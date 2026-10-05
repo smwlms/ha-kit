@@ -9,7 +9,7 @@ house:
   home_destinations: [Home]
 modules: [base, tesla-route, gate, doorbell, presence, shading, notifications]
 people:
-  - { key: an, name: An, phone: pixel_an, notify: mobile_app_pixel_an }
+  - { key: an, name: An, phone: pixel_an, notify: mobile_app_pixel_an, user_id: fedcba9876543210fedcba9876543210 }
 cars:
   - { prefix: blauwe_y, name: Blauwe Y }
 teslemetry:

@@ -1,7 +1,13 @@
-<# Example dashboard section for the doorbell; not deployed automatically. #>
+<# Example dashboard section for the doorbell; not deployed automatically.
+   Notification choices: one card per person with people[].user_id (only that user sees it), and an overview of
+   everyone for the admins with a user_id (_doorbell.jinja: people[].admin among the recipients, none = the first
+   recipient, the same people who get the garage safety notifications); without such an admin every user sees it. Hiding is not protection: see README, "Who gets a notification". #>
+<% from '_doorbell.jinja' import recipients, admins with context %>
 <% set parcel_service = 'parcel-service' in modules %>
+<% set admin_users = admins | selectattr('user_id', 'defined') | selectattr('user_id') | map(attribute='user_id') | map('string') | list %>
 # Example card doorbell: paste into a dashboard (Edit > Add card > Manual).
-# On top the doorbell picture, below it the last visit, the reply buttons (LCD text for 3 min) and the visit list.
+# On top the doorbell picture, below it the last visit, the reply buttons (LCD text for 3 min) and the visit list,
+# then who gets a notification: your own choice, and everyone's for the admins.
 type: vertical-stack
 cards:
   - type: picture-entity
@@ -49,3 +55,43 @@ cards:
     visit: input_text.doorbell_visit
     days: 31
     limit: 8
+<% for p in recipients if p.get('user_id') %>
+  - type: conditional
+    conditions:
+      - condition: user
+        users:
+          - <@ p.user_id | string | tojson @>
+    card:
+      type: entities
+      title: <@ t('card_my_notifications') | tojson @>
+      entities:
+        - entity: input_select.doorbell_<@ p.key @>_ring
+          name: <@ t('card_ring') | tojson @>
+<% if parcel_service %>
+        - entity: input_select.doorbell_<@ p.key @>_parcel
+          name: <@ t('card_parcel') | tojson @>
+<% endif %>
+<% endfor %>
+<% if recipients %>
+<% set overview %>
+type: entities
+title: <@ t('card_all_notifications') | tojson @>
+entities:
+<% for p in recipients %>
+  - input_select.doorbell_<@ p.key @>_ring
+<% if parcel_service %>
+  - input_select.doorbell_<@ p.key @>_parcel
+<% endif %>
+<% endfor %>
+<% endset %>
+<% if admin_users %>
+  - type: conditional
+    conditions:
+      - condition: user
+        users: <@ admin_users | tojson @>
+    card:
+      <@ overview | trim | indent(6) @>
+<% else %>
+  - <@ overview | trim | indent(4) @>
+<% endif %>
+<% endif %>

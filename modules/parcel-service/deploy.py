@@ -5,7 +5,8 @@ Run from the filled-in folder (output of tools/fill.py), with HA_URL and HA_TOKE
 
 Steps:
   1. checks that the modules doorbell and gate are deployed (script.doorbell_reply with the parcel-service steps,
-     script.gate_pulse, script.gate_close_manual, binary_sensor.gate_open); stops when one is missing
+     input_select.doorbell_<key>_parcel, script.gate_pulse, script.gate_close_manual, binary_sensor.gate_open);
+     stops when one is missing
   2. uploads package.yaml -> packages/parcel_service.yaml, checks the configuration, reloads the helpers
   3. sets the defaults from house.yaml once, only on helpers that did not exist before (ajar, open, day = off);
      after that the values are yours to change on the dashboard
@@ -35,8 +36,14 @@ DEFAULTS = {
 # Automations (by id) that start OFF: turned off once, only when this deploy creates them. No initial_state in the
 # YAML, so once you turn one on it stays on after a restart and after a redeploy (see LOGIC.md, Settings).
 OFF_WHEN_NEW = ["doorbell_parcel_left"]
+<% from '_doorbell.jinja' import recipients with context %>
 NEEDS = {
     "script.doorbell_reply": "module doorbell",
+<% if recipients %>
+    # Who gets the parcel notifications (doorbell.jinja reads it): only exists when doorbell was filled in with
+    # parcel-service in modules: and deployed again.
+    "input_select.doorbell_<@ recipients[0].key @>_parcel": "module doorbell, filled in with parcel-service",
+<% endif %>
     "script.gate_pulse": "module gate",
     "script.gate_close_manual": "module gate",
     "binary_sensor.gate_open": "module gate",

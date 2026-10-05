@@ -2,7 +2,7 @@
 
 <@ module.description @>.
 
-When someone rings, every phone immediately gets a notification with a photo of that moment and buttons to reply (text on the screen of the doorbell). The speakers, the Nest Hub and the TV announce it too. A few seconds later Home Assistant silently replaces the notification with what Gemini sees in the photo, e.g. "Someone with a parcel". Every visit goes with its photo into a list on the dashboard. How and why: `LOGIC.md`.
+When someone rings, the phones of everyone who wants it immediately get a notification with a photo of that moment and buttons to reply (text on the screen of the doorbell). Every person chooses when: always, only when home, only when away, only on a parcel day, or never (see "Who gets a notification"). The speakers, the Nest Hub and the TV announce it too. A few seconds later Home Assistant silently replaces the notification with what Gemini sees in the photo, e.g. "Someone with a parcel". Every visit goes with its photo into a list on the dashboard. How and why: `LOGIC.md`.
 
 All texts people see or hear (notifications, buttons, spoken sentences, LCD texts, the card) follow `house.language` (`strings.yaml`, `en` and `nl`).
 
@@ -36,7 +36,10 @@ Example with invented values: section `doorbell:` and the roles `doorbell_*` und
 
 | Field                                                       | Meaning                                                                                               |
 | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `people[].notify`, `people[].name`                          | who gets a notification (everyone, unless `doorbell.recipients`)                                      |
+| `people[].notify`, `people[].name`                          | who may get a notification (everyone with `notify`, unless `doorbell.recipients`); each one chooses when |
+| `people[].person`                                           | person entity for "Only when I'm home / away"; default `person.<key>`                                 |
+| `people[].user_id`                                          | Home Assistant user id: only that user sees "My doorbell notifications"; empty = only in the overview  |
+| `people[].admin`                                            | sees the overview of everyone's choices (with a `user_id`); gets the garage safety notifications when nobody is subscribed |
 | `house.language`                                            | language of the texts and of the spoken sentence (`en` or `nl`)                                       |
 | `entities.doorbell_camera`                                  | front camera of the doorbell                                                                          |
 | `entities.doorbell_button`                                  | event entity of the bell button (event_type `ring`)                                                   |
@@ -48,11 +51,31 @@ Example with invented values: section `doorbell:` and the roles `doorbell_*` und
 | `doorbell.speakers`                                         | list of Sonos `media_player`s; empty list = no announcement                                           |
 | `doorbell.nest_hub`                                         | `media_player` of the Nest Hub; empty = none                                                          |
 | `doorbell.tv`, `doorbell.tv_ip`                             | `media_player` of the Google TV (on/off check) and the IP TvOverlay listens on; empty = none          |
-| `doorbell.recipients`                                       | list of `people[].key`; empty = everyone                                                              |
+| `doorbell.recipients`                                       | list of `people[].key`; empty = everyone with `notify`. The upper limit: within it each person chooses |
 | `doorbell.tap_url`                                          | where a tap on the notification goes; empty = the camera view                                         |
 | `doorbell.lcd_default`                                      | text that comes back after a reply when the previous text was unknown; empty = "Welcome" / "Welkom"   |
 
 An empty optional device drops out completely: no script, no step, no error.
+
+## Who gets a notification
+
+Every person in `doorbell.recipients` (empty = everyone with `people[].notify`) gets a helper and chooses on the dashboard when a notification comes:
+
+| Helper                                | When                       | Options (the first is the start value)                                                   |
+| ------------------------------------- | -------------------------- | ---------------------------------------------------------------------------------------- |
+| `input_select.doorbell_<key>_ring`    | always                     | Always, Only when I'm home, Only when I'm away, Only on a parcel day (with parcel-service), Never |
+| `input_select.doorbell_<key>_parcel`  | with `parcel-service`      | Always, Only when I'm home, Only when I'm away, Never: "parcel left" and the garage notifications |
+
+- "Home" = the person entity (`people[].person`, default `person.<key>`) is `home`; a missing person entity counts as away. "Parcel day" = `input_datetime.parcel_expected` is today.
+- **Nobody matches** (e.g. everyone only when home and nobody is home): everyone who is not on Never gets it. A ring never gets lost by accident.
+- **Everyone on Never**: no phone notification, only the logbook line "no notification · nobody subscribed". The speakers, Nest Hub, TV, visit list and LCD work as before.
+- The choice is made **once per ring**: the first notification and its silent replacement after Gemini go to the same phones.
+- With `parcel-service`: whoever presses a garage button always gets the follow-up, and the safety notifications of the garage (not opened, no movement, not closed) go to the admins when nobody is subscribed. Details: `parcel-service/README.md`.
+- The logbook says who got it: "notification to Jan, Lien".
+
+**On the dashboard** (`lovelace/doorbell.yaml`): a card "My doorbell notifications" per person with `people[].user_id` (only that user sees it) and "Doorbell notifications of everyone" for the admins with a `user_id` (without such an admin every user sees it). `deploy.py` prints the user id of every person without one: copy it into `house.yaml`, fill in again and paste the card again.
+
+**No protection.** The cards only hide. Every user who can open Settings > Helpers (or the overview) can change someone else's choice. For a family that is enough.
 
 ## What you do in the UI
 
@@ -79,6 +102,8 @@ uv run --with-requirements requirements.txt python doorbell/deploy.py
 - Photos go to `/media/doorbell/archive/`. On HA OS `/media` is allowed for `camera.snapshot` by default; elsewhere: add `/media` to `allowlist_external_dirs`.
 - When you add the module **parcel-service** later: fill in again and run this script again. The ring automation and `script.doorbell_reply` then get extra steps.
 - The dashboard: paste `lovelace/doorbell.yaml` as a card (Edit > Add card > Manual).
+- After the first deploy everyone is on **Always**. Set your choice on the card (or in Settings > Helpers, "Doorbell: ring for …").
+- Updating from a kit version without per-person choices: fill in again, run this script (and `parcel-service/deploy.py` when you have it), paste the card again and set the choices. Until then nothing changes: everyone starts on Always.
 
 ## Migrating from the Dutch ids
 
@@ -108,6 +133,8 @@ Steps: deploy, paste the dashboard card again, then delete the old automation an
 3. Ring. Within 1 to 2 s: notification with photo on every phone (long-press = buttons), announcement on the speakers and the Nest Hub, photo on the TV when it is on.
 4. After about 5 to 10 s: the notification silently changes into e.g. "Someone · 14:32 …" with Gemini's sentence. Same sentence in `input_text.doorbell_description`, new row in the visit list.
 5. Again with a box in your hand: title "Parcel at the door".
-6. Something wrong? Automations > "Doorbell: someone is ringing" > Traces (step `ai_task.generate_data`) and the logbook at "Doorbell visit".
+6. Who gets it: set one person on **Never** and ring: only the others get the notification, logbook "notification to …". Everyone on Never: no notification, logbook "nobody subscribed". Someone on "Only when I'm home" while away, and the rest on Never: that person gets it anyway (nobody matches). Put everyone back on your choice.
+7. Log in as a user with `people[].user_id`: the card shows only your own choice (and the overview for an admin).
+8. Something wrong? Automations > "Doorbell: someone is ringing" > Traces (step `ai_task.generate_data`) and the logbook at "Doorbell visit".
 
 The examples are the English texts; with `house.language: nl` the Dutch ones from `strings.yaml`. More edge cases and what each step does: `LOGIC.md`.

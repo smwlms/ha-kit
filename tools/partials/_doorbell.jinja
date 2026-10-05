@@ -1,0 +1,15 @@
+<# Who may get a doorbell or parcel notification, shared by the modules doorbell and parcel-service:
+     recipients   the people with notify, limited to doorbell.recipients when that list is filled in. Each of them gets
+                  the helpers input_select.doorbell_<key>_ring (and _parcel) and one notification block per message;
+                  whether a block sends is decided at run time by targets() in custom_templates/doorbell.jinja.
+     admins       the recipients with people[].admin; none of them admin = the first recipient. They get the safety
+                  notifications of the garage when nobody is subscribed.
+   people[].user_id (optional) is the Home Assistant user id (32 hex characters, Settings > People > the user, or the
+   attribute user_id of the person entity); it only decides who sees which card on the dashboard.
+   Use: <% from '_doorbell.jinja' import recipients with context %> #>
+<% set notify_keys = doorbell.recipients | default(none) or [] %>
+<% for k in notify_keys if k not in people | map(attribute='key') | list %><@ fail('house.yaml: doorbell.recipients contains ' ~ k ~ ', but that key is not in people') @><% endfor %>
+<% for p in people if p.get('user_id') and not (p.user_id | string) is regex_search('^[0-9a-f]{32}$') %><@ fail('house.yaml: people[].user_id of ' ~ p.key ~ ' must be the 32 hex characters of a Home Assistant user id') @><% endfor %>
+<% set recipients = people | selectattr('notify', 'defined') | selectattr('notify') | list %>
+<% set recipients = (recipients | selectattr('key', 'in', notify_keys) | list) if notify_keys else recipients %>
+<% set admins = recipients | selectattr('admin', 'defined') | selectattr('admin') | list or recipients[:1] %>

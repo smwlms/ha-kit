@@ -14,6 +14,8 @@ What it does, in this order:
   3. every .yaml of every build parses (Home Assistant and ESPHome tags allowed)
   4. every Home Assistant template in that YAML, and every custom_templates/*.jinja, compiles with Jinja2 (HA filters
      and tests stubbed, so a typo in a filter name fails)
+  4b. the macro targets() of doorbell/custom_templates/doorbell.jinja ("who gets a notification") runs on the builds
+     with stubbed states(), is_state() and now(): every case of tests/doorbell-targets.yaml gives the expected people
   5. every .py of the kit's tools and of every build compiles (Python's compile())
   6. every <module>/deploy.py --dry-run (and --dry-run --setup where the script has --setup) exits 0 without a
      connection (HA_URL and HA_TOKEN are removed from the environment)
@@ -29,7 +31,10 @@ What it does, in this order:
 from __future__ import annotations
 
 import base64
+import datetime
+import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -194,6 +199,57 @@ def check_yaml_and_templates(builds: list[Path]) -> None:
             if problem:
                 fail(f"{out.name}/{f.relative_to(out)}: {problem}")
     print(f"  {n_yaml} YAML files parsed, {n_tpl} Home Assistant templates compiled")
+
+
+def check_doorbell_targets(builds: list[Path], houses: dict[str, Path]) -> None:
+    """Run targets() and names() of the filled-in doorbell.jinja for every case of tests/doorbell-targets.yaml (a case
+    whose build is missing, e.g. with --language, is skipped)."""
+    cases = yaml.safe_load((KIT / "tests" / "doorbell-targets.yaml").read_text(encoding="utf-8"))["cases"]
+    texts = yaml.safe_load((MODULES / "doorbell" / "strings.yaml").read_text(encoding="utf-8"))
+    by_name = {out.name.removeprefix("build-"): out for out in builds}
+    today = datetime.datetime(2026, 10, 5, 14, 32)
+    n = skipped = 0
+    for case in cases:
+        out = by_name.get(case["build"])
+        macros = out / "doorbell" / "custom_templates" if out else None
+        if not macros or not (macros / "doorbell.jinja").is_file():
+            skipped += 1
+            continue
+        house = yaml.safe_load(houses[case["build"]].read_text(encoding="utf-8"))
+        language = (house.get("house") or {}).get("language") or "en"
+        kind = case.get("kind", "ring")
+        helper = "ring" if kind == "ring" else "parcel"
+        env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(macros)),
+                                 extensions=["jinja2.ext.loopcontrols", "jinja2.ext.do"])
+        env.filters.update(from_json=json.loads, to_json=json.dumps,
+                           regex_findall=lambda v, find="", ignorecase=False: re.findall(find, str(v),
+                                                                                         re.I if ignorecase else 0))
+        # The imported template keeps the globals it saw first: set the stubs before the first render, fill them after.
+        states: dict[str, str] = {}
+        env.globals.update(states=lambda e: states.get(e, "unknown"), is_state=lambda e, v: states.get(e) == v,
+                           now=lambda: today)
+        people = json.loads(env.from_string("{% from 'doorbell.jinja' import candidates %}{{ candidates() }}").render())
+        states.update({f"input_select.doorbell_{key}_{helper}": texts.get(f"option_{choice}", {}).get(language, choice)
+                       for key, choice in (case.get("choice") or {}).items()})
+        states.update({p["person"]: "home" if p["key"] in (case.get("home") or []) else "not_home" for p in people})
+        states["input_datetime.parcel_expected"] = str(today.date()) if case.get("parcel_day") else "2000-01-01"
+        label = f"tests/doorbell-targets.yaml '{case['name']}' ({case['build']})"
+        try:
+            got = json.loads(env.from_string("{% from 'doorbell.jinja' import targets %}{{ targets(kind, pressed) }}")
+                             .render(kind=kind, pressed=case.get("pressed", "")))
+            names = env.from_string("{% from 'doorbell.jinja' import names %}{{ names(got) }}").render(got=got)
+        except (jinja2.TemplateError, ValueError, TypeError) as e:
+            fail(f"{label}: {e.__class__.__name__}: {e}")
+            continue
+        n += 1
+        notify = {p["key"]: p["notify"] for p in people}
+        expected = [notify.get(key, f"(no candidate {key})") for key in case["expect"]]
+        if sorted(got) != sorted(expected):
+            fail(f"{label}: targets('{kind}') = {got}, expected {expected}")
+        expected_names = ", ".join(p["name"] for p in people if p["key"] in case["expect"])
+        if names != expected_names:
+            fail(f"{label}: names() = {names!r}, expected {expected_names!r}")
+    print(f"  doorbell targets: {n} cases" + (f", {skipped} skipped (build not filled in)" if skipped else ""))
 
 
 def check_python(paths: list[Path]) -> None:
@@ -378,6 +434,9 @@ def main() -> None:
 
         step("3+4. YAML and Home Assistant templates")
         check_yaml_and_templates(builds)
+
+        step("4b. doorbell: who gets a notification")
+        check_doorbell_targets(builds, houses)
 
         step("5. Python")
         py = sorted(TOOLS.glob("*.py")) + [f for out in builds for f in sorted(out.rglob("*.py"))]

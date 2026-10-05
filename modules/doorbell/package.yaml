@@ -1,3 +1,8 @@
+<# Helpers of the doorbell. Per person who may get a notification (_doorbell.jinja: people with notify, limited to
+   doorbell.recipients) one input_select for the ring and, with parcel-service, one for the parcel notifications.
+   No 'initial': a new input_select starts on its first option (Always) and keeps the user's choice after that. #>
+<% from '_doorbell.jinja' import recipients with context %>
+<% set parcel_service = 'parcel-service' in modules %>
 # Package 'doorbell' -> /config/packages/doorbell.yaml (loaded by homeassistant: packages: !include_dir_named packages/).
 # Helpers written by the doorbell automations and read by the dashboard (visit list, Home chip).
 # No 'initial': the values are restored over a restart.
@@ -13,3 +18,31 @@ input_text:
     name: <@ t('helper_description') | tojson @>
     icon: mdi:text-box-outline
     max: 255
+<% if recipients %>
+# Who gets a notification, per person (read by custom_templates/doorbell.jinja, see doorbell/LOGIC.md). The state is
+# the label, so a changed label (other house.language) puts the helper back on its first option.
+input_select:
+<% for p in recipients %>
+  doorbell_<@ p.key @>_ring:
+    name: <@ t('helper_ring', name=p.name) | tojson @>
+    icon: mdi:doorbell
+    options:
+      - <@ t('option_always') | tojson @>
+      - <@ t('option_home') | tojson @>
+      - <@ t('option_away') | tojson @>
+<% if parcel_service %>
+      - <@ t('option_parcel_day') | tojson @>
+<% endif %>
+      - <@ t('option_never') | tojson @>
+<% if parcel_service %>
+  doorbell_<@ p.key @>_parcel:
+    name: <@ t('helper_parcel', name=p.name) | tojson @>
+    icon: mdi:package-variant-closed
+    options:
+      - <@ t('option_always') | tojson @>
+      - <@ t('option_home') | tojson @>
+      - <@ t('option_away') | tojson @>
+      - <@ t('option_never') | tojson @>
+<% endif %>
+<% endfor %>
+<% endif %>

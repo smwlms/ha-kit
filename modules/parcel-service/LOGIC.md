@@ -54,7 +54,7 @@ flowchart TD
 
 | Situation                                                            | What happens                                                                                                    | Configurable                         |
 | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
-| Ring on the parcel day                                               | critical notification (through Silent and Focus, full volume) to everyone, with the button "Garage ajar (N s)"  | `input_datetime.parcel_expected`     |
+| Ring on the parcel day                                               | critical notification (through Silent and Focus, full volume) to whoever is subscribed to the ring, with the button "Garage ajar (N s)" | `input_datetime.parcel_expected`, `input_select.doorbell_<key>_ring` |
 | Gemini sees a parcel in a hand or a courier, gate closed             | automatically `script.doorbell_reply` (button `parcel_service`): LCD "Leave in garage", gate open or ajar       | -                                    |
 | Gemini sees nothing, fails, or the gate is not closed                | the gate stays closed; the notification says why and keeps the backup button                                   | -                                    |
 | Second press for the same ring (another phone, or after the automation) | ignored: the first press wins (`input_text.parcel_service_ring` = id of the ring)                            | -                                    |
@@ -68,6 +68,17 @@ flowchart TD
 | Not closed 1 min after the close pulse                               | notification "Garage door not closed" with button **Close gate** (`GATE_CLOSE`, handled by the module gate)     | -                                    |
 | After a successful ajar                                              | the day stays active: a later ring with a parcel opens again                                                    | button Off                           |
 | A day in the past                                                    | counts as off by itself; "off" = 01-01-2000                                                                     | -                                    |
+
+### Who gets a notification
+
+`script.parcel_garage` decides once per run, with `targets()` of the doorbell's `custom_templates/doorbell.jinja` (see `doorbell/LOGIC.md`, "Who gets a notification"):
+
+| Variable    | Kind           | Notifications                                                               | Nobody left                                         |
+| ----------- | -------------- | --------------------------------------------------------------------------- | --------------------------------------------------- |
+| `parcel_to` | `parcel`       | "Garage door opening / ajar", "Parcel in the garage" (same tag, same phones) | nobody                                              |
+| `alert_to`  | `parcel_alert` | "Garage door not opened" (2x), "Garage door not closed" with Close gate     | the admins: an open garage must never stay silent   |
+
+Both read `input_select.doorbell_<key>_parcel` and add the person who pressed: `parcel_service_buttons` passes `pressed_by` (iOS `sourceDeviceID` and `sourceDeviceName`) through `script.doorbell_reply`; a press on the dashboard and the automatic opening pass nothing. `doorbell_parcel_left` computes `parcel_to` the same way (no button). After the notification blocks a logbook line names who got it.
 
 The examples are the English texts; with `house.language: nl` the Dutch ones from `strings.yaml`. The LCD text "Leave in garage" is English in every language: couriers often do not speak the local language.
 
@@ -94,6 +105,8 @@ The examples are the English texts; with `house.language: nl` the Dutch ones fro
 - **Photo cell.** Closing relies on the safety of the controller. When the courier is still in the opening, the gate normally reverses and "Garage door not closed" follows.
 - **HA does not know who moved the gate.** When someone opens it with the remote within 30 s of a pulse that did not come through, the script thinks it opened the gate itself and closes it after the waiting time.
 - **The relay drops out.** At the STOP pulse: the gate opens fully, the CLOSE pulse still closes it (from the OPEN end position the next step is CLOSE). At closing: no pulse, after 1 min the notification with Close gate.
+- **"Not closed" can reach more phones than "opening".** When everyone is on Never for parcel notifications, "opening" goes nowhere but "not closed" goes to the admins; with the tag `doorbell-garage` it then arrives as a new notification. Intended.
+- **Who pressed is matched on words.** The key, the name (lower case) or the phone (device_tracker object id) of a person must be a whole word of `sourceDeviceID` or `sourceDeviceName` (e.g. `iphone_lien` or "iPhone van Lien" for `lien`). A short key such as `an` does not match "iPhone van Lien". A name of two words never matches as a whole: the key or the phone does. No match: nobody is added.
 - **Gemini makes a mistake.** It can miss a parcel (gate stays closed, backup button) or take something for a parcel (gate opens). Both are in the logbook and the calendar.
 
 ### Why "parcel left" is off by default
@@ -133,5 +146,6 @@ Without the gate opening unexpectedly:
 4. Same, long-press the notification > "Garage ajar/open": the gate moves, notification with the garage view, closed after `open_s`, "Parcel in the garage" with photo. Press again on the same notification: logbook "ajar ignored · already handled".
 5. Ring with a box in your hand: same course, without a button.
 6. Set the ajar (only when your controller stops, see Edge cases): "Parcel service ajar" to 6 s, repeat step 4, measure the opening, adjust.
-7. `script.parcel_expected` with `day: off`.
-8. Language: fill in with the other `house.language`, deploy doorbell and this module, repeat step 1: logbook and notifications in that language.
+7. Who gets it: B on Never for parcel notifications. Step 4 with B pressing: B still gets "opening" and "in the garage"; logbook "notification to …". Everyone on Never, gate open by hand, "In the garage" on the dashboard: "Garage door not opened" goes to the admin.
+8. `script.parcel_expected` with `day: off`.
+9. Language: fill in with the other `house.language`, deploy doorbell and this module, repeat step 1: logbook and notifications in that language.

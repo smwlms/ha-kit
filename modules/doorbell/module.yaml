@@ -26,6 +26,7 @@ ask:
     question: Which video doorbell do you have?
     options: [UniFi Protect doorbell with LCD, other, none]
     need: UniFi Protect doorbell with LCD
-# tools/check.py fills the all-modules house with these values too (the example leaves ai_task empty = auto).
+# tools/check.py fills the all-modules house with these values too (the example leaves ai_task empty = auto and
+# recipients empty = everyone with notify; [jan] renders the helpers and cards for a subset).
 check_variant:
-  doorbell: { ai_task: none }
+  doorbell: { ai_task: none, recipients: [jan] }

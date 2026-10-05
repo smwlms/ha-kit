@@ -10,6 +10,15 @@ helper_visit: { en: Doorbell visit, nl: Deurbel bezoek }
 helper_description: { en: Doorbell description, nl: Deurbel beschrijving }
 archive_sensor: { en: Doorbell archive, nl: Deurbel archief }
 archive_unit: { en: photos, nl: "foto's" }
+# Per person: who gets the doorbell and the parcel notifications (input_select.doorbell_<key>_ring / _parcel).
+# The state of an input_select is its label: custom_templates/doorbell.jinja compares with these same texts.
+helper_ring: { en: "Doorbell: ring for {name}", nl: "Deurbel: bel voor {name}" }
+helper_parcel: { en: "Doorbell: parcel notifications for {name}", nl: "Deurbel: pakjesmeldingen voor {name}" }
+option_always: { en: Always, nl: Altijd }
+option_home: { en: "Only when I'm home", nl: Alleen als ik thuis ben }
+option_away: { en: "Only when I'm away", nl: Alleen als ik niet thuis ben }
+option_parcel_day: { en: Only on a parcel day, nl: Alleen op een pakjesdag }
+option_never: { en: Never, nl: Nooit }
 
 # --- Ring: announcement, notification, TV, Nest Hub ---
 ringing: { en: The doorbell is ringing, nl: Er wordt aangebeld }
@@ -72,6 +81,8 @@ log_parcel_day_ring: { en: parcel service · rang on the expected day, nl: pakje
 log_auto_ajar: { en: "parcel service · garage ajar automatically ({short})", nl: "pakjesdienst · garage automatisch op een kier ({short})" }
 log_auto_open: { en: "parcel service · garage open automatically ({short})", nl: "pakjesdienst · garage automatisch open ({short})" }
 log_rang: { en: "rang · {short}", nl: "aangebeld · {short}" }
+log_sent_to: { en: "notification to {names}", nl: "melding naar {names}" }
+log_nobody_subscribed: { en: no notification · nobody subscribed, nl: geen melding · niemand aangemeld }
 log_no_description: { en: no description · AI Task gave no answer, nl: geen beschrijving · AI Task gaf geen antwoord }
 log_ajar_ignored_running: { en: ajar ignored · ajar already running, nl: kier genegeerd · kier loopt al }
 log_ajar_ignored_handled:
@@ -140,13 +151,13 @@ ring_alias: { en: "Doorbell: someone is ringing", nl: "Deurbel: er wordt aangebe
 ring_description:
   en: >-
     On a ring: photo of that moment to the archive (/media/doorbell/archive, 31 days), notification with photo and
-    buttons to {recipients}{announce}. Then Gemini (AI Task) describes the photo: parcel in hand, courier, number of
+    buttons to whoever of {recipients} is subscribed (input_select.doorbell_<key>_ring, custom_templates/doorbell.jinja){announce}. Then Gemini (AI Task) describes the photo: parcel in hand, courier, number of
     people, one sentence without names. The notification is silently replaced (same tag), input_text.doorbell_visit
     and doorbell_description are updated and the visit goes into {calendar}. The buttons put a text on the LCD for
     3 min (script.doorbell_reply).
   nl: >-
     Bij aanbellen: foto van dat moment naar het archief (/media/doorbell/archive, 31 dagen), melding met foto en
-    knoppen naar {recipients}{announce}. Daarna beschrijft Gemini (AI Task) de foto: pakje in de hand, koerier,
+    knoppen naar wie van {recipients} aangemeld is (input_select.doorbell_<key>_ring, custom_templates/doorbell.jinja){announce}. Daarna beschrijft Gemini (AI Task) de foto: pakje in de hand, koerier,
     aantal personen, één zin zonder namen. De melding wordt stil vervangen (zelfde tag), input_text.doorbell_visit en
     doorbell_description worden bijgewerkt en het bezoek komt in {calendar}. De knoppen zetten 3 min een tekst op het
     LCD (script.doorbell_reply).
@@ -193,6 +204,14 @@ field_ring_name: { en: Ring, nl: Aanbelling }
 field_ring_description:
   en: "Parcel service: time of the ring (state of {entity}). Empty = manual."
   nl: "Pakjesdienst: tijdstip van de aanbelling (state van {entity}). Leeg = handmatig."
+field_pressed_by_name: { en: Pressed by, nl: Gedrukt door }
+field_pressed_by_description:
+  en: >-
+    Parcel service: sourceDeviceID and sourceDeviceName of the phone that pressed a notification button; that person
+    always gets the garage notifications. Empty = dashboard or automation.
+  nl: >-
+    Pakjesdienst: sourceDeviceID en sourceDeviceName van de gsm die op een meldingsknop drukte; die persoon krijgt
+    de garagemeldingen altijd. Leeg = dashboard of automation.
 # Texts on the LCD of the doorbell. lcd_parcel_service is English in every language on purpose: couriers often do
 # not speak the local language, and it fits the LCD.
 lcd_at_door: { en: Leave it at the door, nl: Laat het aan de deur }
@@ -253,6 +272,10 @@ card_last_visit: { en: Last visit, nl: Laatste bezoek }
 card_button_at_door: { en: At the door, nl: Aan de deur }
 card_button_garage: { en: In the garage, nl: In de garage }
 card_button_garage_confirm: { en: "Open the garage door for a parcel?", nl: "Garagepoort openen voor een pakje?" }
+card_my_notifications: { en: My doorbell notifications, nl: Mijn deurbelmeldingen }
+card_ring: { en: Doorbell rings, nl: Gewone bel }
+card_parcel: { en: Parcel notifications, nl: Pakjesmeldingen }
+card_all_notifications: { en: Doorbell notifications of everyone, nl: Deurbelmeldingen van iedereen }
 
 # --- Card cw-bezoeken (www/cw-bezoeken.js); {n}, {days} and {version} are filled in by the card ---
 card_name: { en: "Doorbell: visits", nl: "Deurbel: bezoeken" }

@@ -1,8 +1,11 @@
-<# Parcel service scripts. Gate scripts and sensor come from the module gate. Notifications go to the same people
-   as the doorbell notification (doorbell.recipients, empty = everyone). The field 'reason' of script.gate_pulse and
-   script.gate_close_manual is the gate module's interface (it ends up in the gate's logbook). #>
-<% set notify_keys = doorbell.recipients | default(none) %>
-<% set recipients = people | selectattr('key', 'in', notify_keys) | list if notify_keys else people %>
+<# Parcel service scripts. Gate scripts and sensor come from the module gate. Notifications: one block per person in
+   recipients (_doorbell.jinja, the same people as the doorbell); a block only sends when that person is in parcel_to
+   (garage opens, parcel in the garage) or alert_to (not opened, no movement, not closed), decided once per run by
+   targets() in the doorbell's doorbell.jinja: each person's choice for parcel notifications, the safety notifications
+   to the admins when nobody is left, and always to whoever pressed (field pressed_by).
+   The field 'reason' of script.gate_pulse and script.gate_close_manual is the gate module's interface (it ends up in
+   the gate's logbook). #>
+<% from '_doorbell.jinja' import recipients with context %>
 <% set garage_cam = entities.garage_camera | default(none) %>
 # Module parcel-service: scripts (HA YAML, dict object_id -> config). Pushed through the config API by parcel-service/deploy.py.
 parcel_garage:
@@ -40,12 +43,22 @@ parcel_garage:
       example: true
       selector:
         boolean: {}
+    pressed_by:
+      name: <@ t('field_pressed_by_name') | tojson @>
+      description: <@ t('field_pressed_by_description') | tojson @>
+      example: iphone_jan iPhone of Jan
+      selector:
+        text: {}
   sequence:
     - variables:
         open_time: "{{ open_s | default(60) | int(60) }}"
         ajar: "{{ ajar_s | default(0) | float(0) }}"
         service: "{{ parcel_service | default(false) | bool(false) }}"
         photo: "doorbell/archive/{{ now().strftime('%Y%m%d-%H%M%S') }}-garage.jpg"
+        # Who gets the notifications of this run (doorbell.jinja, targets): decided once, so "opening" and "in the
+        # garage" replace each other on the same phones.
+        parcel_to: "{% from 'doorbell.jinja' import targets %}{{ targets('parcel', pressed_by | default('')) | from_json }}"
+        alert_to: "{% from 'doorbell.jinja' import targets %}{{ targets('parcel_alert', pressed_by | default('')) | from_json }}"
     - alias: Only open when the end-stop reports fully closed
       if:
         - condition: not
@@ -60,19 +73,31 @@ parcel_garage:
             entity_id: binary_sensor.gate_open
             message: <@ t('log_not_opened_state', state="{{ states('binary_sensor.gate_open') }}") | tojson @>
 <% for p in recipients %>
-        - action: notify.<@ p.notify @>
-          continue_on_error: true
-          data:
-            title: <@ t('not_opened_title') | tojson @>
-            message: >-
-              {{ <@ t('not_opened_was_open') | tojson @> if is_state('binary_sensor.gate_open', 'on')
-                 else <@ t('not_opened_unknown') | tojson @> }}
-            data:
-              tag: doorbell-garage
-              group: gate
-              push:
-                interruption-level: time-sensitive
+        - alias: "Notification to <@ p.name @> when in alert_to"
+          if:
+            - condition: template
+              value_template: "{{ '<@ p.notify @>' in alert_to }}"
+          then:
+            - action: notify.<@ p.notify @>
+              continue_on_error: true
+              data:
+                title: <@ t('not_opened_title') | tojson @>
+                message: >-
+                  {{ <@ t('not_opened_was_open') | tojson @> if is_state('binary_sensor.gate_open', 'on')
+                     else <@ t('not_opened_unknown') | tojson @> }}
+                data:
+                  tag: doorbell-garage
+                  group: gate
+                  push:
+                    interruption-level: time-sensitive
 <% endfor %>
+        - action: logbook.log
+          data:
+            name: <@ t('logbook_gate') | tojson @>
+            entity_id: binary_sensor.gate_open
+            message: >-
+              {% from 'doorbell.jinja' import names %}{{ <@ t('log_sent_to') | tojson @> | replace('{names}', names(alert_to))
+                 if alert_to | count > 0 else <@ t('log_nobody_subscribed') | tojson @> }}
         - stop: Gate not reported closed
     - alias: "Open: one pulse (gate_pulse skips it when a pulse is running or < 30 s ago)"
       action: script.gate_pulse
@@ -96,17 +121,29 @@ parcel_garage:
             entity_id: binary_sensor.gate_open
             message: <@ t('log_not_opened_no_movement') | tojson @>
 <% for p in recipients %>
-        - action: notify.<@ p.notify @>
-          continue_on_error: true
-          data:
-            title: <@ t('not_opened_title') | tojson @>
-            message: <@ t('not_opened_no_movement') | tojson @>
-            data:
-              tag: doorbell-garage
-              group: gate
-              push:
-                interruption-level: time-sensitive
+        - alias: "Notification to <@ p.name @> when in alert_to"
+          if:
+            - condition: template
+              value_template: "{{ '<@ p.notify @>' in alert_to }}"
+          then:
+            - action: notify.<@ p.notify @>
+              continue_on_error: true
+              data:
+                title: <@ t('not_opened_title') | tojson @>
+                message: <@ t('not_opened_no_movement') | tojson @>
+                data:
+                  tag: doorbell-garage
+                  group: gate
+                  push:
+                    interruption-level: time-sensitive
 <% endfor %>
+        - action: logbook.log
+          data:
+            name: <@ t('logbook_gate') | tojson @>
+            entity_id: binary_sensor.gate_open
+            message: >-
+              {% from 'doorbell.jinja' import names %}{{ <@ t('log_sent_to') | tojson @> | replace('{names}', names(alert_to))
+                 if alert_to | count > 0 else <@ t('log_nobody_subscribed') | tojson @> }}
         - stop: Gate did not open
     - alias: "Ajar: STOP pulse ajar s after leaving the closed end-stop (controller sequence OPEN-STOP-CLOSE-STOP)"
       if:
@@ -127,31 +164,43 @@ parcel_garage:
         message: >-
           {{ (<@ t('log_opened_ajar') | tojson @> if ajar > 0 else <@ t('log_opened_open') | tojson @>)
              ~ (' ' ~ <@ t('log_opened_service') | tojson @> | replace('{seconds}', open_time | string) if service else '') }}
-    - alias: "Parcel service: tell everyone when it closes<% if garage_cam %> (long-press = live garage view, tap = camera dialog)<% endif %>"
+    - alias: "Parcel service: tell parcel_to when it closes<% if garage_cam %> (long-press = live garage view, tap = camera dialog)<% endif %>"
       if:
         - condition: template
           value_template: "{{ service }}"
       then:
 <% for p in recipients %>
-        - action: notify.<@ p.notify @>
-          continue_on_error: true
-          data:
-            title: >-
-              {{ <@ t('opening_title_ajar') | tojson @> if ajar > 0 else <@ t('opening_title_open') | tojson @> }}
-            message: >-
-              {{ <@ t('closes_at') | tojson @> | replace('{time}',
-                 (now() + timedelta(seconds=(0 if ajar > 0 else 25) + open_time)).strftime('%H:%M:%S'))
-                 <@ ("~ ' ' ~ " ~ (t('live_view_hint') | tojson)) if garage_cam else '' @> }}
-            data:
-              tag: doorbell-garage
-              group: gate
+        - alias: "Notification to <@ p.name @> when in parcel_to"
+          if:
+            - condition: template
+              value_template: "{{ '<@ p.notify @>' in parcel_to }}"
+          then:
+            - action: notify.<@ p.notify @>
+              continue_on_error: true
+              data:
+                title: >-
+                  {{ <@ t('opening_title_ajar') | tojson @> if ajar > 0 else <@ t('opening_title_open') | tojson @> }}
+                message: >-
+                  {{ <@ t('closes_at') | tojson @> | replace('{time}',
+                     (now() + timedelta(seconds=(0 if ajar > 0 else 25) + open_time)).strftime('%H:%M:%S'))
+                     <@ ("~ ' ' ~ " ~ (t('live_view_hint') | tojson)) if garage_cam else '' @> }}
+                data:
+                  tag: doorbell-garage
+                  group: gate
 <% if garage_cam %>
-              entity_id: <@ garage_cam @>
-              url: entityId:<@ garage_cam @>
+                  entity_id: <@ garage_cam @>
+                  url: entityId:<@ garage_cam @>
 <% endif %>
-              push:
-                interruption-level: active
+                  push:
+                    interruption-level: active
 <% endfor %>
+        - action: logbook.log
+          data:
+            name: <@ t('logbook_gate') | tojson @>
+            entity_id: binary_sensor.gate_open
+            message: >-
+              {% from 'doorbell.jinja' import names %}{{ <@ t('log_sent_to') | tojson @> | replace('{names}', names(parcel_to))
+                 if parcel_to | count > 0 else <@ t('log_nobody_subscribed') | tojson @> }}
     - alias: "Keep open: open_time s ajar, or 25 s travel + open_time fully open; stop if someone closes it"
       wait_for_trigger:
         - trigger: state
@@ -213,7 +262,7 @@ parcel_garage:
             name: <@ t('logbook_gate') | tojson @>
             entity_id: binary_sensor.gate_open
             message: <@ t('log_closed') | tojson @>
-        - alias: "Parcel service: proof to everyone + visit log (the expected day stays on: a later ring with a parcel opens again)"
+        - alias: "Parcel service: proof to parcel_to + visit log (the expected day stays on: a later ring with a parcel opens again)"
           if:
             - condition: template
               value_template: "{{ service }}"
@@ -221,20 +270,25 @@ parcel_garage:
             - variables:
                 start: "{{ now().isoformat() }}"
 <% for p in recipients %>
-            - action: notify.<@ p.notify @>
-              continue_on_error: true
-              data:
-                title: <@ t('in_garage_title') | tojson @>
-                message: <@ (t('closed_at', time="{{ now().strftime('%H:%M') }}") ~ ((' ' ~ t('closed_photo_hint')) if garage_cam else '')) | tojson @>
-                data:
-                  tag: doorbell-garage
-                  group: gate
+            - alias: "Notification to <@ p.name @> when in parcel_to"
+              if:
+                - condition: template
+                  value_template: "{{ '<@ p.notify @>' in parcel_to }}"
+              then:
+                - action: notify.<@ p.notify @>
+                  continue_on_error: true
+                  data:
+                    title: <@ t('in_garage_title') | tojson @>
+                    message: <@ (t('closed_at', time="{{ now().strftime('%H:%M') }}") ~ ((' ' ~ t('closed_photo_hint')) if garage_cam else '')) | tojson @>
+                    data:
+                      tag: doorbell-garage
+                      group: gate
 <% if garage_cam %>
-                  image: "/media/local/{{ photo }}"
-                  url: entityId:<@ garage_cam @>
+                      image: "/media/local/{{ photo }}"
+                      url: entityId:<@ garage_cam @>
 <% endif %>
-                  push:
-                    interruption-level: active
+                      push:
+                        interruption-level: active
 <% endfor %>
             - action: calendar.create_event
               continue_on_error: true
@@ -256,21 +310,33 @@ parcel_garage:
             entity_id: binary_sensor.gate_open
             message: <@ t('log_not_closed', state="{{ states('binary_sensor.gate_open') }}") | tojson @>
 <% for p in recipients %>
-        - action: notify.<@ p.notify @>
-          continue_on_error: true
-          data:
-            title: <@ t('not_closed_title') | tojson @>
-            message: <@ t('not_closed_message') | tojson @>
-            data:
-              tag: doorbell-garage
-              group: gate
-              push:
-                sound: default
-                interruption-level: time-sensitive
-              actions:
-                - action: GATE_CLOSE
-                  title: <@ t('button_close_gate') | tojson @>
+        - alias: "Notification to <@ p.name @> when in alert_to"
+          if:
+            - condition: template
+              value_template: "{{ '<@ p.notify @>' in alert_to }}"
+          then:
+            - action: notify.<@ p.notify @>
+              continue_on_error: true
+              data:
+                title: <@ t('not_closed_title') | tojson @>
+                message: <@ t('not_closed_message') | tojson @>
+                data:
+                  tag: doorbell-garage
+                  group: gate
+                  push:
+                    sound: default
+                    interruption-level: time-sensitive
+                  actions:
+                    - action: GATE_CLOSE
+                      title: <@ t('button_close_gate') | tojson @>
 <% endfor %>
+        - action: logbook.log
+          data:
+            name: <@ t('logbook_gate') | tojson @>
+            entity_id: binary_sensor.gate_open
+            message: >-
+              {% from 'doorbell.jinja' import names %}{{ <@ t('log_sent_to') | tojson @> | replace('{names}', names(alert_to))
+                 if alert_to | count > 0 else <@ t('log_nobody_subscribed') | tojson @> }}
 
 parcel_expected:
   alias: <@ t('day_alias') | tojson @>

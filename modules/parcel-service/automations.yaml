@@ -1,14 +1,15 @@
 <# Parcel service automations. doorbell_parcel_left needs the downward package camera and its Protect event;
    without them (entities.doorbell_package_camera / doorbell_package empty) it is left out.
-   The photo goes to the AI service of doorbell.ai_task (empty = the first ai_task entity); none = never. #>
+   The photo goes to the AI service of doorbell.ai_task (empty = the first ai_task entity); none = never.
+   Notifications: one block per person in recipients (_doorbell.jinja); a block only sends when that person is in
+   parcel_to (their choice in input_select.doorbell_<key>_parcel, targets() in the doorbell's doorbell.jinja). #>
 <% from '_ai_task.jinja' import ai_entity %>
+<% from '_doorbell.jinja' import recipients with context %>
 <% set speakers = doorbell.speakers | default([], true) %>
 <% set hub = doorbell.nest_hub | default(none) %>
 <% set tv = doorbell.tv | default(none) %>
 <% set package_cam = entities.doorbell_package_camera | default(none) %>
 <% set package_event = entities.doorbell_package | default(none) %>
-<% set notify_keys = doorbell.recipients | default(none) %>
-<% set recipients = people | selectattr('key', 'in', notify_keys) | list if notify_keys else people %>
 <% set tap = doorbell.tap_url | default(none) or 'entityId:' ~ entities.doorbell_camera %>
 # Module parcel-service: automations (HA YAML, list). Pushed through the config API by parcel-service/deploy.py.
 - id: parcel_service_buttons
@@ -39,6 +40,9 @@
           ring: >-
             {{ trigger.event.data.action_data.ring | default('')
                if trigger.id == 'parcel_service' and trigger.event.data.action_data is defined else '' }}
+          # The phone that pressed (iOS): that person always gets the garage notifications (doorbell.jinja, targets).
+          pressed_by: >-
+            {{ trigger.event.data.sourceDeviceID | default('') }} {{ trigger.event.data.sourceDeviceName | default('') }}
 <% if package_cam and package_event %>
 - id: doorbell_parcel_left
   alias: <@ t('left_alias') | tojson @>
@@ -60,6 +64,8 @@
         start: "{{ now().isoformat() }}"
         photo: "doorbell/archive/{{ now().strftime('%Y%m%d-%H%M%S') }}-parcel.jpg"
         ai_entity: <@ ai_entity(doorbell.ai_task | default(none)) @>
+        # Who gets "parcel left": each person's choice for parcel notifications (doorbell.jinja, targets).
+        parcel_to: "{% from 'doorbell.jinja' import targets %}{{ targets('parcel') | from_json }}"
     - alias: Photo from the downward package camera into the archive
       action: camera.snapshot
       continue_on_error: true
@@ -103,19 +109,31 @@
           value_template: "{{ visible }}"
       then:
 <% for p in recipients %>
-        - action: notify.<@ p.notify @>
-          continue_on_error: true
-          data:
-            title: <@ t('parcel_left') | tojson @>
-            message: <@ (t('left_message', time='{{ ring_time }}') ~ "{{ ' ' ~ description if description }}") | tojson @>
-            data:
-              image: "/media/local/{{ photo }}"
-              url: <@ tap @>
-              tag: doorbell_parcel
-              push:
-                sound: default
-                interruption-level: active
+        - alias: "Notification to <@ p.name @> when subscribed"
+          if:
+            - condition: template
+              value_template: "{{ '<@ p.notify @>' in parcel_to }}"
+          then:
+            - action: notify.<@ p.notify @>
+              continue_on_error: true
+              data:
+                title: <@ t('parcel_left') | tojson @>
+                message: <@ (t('left_message', time='{{ ring_time }}') ~ "{{ ' ' ~ description if description }}") | tojson @>
+                data:
+                  image: "/media/local/{{ photo }}"
+                  url: <@ tap @>
+                  tag: doorbell_parcel
+                  push:
+                    sound: default
+                    interruption-level: active
 <% endfor %>
+        - action: logbook.log
+          data:
+            name: <@ t('logbook_doorbell') | tojson @>
+            entity_id: input_text.doorbell_visit
+            message: >-
+              {% from 'doorbell.jinja' import names %}{{ <@ t('log_sent_to') | tojson @> | replace('{names}', names(parcel_to))
+                 if parcel_to | count > 0 else <@ t('log_nobody_subscribed') | tojson @> }}
 <% if hub %>
         - alias: "Nest Hub: says it and shows the photo"
           action: script.turn_on

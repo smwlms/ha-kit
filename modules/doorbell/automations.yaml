@@ -4,16 +4,17 @@
    User-facing texts come from strings.yaml: directly with t(), or (when Home Assistant builds the text at run time)
    through the automation variable txt, filled in with t() and completed with | replace('{name}', value).
    doorbell.ai_task decides whether the photo goes to an AI service: empty or auto = the first ai_task entity (if one
-   exists, the photo IS sent), an entity id = that one, none = never. #>
+   exists, the photo IS sent), an entity id = that one, none = never.
+   Notifications: one block per person in recipients (_doorbell.jinja); each block only sends when that person is in
+   ring_to, decided once per ring by targets() in custom_templates/doorbell.jinja (the person's own choice). #>
 <% from '_ai_task.jinja' import ai_entity %>
+<% from '_doorbell.jinja' import recipients with context %>
 <% set parcel_service = 'parcel-service' in modules %>
 <% set speakers = doorbell.speakers | default([], true) %>
 <% set hub = doorbell.nest_hub | default(none) %>
 <% set tv = doorbell.tv | default(none) %>
 <% set package_cam = entities.doorbell_package_camera | default(none) %>
 <% set package_event = entities.doorbell_package | default(none) %>
-<% set notify_keys = doorbell.recipients | default(none) %>
-<% set recipients = people | selectattr('key', 'in', notify_keys) | list if notify_keys else people %>
 <% set tap = doorbell.tap_url | default(none) or 'entityId:' ~ entities.doorbell_camera %>
 <% set devices = ([t('device_speakers')] if speakers else []) + ([t('device_hub')] if hub else []) + ([t('device_tv')] if tv else []) %>
 <% set announce = t('ring_description_announce', devices=devices | join(', ')) if devices else '' %>
@@ -59,6 +60,8 @@
       title_parcel_at_door: <@ t('title_parcel_at_door') | tojson @>
       message_outcome: <@ t('message_outcome') | tojson @>
       log_rang: <@ t('log_rang') | tojson @>
+      log_sent_to: <@ t('log_sent_to') | tojson @>
+      log_nobody_subscribed: <@ t('log_nobody_subscribed') | tojson @>
 <% if hub %>
       hub_outcome: <@ t('hub_outcome') | tojson @>
 <% endif %>
@@ -105,6 +108,9 @@
                         start: "{{ now().isoformat() }}"
                         # Identifies this ring (state of the event entity = its timestamp); goes along in action_data.
                         ring_id: "{{ states('<@ entities.doorbell_button @>') }}"
+                        # Who gets this ring (each person's choice, decided once): the first notification and its
+                        # silent replacement go to the same phones.
+                        ring_to: "{% from 'doorbell.jinja' import targets %}{{ targets('ring') | from_json }}"
                         buttons_normal:
                           - action: DOORBELL_AT_DOOR
                             title: <@ t('button_leave_at_door') | tojson @>
@@ -161,27 +167,31 @@
                           value_template: "{{ parcel_day }}"
                       then:
 <% for p in recipients %>
-                        - alias: "Critical alert to <@ p.name @> (first press on any phone wins)"
-                          action: notify.<@ p.notify @>
-                          continue_on_error: true
-                          data:
-                            title: <@ t('parcel_day_title') | tojson @>
-                            message: >-
-                              {{ (txt.parcel_day_message_ajar if ajar else txt.parcel_day_message_open)
-                                 | replace('{time}', ring_time) | replace('{seconds}', open_s | string) }}
-                            data:
-                              image: "/media/local/{{ photo }}"
-                              url: <@ tap @>
-                              tag: doorbell
-                              push:
-                                sound:
-                                  name: default
-                                  critical: 1
-                                  volume: 1
-                                interruption-level: critical
-                              actions: "{{ buttons_parcel }}"
-                              action_data:
-                                ring: "{{ ring_id }}"
+                        - alias: "Critical alert to <@ p.name @> when subscribed (first press on any phone wins)"
+                          if:
+                            - condition: template
+                              value_template: "{{ '<@ p.notify @>' in ring_to }}"
+                          then:
+                            - action: notify.<@ p.notify @>
+                              continue_on_error: true
+                              data:
+                                title: <@ t('parcel_day_title') | tojson @>
+                                message: >-
+                                  {{ (txt.parcel_day_message_ajar if ajar else txt.parcel_day_message_open)
+                                     | replace('{time}', ring_time) | replace('{seconds}', open_s | string) }}
+                                data:
+                                  image: "/media/local/{{ photo }}"
+                                  url: <@ tap @>
+                                  tag: doorbell
+                                  push:
+                                    sound:
+                                      name: default
+                                      critical: 1
+                                      volume: 1
+                                    interruption-level: critical
+                                  actions: "{{ buttons_parcel }}"
+                                  action_data:
+                                    ring: "{{ ring_id }}"
 <% endfor %>
                         - action: logbook.log
                           data:
@@ -190,8 +200,35 @@
                             entity_id: input_datetime.parcel_expected
                       else:
 <% for p in recipients %>
-                        - alias: "Notification to <@ p.name @>"
-                          action: notify.<@ p.notify @>
+                        - alias: "Notification to <@ p.name @> when subscribed"
+                          if:
+                            - condition: template
+                              value_template: "{{ '<@ p.notify @>' in ring_to }}"
+                          then:
+                            - action: notify.<@ p.notify @>
+                              continue_on_error: true
+                              data:
+                                title: <@ t('ringing') | tojson @>
+                                message: <@ t('someone_at_door', time='{{ ring_time }}') | tojson @>
+                                data:
+                                  image: "/media/local/{{ photo }}"
+                                  url: <@ tap @>
+                                  tag: doorbell
+                                  push:
+                                    sound: default
+                                    interruption-level: time-sensitive
+                                  actions: "{{ buttons_normal }}"
+                                  action_data:
+                                    ring: "{{ ring_id }}"
+<% endfor %>
+<% else %>
+<% for p in recipients %>
+                    - alias: "Notification to <@ p.name @> when subscribed"
+                      if:
+                        - condition: template
+                          value_template: "{{ '<@ p.notify @>' in ring_to }}"
+                      then:
+                        - action: notify.<@ p.notify @>
                           continue_on_error: true
                           data:
                             title: <@ t('ringing') | tojson @>
@@ -204,27 +241,16 @@
                                 sound: default
                                 interruption-level: time-sensitive
                               actions: "{{ buttons_normal }}"
-                              action_data:
-                                ring: "{{ ring_id }}"
-<% endfor %>
-<% else %>
-<% for p in recipients %>
-                    - alias: "Notification to <@ p.name @>"
-                      action: notify.<@ p.notify @>
-                      continue_on_error: true
-                      data:
-                        title: <@ t('ringing') | tojson @>
-                        message: <@ t('someone_at_door', time='{{ ring_time }}') | tojson @>
-                        data:
-                          image: "/media/local/{{ photo }}"
-                          url: <@ tap @>
-                          tag: doorbell
-                          push:
-                            sound: default
-                            interruption-level: time-sensitive
-                          actions: "{{ buttons_normal }}"
 <% endfor %>
 <% endif %>
+                    - alias: "Logbook: who got the notification (or nobody: everyone on Never)"
+                      action: logbook.log
+                      data:
+                        name: <@ t('logbook_name') | tojson @>
+                        entity_id: input_text.doorbell_visit
+                        message: >-
+                          {% from 'doorbell.jinja' import names %}{{ txt.log_sent_to | replace('{names}', names(ring_to))
+                             if ring_to | count > 0 else txt.log_nobody_subscribed }}
 <% if package_cam %>
                     - alias: "Second photo from the downward package camera (after the first notification): children and hands are often only visible from above, and it shows a parcel on the ground"
                       action: camera.snapshot
@@ -362,21 +388,25 @@
                               data:
                                 value: "{{ description if description else short }}"
 <% for p in recipients %>
-                            - alias: "Same tag: silently replaces the first notification to <@ p.name @> (photo stays)"
-                              action: notify.<@ p.notify @>
-                              continue_on_error: true
-                              data:
-                                title: "{{ title }}"
-                                message: "{{ message }}"
-                                data:
-                                  image: "/media/local/{{ photo }}"
-                                  url: <@ tap @>
-                                  tag: doorbell
-                                  push:
-                                    interruption-level: passive
-                                  actions: "{{ buttons }}"
-                                  action_data:
-                                    ring: "{{ ring_id }}"
+                            - alias: "Same tag: silently replaces the first notification to <@ p.name @> (photo stays), same ring_to"
+                              if:
+                                - condition: template
+                                  value_template: "{{ '<@ p.notify @>' in ring_to }}"
+                              then:
+                                - action: notify.<@ p.notify @>
+                                  continue_on_error: true
+                                  data:
+                                    title: "{{ title }}"
+                                    message: "{{ message }}"
+                                    data:
+                                      image: "/media/local/{{ photo }}"
+                                      url: <@ tap @>
+                                      tag: doorbell
+                                      push:
+                                        interruption-level: passive
+                                      actions: "{{ buttons }}"
+                                      action_data:
+                                        ring: "{{ ring_id }}"
 <% endfor %>
                             - action: logbook.log
                               data:

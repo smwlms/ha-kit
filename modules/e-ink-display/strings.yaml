@@ -1,0 +1,79 @@
+# User-facing texts of the module e-ink-display: one key per text, {en: ..., nl: ...}. tools/fill.py picks
+# house.language (default en); _e_ink.jinja passes every key of string_keys into the card config as strings:, and
+# www/e-ink-screen.js reads them as S.<key>. {placeholders} stay in the text and are filled in by the card (fmt());
+# keep them when you translate. Add a key here AND in string_keys of _e_ink.jinja.
+
+language_code: { en: en, nl: nl }
+dashboard_title: { en: E-ink display, nl: E-inkscherm }
+view_title: { en: Hall, nl: Hal }
+card_name: { en: E-ink display, nl: E-inkscherm }
+
+# --- formats ---
+locale: { en: en-GB, nl: nl-BE } # numbers, dates and times (BCP 47 tag for toLocaleString)
+week: { en: "week {n}", nl: "week {n}" }
+hour_short: { en: "{h}h", nl: "{h}u" }
+temp_range: { en: "{low}° to {high}°", nl: "{low}° tot {high}°" }
+
+# --- buttons (top row) ---
+nav_home: { en: Home, nl: Home }
+nav_energy: { en: Energy, nl: Energie }
+nav_climate: { en: Climate, nl: Klimaat }
+nav_shading: { en: Shading, nl: Zonwering }
+nav_cars: { en: Cars, nl: Auto's }
+nav_presence: { en: Week, nl: Week }
+nav_results: { en: Results, nl: Resultaat }
+
+# --- agenda ---
+agenda: { en: Agenda, nl: Agenda }
+agenda_none: { en: Nothing today or tomorrow., nl: Niets vandaag of morgen. }
+all_day: { en: all day, nl: hele dag }
+tomorrow: { en: tomorrow, nl: morgen }
+
+# --- home block ---
+home: { en: Home, nl: Thuis }
+person_home: { en: home, nl: thuis }
+person_away: { en: away, nl: weg }
+gate: { en: Gate, nl: Poort }
+gate_open: { en: OPEN, nl: OPEN }
+gate_closed: { en: closed, nl: dicht }
+gate_tap_again: { en: tap again, nl: tik nog eens }
+gate_open_q: { en: "open?", nl: "openen?" }
+gate_close_q: { en: "close?", nl: "sluiten?" }
+gate_close_reason: { en: close from the e-ink display, nl: sluiten via het e-inkscherm }
+blinds: { en: Blinds, nl: Rolluiken }
+blinds_open: { en: open, nl: open }
+blinds_closed: { en: closed, nl: dicht }
+blinds_n_closed: { en: "{n} closed", nl: "{n} dicht" }
+indoor: { en: Indoors, nl: Binnen }
+hot_water: { en: Hot water, nl: Warm water }
+doorbell: { en: Doorbell, nl: Deurbel }
+doorbell_rings: { en: RINGS, nl: BELT }
+doorbell_quiet: { en: quiet, nl: stil }
+car_charging: { en: "{name}, charging", nl: "{name}, laadt" }
+
+# --- energy block ---
+energy: { en: Energy, nl: Energie }
+solar: { en: solar, nl: zon }
+house: { en: house, nl: huis }
+from_grid: { en: from grid, nl: van net }
+to_grid: { en: to grid, nl: naar net }
+battery: { en: battery, nl: batterij }
+battery_charging: { en: charging, nl: laadt }
+battery_discharging: { en: discharging, nl: ontlaadt }
+today: { en: "Today:", nl: "Vandaag:" }
+today_solar: { en: "solar {v} kWh", nl: "zon {v} kWh" }
+today_solar_of: { en: "solar {v} of {f} kWh", nl: "zon {v} van {f} kWh" }
+today_grid: { en: "grid {v} kWh", nl: "net {v} kWh" }
+price_now: { en: "now {v} €/kWh", nl: "nu {v} €/kWh" }
+price_cheapest: { en: "cheapest {from}–{to}", nl: "goedkoopst {from}–{to}" }
+
+# --- helpers and automation ---
+helper_refresh: { en: "E-ink display: refresh every", nl: "E-inkscherm: verversen elke" }
+helper_charge_on_below: { en: "E-ink display: charge below", nl: "E-inkscherm: laden onder" }
+helper_charge_off_above: { en: "E-ink display: stop charging above", nl: "E-inkscherm: laden stoppen boven" }
+helper_smart_charging: { en: "E-ink display: smart charging", nl: "E-inkscherm: slim laden" }
+automation_alias: { en: "E-ink display: smart charging", nl: "E-inkscherm: slim laden" }
+automation_description: { en: "Charger of the wall tablet on below the lower limit, off above the upper limit; on as well when the battery sensor stays silent for 3 hours. See e-ink-display/LOGIC.md.", nl: "Lader van de wandtablet aan onder de ondergrens, uit boven de bovengrens; ook aan als de batterijsensor 3 uur zwijgt. Zie e-ink-display/LOGIC.md." }
+log_on: { en: "charger on: battery {level} %", nl: "lader aan: batterij {level} %" }
+log_on_silent: { en: "charger on: no battery level for a while", nl: "lader aan: al een tijd geen batterijniveau" }
+log_off: { en: "charger off: battery {level} %", nl: "lader uit: batterij {level} %" }

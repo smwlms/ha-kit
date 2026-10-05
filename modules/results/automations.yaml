@@ -1,0 +1,76 @@
+<% from '_results.jinja' import event_kinds, solar_missed with context %>
+<# Automations of the module results. Written through the config API by results/deploy.py. Texts through t(). #>
+<% set names = {} %>
+<% for k in event_kinds %><% set _ = names.update({k.kind: t('kind_' ~ k.kind)}) %><% endfor %>
+<% if not solar_missed and not event_kinds %>
+[]
+<% endif %>
+<% if solar_missed %>
+# Goal "solar used": at 23:55 results checks its own sensor.results_solar_missed_today and fires ha_kit_day_goal like
+# the producers do, so the goal sensor and the screen treat every goal the same.
+- id: results_solar_used_goal
+  alias: "<@ t('automation_solar_used') @>"
+  description: >-
+    ha-kit results: goal solar_used at 23:55. Met when less than input_number.results_solar_missed_max_kwh was sold
+    while the tank or a connected car still had room (sensor.results_solar_missed_today). See results/LOGIC.md.
+  mode: single
+  triggers:
+    - trigger: time
+      at: "23:55:00"
+  variables:
+    missed: "{{ states('sensor.results_solar_missed_today') | float(0) }}"
+    exported: "{{ state_attr('sensor.results_solar_missed_today', 'exported_today') | float(0) }}"
+    limit: "{{ states('input_number.results_solar_missed_max_kwh') | float(1) }}"
+    status: "{{ 'met' if missed < limit else 'missed' }}"
+  actions:
+    - event: ha_kit_day_goal
+      event_data:
+        goal: solar_used
+        status: "{{ status }}"
+        detail: >-
+          {{ <@ t('goal_solar_used_detail') | tojson @> | replace('{missed}', '%.1f' | format(missed))
+             | replace('{exported}', '%.1f' | format(exported)) }}
+    - action: logbook.log
+      data:
+        name: <@ t('log_name') | tojson @>
+        entity_id: sensor.results_solar_missed_today
+        message: >-
+          {{ <@ t('log_goal_solar_used') | tojson @> | replace('{missed}', '%.1f' | format(missed))
+             | replace('{status}', <@ t('status_met') | tojson @> if status == 'met' else <@ t('status_missed') | tojson @>) }}
+<% endif %>
+<% if event_kinds %>
+# A readable logbook line for every result a producer reports, on the saving sensor of its kind ("What the house
+# did" on the results screen). The sums themselves are kept by the template sensors in templates/results.yaml.
+- id: results_log_saving
+  alias: "<@ t('automation_log_saving') @>"
+  description: >-
+    ha-kit results: one logbook line per ha_kit_result of an installed kind (EUR, kWh). See results/LOGIC.md.
+  mode: queued
+  max: 20
+  triggers:
+    - trigger: event
+      event_type: ha_kit_result
+  conditions:
+    - condition: template
+      value_template: >-
+        {{ trigger.event.data.get('kind') in <@ names.keys() | list | tojson @> }}
+  variables:
+    names: <@ names | tojson @>
+    kind: "{{ trigger.event.data.get('kind') }}"
+    eur: "{{ trigger.event.data.get('eur') | float(0) }}"
+    kwh: "{{ trigger.event.data.get('kwh') | float(0) }}"
+    kw: "{{ trigger.event.data.get('kw') | float(0) }}"
+  actions:
+    - action: logbook.log
+      data:
+        name: <@ t('log_name') | tojson @>
+        entity_id: "{{ 'sensor.results_saving_' ~ kind }}"
+        message: >-
+          {%- if kind == 'peak_avoided' -%}
+          {{ <@ t('log_saving_peak') | tojson @> | replace('{what}', names[kind]) | replace('{eur}', '%.2f' | format(eur))
+             | replace('{kw}', '%.2f' | format(kw)) }}
+          {%- else -%}
+          {{ <@ t('log_saving') | tojson @> | replace('{what}', names[kind]) | replace('{eur}', '%.2f' | format(eur))
+             | replace('{kwh}', '%.1f' | format(kwh)) }}
+          {%- endif -%}
+<% endif %>

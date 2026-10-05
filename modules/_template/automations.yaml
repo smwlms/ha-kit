@@ -1,0 +1,21 @@
+<# Roles, not entity ids: the light comes from house.yaml entities.template_light (optional). #>
+<% set light = (entities.get('template_light') if entities is defined else none) or none %>
+<% if people is not defined or not people %><@ fail('house.yaml has no people (the module _template greets the first person)') @><% endif %>
+- id: ha_kit_template_switch_on
+  alias: "<@ t('automation_alias') @>"
+  description: Example automation of the kit's template module. See _template/LOGIC.md.
+  mode: single
+  triggers:
+    - trigger: state
+      entity_id: input_boolean.ha_kit_template_enabled
+      to: "on"
+  actions:
+<% if light %>
+    - action: light.turn_on
+      target:
+        entity_id: <@ light @>
+<% endif %>
+    - action: persistent_notification.create
+      data:
+        title: "<@ t('notify_title') @>"
+        message: "<@ t('notify_message', name=people[0].name) @>"

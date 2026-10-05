@@ -1,0 +1,72 @@
+<% from '_appliances.jinja' import apps, has_energy, has_battery with context %>
+# Appliances (Home Connect): helpers (ha-kit module appliances-home-connect, see appliances-home-connect/LOGIC.md
+# "Settings"). Uploaded by appliances-home-connect/deploy.py to /config/packages/appliances_home_connect.yaml.
+# No `initial` on anything you tune yourself: deploy.py sets the start values once (module.yaml defaults: and
+# appliances[].duration_h), after that Home Assistant keeps your value over a restart.
+
+input_boolean:
+<% for a in apps %>
+  appliance_<@ a.key @>_smart_waiting: # on = a smart start waits for sun (automation appliance_smart_start_run)
+    name: <@ t('helper_smart_waiting', name=a.name) | tojson @>
+    icon: mdi:timer-sand
+<% endfor %>
+
+input_datetime:
+<% for a in apps %>
+  appliance_<@ a.key @>_smart_start: # planned start (while waiting for sun: the latest start, the safety net)
+    name: <@ t('helper_smart_start', name=a.name) | tojson @>
+    icon: mdi:clock-start
+    has_date: true
+    has_time: true
+<% endfor %>
+<% if has_energy %>
+  appliances_solar_peak: # the sunniest moment: a plan that waits for sun falls back to a program centred on it
+    name: <@ t('helper_solar_peak') | tojson @>
+    icon: mdi:white-balance-sunny
+    has_date: false
+    has_time: true
+<% endif %>
+
+input_select:
+<% for a in apps %>
+  appliance_<@ a.key @>_ready_by: # auto = the learned arrival of that day (presence), else an hour; default auto
+    name: <@ t('helper_ready_by', name=a.name) | tojson @>
+    icon: mdi:clock-check-outline
+    options:
+      - auto
+<% for h in range(6, 23) %>
+      - "<@ '%02d:00' | format(h) @>"
+<% endfor %>
+<% endfor %>
+
+input_number:
+<% for a in apps %>
+  appliance_<@ a.key @>_duration_h: # program duration used by the plan (start value appliances[].duration_h)
+    name: <@ t('helper_duration', name=a.name) | tojson @>
+    icon: mdi:timer-outline
+    min: 0.5
+    max: 6
+    step: 0.25
+    mode: box
+    unit_of_measurement: h
+<% endfor %>
+<% if has_battery %>
+  appliances_battery_minimum: # start on the home battery above this level while the panels give >= 1 kW (default 60)
+    name: <@ t('helper_battery_minimum') | tojson @>
+    icon: mdi:home-battery-outline
+    min: 30
+    max: 100
+    step: 5
+    mode: box
+    unit_of_measurement: "%"
+<% endif %>
+<% if has_energy %>
+  appliances_solar_minimum_kwh: # wait for sun only when at least this much solar is expected (default 10)
+    name: <@ t('helper_solar_minimum') | tojson @>
+    icon: mdi:solar-power-variant-outline
+    min: 0
+    max: 60
+    step: 0.5
+    mode: box
+    unit_of_measurement: kWh
+<% endif %>

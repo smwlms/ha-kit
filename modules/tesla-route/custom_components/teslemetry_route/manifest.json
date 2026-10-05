@@ -1,0 +1,13 @@
+{
+  "domain": "teslemetry_route",
+  "name": "Teslemetry route",
+  "codeowners": [],
+  "config_flow": true,
+  "dependencies": ["teslemetry"],
+  "documentation": "https://github.com/Teslemetry/python-teslemetry-stream",
+  "integration_type": "service",
+  "iot_class": "cloud_push",
+  "requirements": [],
+  "single_config_entry": true,
+  "version": "0.2.0"
+}

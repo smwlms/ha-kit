@@ -1,0 +1,29 @@
+# Module metadata, read by tools/fill.py (--list shows it as a table), tools/choose.py (ask:) and by ventilation-zehnder/deploy.py.
+name: Ventilation (Zehnder)
+description: ESPHome firmware for the Zehnder ComfoAir Q over the ComfoNet bus (CAN), ComfoClime optional
+status: built, not tested on HA
+depends_on: []
+requires:
+  integrations: [ESPHome, ESPHome Device Builder app (or esphome on a computer)]
+  hardware: [Zehnder ComfoAir Q, M5Stack AtomS3 Lite, M5Stack Mini CAN Unit (TJA1051T/3), 4-wire cable to the ComfoNet connector]
+optional: false
+generate: []
+ask:
+  - id: ventilation
+    question: Which ventilation unit do you have?
+    options: [Zehnder ComfoAir Q, other, none]
+    need: Zehnder ComfoAir Q
+# Fields of house.yaml this module reads (example: section ventilation: in house.example.yaml).
+house_fields:
+  - ventilation.name, display_name (optional), mac_suffix (optional), comfoclime (optional), sniffer (optional), web_server (optional)
+# Secrets the firmware needs in /config/esphome/secrets.yaml (example: secrets.example.yaml).
+secrets: [wifi_ssid, wifi_password, wifi_hotspot_password, ota_password, ventilation_api_encryption_key]
+# Only needed with ventilation.web_server: true (login of the device's web page).
+secrets_web_server: [ventilation_web_username, ventilation_web_password]
+# Firmware pins (also in esphome/ventilation.yaml): change only together, after a test build.
+pins:
+  yoziru_esphome_zehnder_comfoair: ce62828bf21bcaec3a530e97740fa322cc085526
+  esphome_tested: 2026.9.0
+# tools/check.py: the other side of the optional switches, used in its all-modules house.
+check_variant:
+  ventilation: { comfoclime: true, sniffer: true, web_server: true }

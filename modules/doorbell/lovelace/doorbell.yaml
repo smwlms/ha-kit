@@ -1,0 +1,51 @@
+<# Example dashboard section for the doorbell; not deployed automatically. #>
+<% set parcel_service = 'parcel-service' in modules %>
+# Example card doorbell: paste into a dashboard (Edit > Add card > Manual).
+# On top the doorbell picture, below it the last visit, the reply buttons (LCD text for 3 min) and the visit list.
+type: vertical-stack
+cards:
+  - type: picture-entity
+    entity: <@ entities.doorbell_camera @>
+    name: <@ t('card_front_door') | tojson @>
+    camera_view: auto # refreshing photo; live only after a tap (live loads slowly)
+    show_state: false
+  - type: tile
+    entity: input_text.doorbell_visit
+    name: <@ t('card_last_visit') | tojson @>
+  - type: grid
+    columns: <@ 3 if parcel_service else 2 @>
+    square: false
+    cards:
+      - type: button
+        name: <@ t('card_button_at_door') | tojson @>
+        icon: mdi:door
+        tap_action:
+          action: perform-action
+          perform_action: script.doorbell_reply
+          data:
+            button: at_door
+<% if parcel_service %>
+      - type: button
+        name: <@ t('card_button_garage') | tojson @>
+        icon: mdi:garage-open-variant
+        tap_action:
+          action: perform-action
+          perform_action: script.doorbell_reply
+          data:
+            button: garage
+          confirmation:
+            text: <@ t('card_button_garage_confirm') | tojson @>
+<% endif %>
+      - type: button
+        name: <@ t('button_coming') | tojson @>
+        icon: mdi:walk
+        tap_action:
+          action: perform-action
+          perform_action: script.doorbell_reply
+          data:
+            button: coming
+  - type: custom:cw-bezoeken
+    calendar: <@ doorbell.calendar @>
+    visit: input_text.doorbell_visit
+    days: 31
+    limit: 8

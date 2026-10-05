@@ -1,0 +1,47 @@
+<#
+  Shared by every file of charger-zappi (import with context):
+    zappi              role -> entity id of the Zappi: entities.charger_<role> when filled in, else derived from
+                       charger_zappi.prefix (the myenergi entity prefix, e.g. myenergi_zappi_<serial>); none = absent
+    connection_phases  ev_charging.phases (default 3): phases of the charger connection
+    phase_switching    true when the phase automation and its helpers are rendered: ev-charging installed, a phase
+                       select known and a 3-phase connection
+    battery_power      entities.battery_power_w or none
+    battery_discharge_w a Home Assistant Jinja EXPRESSION (no braces) for "W the battery discharges now", following
+                       energy.battery_power_sign and the unit (W or kW); "0" without battery
+  The required roles are checked here, so every file that imports this partial stops with the same message.
+#>
+<% set _cz = (charger_zappi if charger_zappi is defined and charger_zappi else {}) %>
+<% set _ent = (entities if entities is defined and entities else {}) %>
+<% set _evc = (ev_charging if ev_charging is defined and ev_charging else {}) %>
+<% set _energy = (energy if energy is defined and energy else {}) %>
+<% set zappi_prefix = (_cz.get('prefix') or '') | string %>
+<% if zappi_prefix and not (zappi_prefix | regex_search('^[a-z0-9_]+$')) %><@ fail('charger_zappi.prefix must be lower case letters, digits and underscores, without domain (e.g. myenergi_zappi_0000000); now: ' ~ zappi_prefix) @><% endif %>
+<% set _patterns = {
+  'charger_status': 'sensor.{p}_status',
+  'charger_mode': 'select.{p}_charge_mode',
+  'charger_plug': 'sensor.{p}_plug_status',
+  'charger_power_w': 'sensor.{p}_power_ct_internal_load',
+  'charger_min_green': 'number.{p}_minimum_green_level',
+  'charger_phase': 'select.{p}_phase_setting',
+  'charger_energy_today': 'sensor.{p}_energy_used_today',
+  'charger_solar_energy_today': 'sensor.{p}_green_energy_today',
+} %>
+<% set zappi = {} %>
+<% for role, pattern in _patterns.items() %>
+<% set _ = zappi.update({role: (_ent.get(role) or (pattern.replace('{p}', zappi_prefix) if zappi_prefix else none))}) %>
+<% endfor %>
+<% for role in ['charger_status', 'charger_mode', 'charger_plug', 'charger_power_w', 'charger_min_green'] %>
+<% if not zappi[role] %><@ fail('house.yaml: entities.' ~ role ~ ' is empty and charger_zappi.prefix is not set (required for the module charger-zappi)') @><% endif %>
+<% endfor %>
+<% set connection_phases = (_evc.get('phases') or 3) | int %>
+<% if connection_phases not in [1, 3] %><@ fail('ev_charging.phases must be 1 or 3 (now: ' ~ connection_phases ~ ')') @><% endif %>
+<% set phase_switching = ('ev-charging' in modules) and (zappi.charger_phase is not none) and connection_phases == 3 %>
+<% set battery_power = _ent.get('battery_power_w') or none %>
+<% set battery_sign = _energy.get('battery_power_sign') or '' %>
+<% if battery_power and phase_switching and battery_sign not in ['charge_positive', 'discharge_positive'] %><@ fail('house.yaml: energy.battery_power_sign must be charge_positive or discharge_positive when entities.battery_power_w is set (charger-zappi reads the battery for the phase switching)') @><% endif %>
+<% if battery_power %>
+<% set _bw = "(states('" ~ battery_power ~ "') | float(0)) * (1000 if state_attr('" ~ battery_power ~ "', 'unit_of_measurement') == 'kW' else 1)" %>
+<% set battery_discharge_w = "([" ~ ('' if battery_sign == 'discharge_positive' else '0 - ') ~ _bw ~ ", 0] | max)" %>
+<% else %>
+<% set battery_discharge_w = "0" %>
+<% endif %>

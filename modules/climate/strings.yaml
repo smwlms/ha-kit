@@ -1,0 +1,348 @@
+# User-facing texts of the module climate: one key per text, {en: ..., nl: ...}. tools/fill.py picks house.language
+# (default en). Helper, sensor and automation names and logbook lines are filled in by t() in the module's files;
+# _climate_card.jinja passes every key the screen reads into the card config as strings:, and www/climate-screen.js
+# reads them as S.<key>. {placeholders} stay in the text and are filled in by the card in the browser (fmt()) or by
+# t(); keep them when you translate. Add a key here AND, for the screen, in string_keys of _climate_card.jinja.
+
+# --- formats and card ---
+language_code: { en: "en", nl: "nl" }
+locale: { en: "en-GB", nl: "nl-BE" }
+card_name: { en: "Climate", nl: "Klimaat" }
+view_title: { en: "Climate", nl: "Klimaat" }
+title: { en: "Climate", nl: "Klimaat" }
+tab_status: { en: "Status", nl: "Status" }
+tab_controls: { en: "Controls", nl: "Bediening" }
+tab_smart: { en: "Smart", nl: "Slim" }
+tab_settings: { en: "Settings", nl: "Instellingen" }
+tab_details: { en: "Details", nl: "Details" }
+no_measurement: { en: "no measurement yet", nl: "nog geen meting" }
+no_measurements: { en: "No measurements yet.", nl: "Nog geen metingen." }
+lower: { en: "{what}: lower", nl: "{what}: lager" }
+higher: { en: "{what}: higher", nl: "{what}: hoger" }
+yes_word: { en: "yes", nl: "ja" }
+none: { en: "none", nl: "geen" }
+is_off: { en: "is off", nl: "staat uit" }
+off_word: { en: "off", nl: "uit" }
+offline: { en: "offline", nl: "offline" }
+now: { en: "Now", nl: "Nu" }
+today: { en: "Today", nl: "Vandaag" }
+n_days: { en: "{n} days", nl: "{n} dagen" }
+hours_short: { en: "{h} h", nl: "{h} u" }
+at_hour: { en: "{h}", nl: "{h}u" }
+
+# --- modes and states (fixed English values shown translated) ---
+mode_heating: { en: "heating", nl: "verwarmen" }
+mode_neutral: { en: "neutral", nl: "neutraal" }
+mode_cooling: { en: "cooling", nl: "koelen" }
+vstate_auto: { en: "automatic", nl: "automatisch" }
+vstate_bypass_closed: { en: "bypass closed", nl: "bypass dicht" }
+vstate_cooling_medium: { en: "cooling on medium", nl: "koelen midden" }
+vstate_cooling_high: { en: "cooling on high", nl: "koelen hoog" }
+vstate_auto_info: { en: "lets the ventilation choose", nl: "laat de ventilatie zelf kiezen" }
+vstate_bypass_closed_info: { en: "bypass closed, the heat stays inside", nl: "bypass dicht, de warmte blijft binnen" }
+vstate_cooling_medium_info: { en: "cools on medium", nl: "koelt op midden" }
+vstate_cooling_high_info: { en: "cools on high", nl: "koelt op hoog" }
+hp_idle: { en: "resting", nl: "in rust" }
+hp_hot_water: { en: "heating hot water", nl: "warmt water op" }
+hp_heating: { en: "heating", nl: "verwarmt" }
+hp_cooling: { en: "cooling", nl: "koelt" }
+hp_unknown: { en: "unknown", nl: "onbekend" }
+term_base: { en: "base", nl: "basis" }
+term_solar: { en: "sun", nl: "zon" }
+term_outdoor: { en: "outdoor air", nl: "buitenlucht" }
+
+# --- helpers, sensors (names in Home Assistant) ---
+helper_floor_auto: { en: "Floor mode automatic", nl: "Vloerstand automatisch" }
+helper_floor_mode: { en: "Floor mode", nl: "Vloerstand" }
+helper_floor_since: { en: "Floor mode since", nl: "Vloerstand sinds" }
+helper_floor_band_low: { en: "Floor {mode} low", nl: "Vloer {mode} laag" }
+helper_floor_band_high: { en: "Floor {mode} high", nl: "Vloer {mode} hoog" }
+helper_floor_cooling_from: { en: "Floor cooling from outdoor max", nl: "Vloer koelen vanaf buiten max" }
+helper_floor_heating_below: { en: "Floor heating below outdoor max", nl: "Vloer verwarmen onder buiten max" }
+helper_ventilation_cooling: { en: "Ventilation cooling with outside air", nl: "Ventilatie koelen met buitenlucht" }
+helper_ventilation_cooling_from: { en: "Ventilation cooling from", nl: "Ventilatie koelen vanaf" }
+helper_ventilation_state: { en: "Ventilation cooling state", nl: "Ventilatie koelstand" }
+helper_bypass_renewed: { en: "Ventilation bypass renewed", nl: "Ventilatie bypass vernieuwd" }
+helper_comfoclime_previous: { en: "ComfoClime before boost", nl: "ComfoClime voor bijverwarmen" }
+sensor_weather_days: { en: "Climate weather days", nl: "Klimaat weer komende dagen" }
+
+# --- automations: names, descriptions, logbook, notifications ---
+auto_floor_choose_alias: { en: "Climate: choose the floor mode for the coming days", nl: "Klimaat: vloerstand kiezen voor de komende dagen" }
+auto_floor_choose_description: { en: "Once a day at 06:00: cooling only when at least 3 days in a row are warm (forecast day maximum at or above the threshold), heating when 3 days in a row are cool, otherwise neutral. The indoor forecast vetoes the opposite mode. A mode stays at least 3 days and heating <-> cooling always passes through neutral. Daily peaks are for the ventilation, never for the floor. Off with input_boolean.climate_floor_mode_auto.", nl: "Elke dag om 06:00: koelen alleen als minstens 3 dagen na elkaar warm zijn (voorspeld dagmaximum op of boven de grens), verwarmen als 3 dagen na elkaar fris zijn, anders neutraal. De binnenprognose heeft een veto op de tegenovergestelde stand. Een stand blijft minstens 3 dagen en verwarmen <-> koelen gaat altijd via neutraal. Dagelijkse pieken zijn voor de ventilatie, nooit voor de vloer. Uit te zetten met input_boolean.climate_floor_mode_auto." }
+auto_floor_apply_alias: { en: "Climate: apply the floor mode", nl: "Klimaat: vloerstand toepassen" }
+auto_floor_apply_description: { en: "When the floor mode changes (by the daily decision or by hand), or a band of the active mode is tuned: writes the band of that mode through script.heat_pump_set_floor_band (the heat-pump module writes only values that differ) and stores the switch time in input_datetime.climate_floor_mode_since.", nl: "Als de vloerstand wijzigt (door de dagelijkse keuze of met de hand), of een band van de actieve stand bijgesteld wordt: schrijft de band van die stand via script.heat_pump_set_floor_band (de warmtepompmodule schrijft enkel waarden die verschillen) en bewaart het moment in input_datetime.climate_floor_mode_since." }
+auto_ventilation_cooling_alias: { en: "Climate: cool with outside air", nl: "Klimaat: koelen met buitenlucht" }
+auto_ventilation_cooling_description: { en: "Cools as cheaply as possible: warm inside and at least 2 °C cooler outside opens the bypass and runs the ventilation harder (medium; high only between {start} and {end}, because high is loud). Warmer outside than inside, or getting too cool inside: the bypass closes so the heat exchanger keeps the indoor temperature. Otherwise the ventilation runs on its own. Not in the heating season. Off with input_boolean.climate_ventilation_cooling.", nl: "Koelt zo zuinig mogelijk: warm binnen en buiten minstens 2 °C koeler zet de bypass open en de ventilatie harder (midden; hoog alleen tussen {start} en {end}, want hoog is luid). Buiten warmer dan binnen, of binnen te fris: de bypass gaat dicht zodat de warmtewisselaar de binnentemperatuur vasthoudt. Anders regelt de ventilatie zichzelf. Niet in het stookseizoen. Uit te zetten met input_boolean.climate_ventilation_cooling." }
+auto_season_profile_alias: { en: "Climate: ventilation profile by season", nl: "Klimaat: ventilatieprofiel volgens seizoen" }
+auto_season_profile_description: { en: "Sets the temperature profile of the ventilation to its heating profile when the unit's own season detection reports the heating season, and to its cooling profile in the cooling season, so the bypass does not throw heat away in winter.", nl: "Zet het temperatuurprofiel van de ventilatie op het stookprofiel zodra de eigen seizoensdetectie van het toestel het stookseizoen meldt, en op het koelprofiel in het koelseizoen. Zo gooit de bypass in de winter geen warmte weg." }
+auto_boost_alias: { en: "Climate: ComfoClime boost on a cold dip", nl: "Klimaat: ComfoClime bijverwarmen bij een korte koude piek" }
+auto_boost_description: { en: "Indoor below {below} °C while the ComfoClime is not heating: it heats the supply air with boost for {hours} h (air warms up in minutes, the floor takes hours), then goes back to the mode it had. The previous mode is kept in input_text.climate_comfoclime_previous, so the way back survives a restart.", nl: "Binnen onder {below} °C terwijl de ComfoClime niet verwarmt: hij warmt de toevoerlucht op met boost, {hours} u lang (lucht warmt op in minuten, de vloer in uren), en gaat daarna terug naar zijn vorige stand. Die staat in input_text.climate_comfoclime_previous, zodat de terugweg ook een herstart overleeft." }
+log_name_floor: { en: "Floor", nl: "Vloer" }
+log_name_ventilation: { en: "Ventilation", nl: "Ventilatie" }
+log_name_comfoclime: { en: "ComfoClime", nl: "ComfoClime" }
+log_floor_stays: { en: "stays on {mode} · only {days} days (min. 3)", nl: "blijft op {mode} · pas {days} dagen (min. 3)" }
+log_floor_to_cooling: { en: "to cooling · up to {max} °C outdoors", nl: "op koelen · tot {max} °C buiten" }
+log_floor_to_heating: { en: "to heating · {min}–{max} °C outdoors", nl: "op verwarmen · buiten {min}–{max} °C" }
+log_floor_via_neutral: { en: "via neutral towards {mode}", nl: "via neutraal naar {mode}" }
+log_floor_to_neutral: { en: "to neutral · changeable weather", nl: "op neutraal · wisselend weer" }
+log_by_hand: { en: " (by hand)", nl: " (handmatig)" }
+log_band_tuned: { en: " · band tuned", nl: " · band bijgesteld" }
+reason_floor_mode: { en: "climate: floor mode {mode}", nl: "klimaat: vloerstand {mode}" }
+log_ventilation: { en: "{state} · {indoor} °C inside, {outdoor} °C outside", nl: "{state} · {indoor} °C binnen, {outdoor} °C buiten" }
+log_high_later: { en: " (high only {start}–{end})", nl: " (hoog pas {start}–{end})" }
+log_profile_heating: { en: "profile {profile} · heating season", nl: "profiel {profile} · stookseizoen" }
+log_profile_cooling: { en: "profile {profile} · cooling season", nl: "profiel {profile} · koelseizoen" }
+log_boost_start: { en: "boost {hours} h · {indoor} °C inside", nl: "bijverwarmen {hours} u · binnen {indoor} °C" }
+log_boost_end: { en: "boost done · back to {mode}", nl: "bijverwarmen klaar · terug op {mode}" }
+log_boost_no_writes: { en: "no boost: writes over the bus are off (switch ComfoClime: allow writes)", nl: "geen bijverwarmen: schrijven over de bus staat uit (schakelaar ComfoClime: allow writes)" }
+notify_boost_title: { en: "ComfoClime boost", nl: "ComfoClime bijverwarmen" }
+notify_boost_message: { en: "Indoors dropped below {below} °C. The ComfoClime heats the supply air for {hours} h.", nl: "Binnen zakte onder {below} °C. De ComfoClime warmt de toevoerlucht op, {hours} u lang." }
+veto_reason: { en: "climate screen", nl: "klimaatscherm" }
+
+# --- screen: status ---
+alert_fault: { en: "fault", nl: "storing" }
+alert_fault_info: { en: "Fault: the heat pump reports a fault.", nl: "Storing: de warmtepomp meldt een storing." }
+alert_filter: { en: "filter {days} d", nl: "filter {days} d" }
+alert_filter_info: { en: "Ventilation filter: replace in {days} days.", nl: "Filter ventilatie: vervangen over {days} dagen." }
+alert_floor_offline: { en: "Floor offline: Home Assistant gets no data from the heat pump.", nl: "Vloer offline: Home Assistant krijgt geen gegevens van de warmtepomp." }
+alert_vent_offline: { en: "Ventilation offline: the unit cannot be reached.", nl: "Ventilatie offline: het toestel is niet bereikbaar." }
+alert_cc_offline: { en: "ComfoClime offline: it cannot be reached.", nl: "ComfoClime offline: hij is niet bereikbaar." }
+alert_cc_writes: { en: "ComfoClime read-only", nl: "ComfoClime alleen lezen" }
+alert_cc_writes_info: { en: "ComfoClime read-only: writing over the bus is off, so the boost cannot start. Turn it on under Settings.", nl: "ComfoClime alleen lezen: schrijven over de bus staat uit, dus bijverwarmen kan niet starten. Zet het aan onder Instellingen." }
+alert_forecast: { en: "forecast", nl: "prognose" }
+alert_forecast_info: { en: "Forecast: the indoor forecast has no value ({error}). It needs the recorder on SQLite and statistics of the indoor temperature.", nl: "Prognose: de binnenprognose heeft geen waarde ({error}). Ze heeft de recorder op SQLite nodig en statistieken van de binnentemperatuur." }
+comfort_band: { en: "Comfortable is between {low} and {high}°.", nl: "Comfortabel is tussen {low} en {high}°." }
+too_warm: { en: "too warm", nl: "te warm" }
+too_warm_label: { en: "Warmer than wanted", nl: "Warmer dan gewenst" }
+too_warm_info: { en: "It is {t}° inside: warmer than wanted.", nl: "Binnen is het {t}°: warmer dan gewenst." }
+too_cold: { en: "too cold", nl: "te koud" }
+too_cold_label: { en: "Colder than wanted", nl: "Kouder dan gewenst" }
+too_cold_info: { en: "It is {t}° inside: colder than wanted.", nl: "Binnen is het {t}°: kouder dan gewenst." }
+comfortable: { en: "good", nl: "goed" }
+comfortable_label: { en: "Within the wanted band", nl: "Binnen de gewenste band" }
+indoor_info: { en: "It is {t}° inside.", nl: "Binnen is het {t}°." }
+indoor: { en: "indoors", nl: "binnen" }
+not_measured: { en: "Not measured yet", nl: "Nog niet gemeten" }
+indoor_not_measured: { en: "The indoor temperature has not been measured yet.", nl: "De binnentemperatuur is nog niet gemeten." }
+target_label: { en: "Indoor target", nl: "Doel binnen" }
+target_info: { en: "The indoor target is {t}°.", nl: "Het doel binnen is {t}°." }
+outdoor: { en: "Outdoors", nl: "Buiten" }
+outdoor_info: { en: "It is {t} outside.", nl: "Buiten is het {t}." }
+outdoor_info_weather: { en: "It is {t} outside and {w}.", nl: "Buiten is het {t} en {w}." }
+humidity_in: { en: "Humidity inside", nl: "Vocht binnen" }
+humidity_in_info: { en: "The humidity inside is {h}. Between 40 and 60 % is healthy.", nl: "De luchtvochtigheid binnen is {h}. Tussen 40 en 60 % is gezond." }
+humidity_out: { en: "Humidity outside", nl: "Vocht buiten" }
+humidity_out_info: { en: "The humidity outside is {h}.", nl: "De luchtvochtigheid buiten is {h}." }
+humidity_house: { en: "Humidity of the extract air", nl: "Vocht in huis" }
+day_type: { en: "Kind of day", nl: "Soort dag" }
+day_info: { en: "Today will be {day}.", nl: "Vandaag wordt een {day}." }
+day_cool: { en: "a cool day", nl: "koele dag" }
+day_warm: { en: "a warm day", nl: "warme dag" }
+day_sunny_fresh: { en: "a sunny but fresh day", nl: "zonnige maar frisse dag" }
+day_normal: { en: "an ordinary day", nl: "gewone dag" }
+day_cool_short: { en: "cool", nl: "koel" }
+day_warm_short: { en: "warm", nl: "warm" }
+day_sunny_fresh_short: { en: "fresh", nl: "fris" }
+day_normal_short: { en: "ordinary", nl: "gewoon" }
+indoor_peak: { en: "Indoor peak", nl: "Binnenpiek" }
+peak_info: { en: "We expect an indoor peak of {t}.", nl: "Binnen verwachten we een piek van {t}." }
+peak_info_at: { en: "We expect an indoor peak of {t} around {h}.", nl: "Binnen verwachten we een piek van {t} rond {h} u." }
+floor_mode: { en: "Floor mode", nl: "Vloerstand" }
+floor_mode_sub: { en: "chosen over several days; a choice by hand also stays 3 days", nl: "gekozen over meerdere dagen; een keuze met de hand blijft ook 3 dagen" }
+floor_mode_info_heating: { en: "The floor is on heating: the coming days are cool.", nl: "De vloer staat op verwarmen: de komende dagen zijn fris." }
+floor_mode_info_neutral: { en: "The floor is neutral: it neither heats nor cools; the ventilation handles daily peaks.", nl: "De vloer staat neutraal: hij verwarmt niet en koelt niet; dagelijkse pieken doet de ventilatie." }
+floor_mode_info_cooling: { en: "The floor cools preventively for a warm spell.", nl: "De vloer koelt preventief voor een warme periode." }
+floor: { en: "Floor", nl: "Vloer" }
+floor_band: { en: "heats below {low}°, cools above {high}°", nl: "verwarmt onder {low}°, koelt boven {high}°" }
+floor_doing_heating: { en: "The floor heats.", nl: "De vloer verwarmt." }
+floor_doing_cooling: { en: "The floor cools.", nl: "De vloer koelt." }
+floor_doing_hot_water: { en: "The heat pump heats the hot water.", nl: "De warmtepomp warmt het water op." }
+floor_doing_idle: { en: "The floor rests: no heat or cooling needed.", nl: "De vloer rust: geen warmte of koeling nodig." }
+floor_off_info: { en: "The floor heating is off.", nl: "De vloerverwarming staat uit." }
+heats: { en: "heats", nl: "verwarmt" }
+cools: { en: "cools", nl: "koelt" }
+rests: { en: "rests", nl: "rust" }
+hot_water_word: { en: "hot water", nl: "warm water" }
+temporary: { en: "temporary", nl: "tijdelijk" }
+veto_label: { en: "Temporary temperature", nl: "Tijdelijke temperatuur" }
+veto_until: { en: "temporary temperature until {t}", nl: "tijdelijk andere temperatuur tot {t}" }
+ventilation: { en: "Ventilation", nl: "Ventilatie" }
+speed: { en: "Speed", nl: "Stand" }
+speed_info: { en: "Speed {s}.", nl: "Stand {s}." }
+speed_away: { en: "away", nl: "weg" }
+speed_low: { en: "low", nl: "laag" }
+speed_medium: { en: "medium", nl: "midden" }
+speed_high: { en: "high", nl: "hoog" }
+bypass: { en: "Bypass", nl: "Bypass" }
+bypass_pct: { en: "bypass {pct} %", nl: "bypass {pct} %" }
+bypass_open_pct: { en: "bypass open {pct} %", nl: "bypass open {pct} %" }
+bypass_closed: { en: "bypass closed", nl: "bypass dicht" }
+bypass_info: { en: "The bypass is {pct} % open: outside air comes in without passing the heat exchanger.", nl: "De bypass staat {pct} % open: buitenlucht komt binnen zonder langs de warmtewisselaar." }
+vent_unreachable: { en: "The ventilation cannot be reached now", nl: "De ventilatie is nu niet bereikbaar" }
+vent_air_heated: { en: "The supply air is heated", nl: "De toevoerlucht wordt opgewarmd" }
+vent_air_cooled: { en: "The supply air is cooled", nl: "De toevoerlucht wordt gekoeld" }
+vent_free_cooling: { en: "The house cools for free with outside air", nl: "Het huis koelt gratis met buitenlucht" }
+vent_free_cooling_info: { en: "The house cools for free with cool outside air.", nl: "Het huis koelt gratis met koele buitenlucht." }
+vent_cool_air_in: { en: "Cool outside air comes in", nl: "Koele buitenlucht komt binnen" }
+vent_bypass_open: { en: "The bypass is open", nl: "De bypass staat open" }
+vent_away: { en: "The ventilation is on away", nl: "De ventilatie staat op weg" }
+vent_keeps_heat: { en: "The ventilation keeps the heat inside", nl: "De ventilatie houdt de warmte binnen" }
+vent_calm: { en: "The house is ventilated calmly", nl: "Het huis wordt rustig geventileerd" }
+comfoclime: { en: "ComfoClime", nl: "ComfoClime" }
+cc_off: { en: "Off", nl: "Uit" }
+cc_heating: { en: "Heats the supply air", nl: "Warmt de lucht op" }
+cc_cooling: { en: "Cools the supply air", nl: "Koelt de lucht" }
+cc_defrosting: { en: "Defrosting", nl: "Ontdooit" }
+cc_fan_only: { en: "Only lets air through", nl: "Laat enkel lucht door" }
+cc_fan_only_short: { en: "air only", nl: "enkel lucht" }
+cc_idle: { en: "Resting", nl: "In rust" }
+boost_word: { en: "boost", nl: "bijverwarmen" }
+cc_boost: { en: "Boost on a cold dip", nl: "Bijverwarmen bij een koude piek" }
+cc_boost_until: { en: "boost until {t}", nl: "bijverwarmen tot {t}" }
+cc_boost_waiting: { en: "waits until it is below {t}° inside", nl: "wacht tot het binnen onder {t}° zakt" }
+cc_boost_rule: { en: "When it drops below {below}° inside, the ComfoClime heats the supply air with boost for {hours} h, then goes back to its previous mode. The slow floor does not have to catch up.", nl: "Zakt het binnen onder {below}°, dan warmt de ComfoClime de toevoerlucht {hours} u op met boost en gaat daarna terug naar zijn vorige stand. De trage vloer hoeft niet op te schalen." }
+hot_water: { en: "Hot water", nl: "Warm water" }
+sun_word: { en: "sun", nl: "zon" }
+shower_word: { en: "shower", nl: "douche" }
+hw_surplus: { en: "On solar surplus", nl: "Op zonne-overschot" }
+hw_surplus_info: { en: "The tank heats with solar power that would otherwise go to the grid.", nl: "De boiler warmt op met zonnestroom die anders naar het net zou gaan." }
+hw_shower: { en: "Shower tomorrow morning", nl: "Douche morgenvroeg" }
+hw_shower_info: { en: "Shower tomorrow morning is on: the water is kept warmer for the morning.", nl: "Douche morgenvroeg staat aan: het water wordt warmer gehouden tegen de ochtend." }
+hw_shower_sub: { en: "warm by sunrise", nl: "warm tegen zonsopgang" }
+hw_in_tank: { en: "{t} °C in the tank", nl: "{t} °C in de boiler" }
+blinds: { en: "Blinds", nl: "Rolluiken" }
+shading_auto: { en: "Shading automatic", nl: "Zonwering automatisch" }
+shading_auto_on: { en: "The blinds close by themselves when it is warm and the sun is on the window.", nl: "De rolluiken gaan vanzelf dicht als het warm is en de zon op het raam staat." }
+shading_auto_off: { en: "The automatic shading is off.", nl: "De automatische zonwering staat uit." }
+auto_word: { en: "auto", nl: "auto" }
+manual_word: { en: "manual", nl: "manueel" }
+closed_for_sun: { en: "Closed against the sun", nl: "Dicht tegen de zon" }
+n_closed: { en: "{n} closed", nl: "{n} dicht" }
+n_closed_for_sun: { en: "Closed against the sun: {n}.", nl: "Dicht tegen de zon: {n}." }
+blinds_closed_aria: { en: "Blinds: {n} of {total} closed", nl: "Rolluiken: {n} van {total} dicht" }
+
+# --- screen: controls ---
+boost: { en: "Boost", nl: "Boost" }
+boost_15: { en: "15 min", nl: "15 min" }
+boost_60: { en: "1 h", nl: "1 u" }
+boost_180: { en: "3 h", nl: "3 u" }
+boost_720: { en: "12 h", nl: "12 u" }
+boost_off: { en: "Stop boost", nl: "Stop boost" }
+bypass_sub: { en: "let cool outside air in", nl: "koele buitenlucht binnenhalen" }
+bypass_on_1h: { en: "Open 1 h", nl: "Open 1 u" }
+bypass_on_12h: { en: "Open 12 h", nl: "Open 12 u" }
+bypass_off_1h: { en: "Closed 1 h", nl: "Dicht 1 u" }
+bypass_auto: { en: "Automatic", nl: "Automatisch" }
+vent_auto: { en: "Own control", nl: "Zelf regelen" }
+vent_auto_sub: { en: "chooses the speed", nl: "kiest de snelheid" }
+vent_away_toggle: { en: "Away", nl: "Afwezig" }
+vent_away_sub: { en: "minimal ventilation", nl: "minimale ventilatie" }
+cc_offline_title: { en: "ComfoClime · offline", nl: "ComfoClime · offline" }
+cc_offline_sub: { en: "The air comes in without extra heating or cooling.", nl: "De lucht komt binnen zonder extra opwarmen of koelen." }
+mode: { en: "Mode", nl: "Stand" }
+cc_mode_off: { en: "off", nl: "uit" }
+cc_mode_fan_only: { en: "air", nl: "lucht" }
+cc_mode_heat: { en: "heat", nl: "warm" }
+cc_mode_cool: { en: "cool", nl: "koel" }
+cc_preset_none: { en: "normal", nl: "normaal" }
+cc_preset_comfort: { en: "comfort", nl: "comfort" }
+cc_preset_boost: { en: "boost", nl: "boost" }
+cc_preset_eco: { en: "eco", nl: "zuinig" }
+preset: { en: "Preset", nl: "Voorkeur" }
+target_temperature: { en: "Target temperature", nl: "Doeltemperatuur" }
+cc_target_cool: { en: "cools the air when it is warmer inside", nl: "koelt de lucht als het binnen warmer is" }
+cc_target_heat: { en: "heats the air when it is colder inside", nl: "warmt de lucht op als het binnen kouder is" }
+floor_auto: { en: "Automatic", nl: "Automatisch" }
+floor_auto_sub: { en: "the house picks the mode at 06:00", nl: "het huis kiest de stand om 06:00" }
+veto_title: { en: "Temporarily another temperature", nl: "Tijdelijk een andere temperatuur" }
+veto_sub: { en: "afterwards the floor returns to its normal control", nl: "daarna gaat de vloer terug naar de gewone regeling" }
+temperature: { en: "Temperature", nl: "Temperatuur" }
+duration: { en: "Duration", nl: "Duur" }
+veto_start: { en: "Start {h} h", nl: "Start {h} u" }
+veto_stop: { en: "Stop, back to normal", nl: "Stop, terug naar gewoon" }
+room_closed_sun: { en: "closed against the sun", nl: "dicht tegen de zon" }
+room_manual: { en: "operated by hand", nl: "met de hand bediend" }
+cover_open: { en: "open", nl: "open" }
+cover_closed: { en: "closed", nl: "dicht" }
+cover_opening: { en: "opening", nl: "gaat open" }
+cover_closing: { en: "closing", nl: "gaat dicht" }
+cover_unknown: { en: "position unknown", nl: "stand onbekend" }
+open: { en: "Open", nl: "Open" }
+close: { en: "Close", nl: "Dicht" }
+hold: { en: "Hold", nl: "Vasthouden" }
+
+# --- screen: smart ---
+smart_cooling: { en: "Cooling with outside air", nl: "Koelen met buitenlucht" }
+smart_cooling_rule: { en: "Warmer than {from} inside and cooler outside: the bypass opens and the ventilation runs harder. High only between {start} and {end}; during the day medium or closed.", nl: "Binnen warmer dan {from} en buiten koeler: de bypass gaat open en de ventilatie draait harder. Hoog enkel tussen {start} en {end}, overdag midden of dicht." }
+smart_cooling_sub: { en: "high only {start}–{end}", nl: "hoog enkel {start}–{end}" }
+cooling_from: { en: "Cool from", nl: "Koelen vanaf" }
+cooling_from_sub: { en: "indoor temperature above which the house is cooled", nl: "binnentemperatuur waarboven het huis gekoeld wordt" }
+outdoor_vent: { en: "Outdoors (ventilation)", nl: "Buiten (ventilatie)" }
+loud_hours: { en: "High allowed", nl: "Hoog toegelaten" }
+floor_coming_days: { en: "Floor, coming days", nl: "Vloer, komende dagen" }
+floor_rule: { en: "The floor never cools day by day: only preventively when at least 3 days in a row reach {warm} or more. Heating when 3 days stay below {cool}. A mode stays at least 3 days, heating and cooling always through neutral. Daily cooling is done by the ventilation.", nl: "De vloer koelt nooit dagelijks: alleen preventief als minstens 3 dagen na elkaar {warm} of meer halen. Verwarmen als 3 dagen onder {cool} blijven. Een stand blijft minstens 3 dagen, verwarmen en koelen altijd via neutraal. Dagelijks koelen doet de ventilatie." }
+days_in_mode: { en: "for {d} days", nl: "sinds {d} dagen" }
+advice_forecast: { en: "Advice of the forecast", nl: "Advies van de prognose" }
+floor_band_now: { en: "Band of the floor", nl: "Band van de vloer" }
+season_profile: { en: "Season profile", nl: "Seizoensprofiel" }
+season_profile_rule: { en: "Chooses the temperature profile of the ventilation by itself: {heating} in the heating season, {cooling} in the cooling season.", nl: "Kiest vanzelf het temperatuurprofiel van de ventilatie: {heating} in het stookseizoen, {cooling} in het koelseizoen." }
+profile_now: { en: "profile {p}", nl: "profiel {p}" }
+season_heating: { en: "heating season", nl: "stookseizoen" }
+season_cooling: { en: "cooling season", nl: "koelseizoen" }
+season_between: { en: "between seasons", nl: "tussenseizoen" }
+shading: { en: "Shading", nl: "Zonwering" }
+shading_rule: { en: "A blind closes when it is warm and the sun is on that window. Whoever opens a blind by hand holds it for the rest of the day.", nl: "Rolluik dicht als het warm is en de zon op dat raam staat. Wie een rolluik zelf opent, houdt het de rest van de dag vast." }
+shut_rooms: { en: "closed against the sun: {rooms}", nl: "dicht tegen de zon: {rooms}" }
+none_shut: { en: "no blind closed against the sun", nl: "geen rolluik dicht tegen de zon" }
+held_rooms: { en: "held: {rooms}", nl: "vastgehouden: {rooms}" }
+
+# --- screen: settings ---
+floor_settings_sub: { en: "mode, bands and thresholds", nl: "stand, banden en grenzen" }
+floor_cooling_from: { en: "Warm day from", nl: "Warme dag vanaf" }
+floor_cooling_from_sub: { en: "forecast day maximum; 3 such days in a row = floor cooling", nl: "voorspeld dagmaximum; 3 zulke dagen na elkaar = vloer koelen" }
+floor_heating_below: { en: "Cool day below", nl: "Frisse dag onder" }
+floor_heating_below_sub: { en: "forecast day maximum; 3 such days in a row = floor heating", nl: "voorspeld dagmaximum; 3 zulke dagen na elkaar = vloer verwarmen" }
+band_low: { en: "Heats below", nl: "Verwarmen onder" }
+band_low_sub: { en: "the floor heats when it gets colder", nl: "de vloer warmt op als het kouder wordt" }
+band_high: { en: "Cools above", nl: "Koelen boven" }
+band_high_sub: { en: "the floor cools when it gets warmer (not below the dew point)", nl: "de vloer koelt als het warmer wordt (niet onder het dauwpunt)" }
+vent_settings_sub: { en: "cooling with outside air and the profile", nl: "koelen met buitenlucht en het profiel" }
+temperature_profile: { en: "Temperature profile", nl: "Temperatuurprofiel" }
+temperature_profile_auto: { en: "is chosen again automatically at the next change of season", nl: "wordt bij de volgende seizoenswissel weer automatisch gekozen" }
+profile_normal: { en: "normal", nl: "normaal" }
+profile_cool: { en: "cool", nl: "koel" }
+profile_warm: { en: "warm", nl: "warm" }
+cc_settings_sub: { en: "mode, target and writes over the bus", nl: "stand, doel en schrijven over de bus" }
+cc_writes: { en: "Allow writes", nl: "Schrijven toelaten" }
+cc_writes_sub: { en: "lets Home Assistant change the ComfoClime over the bus (needed for the boost)", nl: "laat Home Assistant de ComfoClime via de bus aanpassen (nodig voor bijverwarmen)" }
+shading_settings_sub: { en: "when the blinds close", nl: "wanneer gaan de rolluiken dicht" }
+shading_indoor_warm: { en: "Warm inside from", nl: "Binnen warm vanaf" }
+shading_outdoor_warm: { en: "Warm outside from", nl: "Buiten warm vanaf" }
+shading_max_cloud: { en: "Cloud cover at most", nl: "Bewolking hoogstens" }
+shading_max_cloud_sub: { en: "with more clouds they stay open", nl: "bij meer wolken blijven ze open" }
+
+# --- screen: details ---
+heat_pump: { en: "Heat pump", nl: "Warmtepomp" }
+state: { en: "State", nl: "Toestand" }
+power_estimated: { en: "Power (estimate)", nl: "Vermogen (schatting)" }
+flow_temperature: { en: "Flow to the floor", nl: "Aanvoer vloer" }
+water_pressure: { en: "Water pressure", nl: "Waterdruk" }
+faults: { en: "Faults", nl: "Storingen" }
+zone_temperature: { en: "Zone temperature", nl: "Temperatuur zone" }
+air_in: { en: "Air into the house", nl: "Lucht naar binnen" }
+air_out_house: { en: "Air out of the house", nl: "Lucht uit het huis" }
+fan_power: { en: "Fan power", nl: "Verbruik ventilatoren" }
+season_vent: { en: "Season according to the ventilation", nl: "Seizoen volgens de ventilatie" }
+filter_in: { en: "Replace filter in", nl: "Filter vervangen over" }
+cooling_state: { en: "Cooling with outside air", nl: "Koelen met buitenlucht" }
+forecast_model: { en: "Indoor forecast", nl: "Binnenprognose" }
+rise: { en: "Rise still expected", nl: "Nog verwachte stijging" }
+solar_left: { en: "Sun still to come", nl: "Zon die nog komt" }
+model_terms: { en: "Model uses", nl: "Model gebruikt" }
+k_per_kwh: { en: "°C per kWh of sun", nl: "°C per kWh zon" }
+b_outdoor: { en: "Share of outdoor air", nl: "Aandeel buitenlucht" }
+days_learned: { en: "Days learned", nl: "Dagen geleerd" }
+morning_error: { en: "Mean error (08:00 model)", nl: "Gemiddelde fout (model 08:00)" }
+error: { en: "Error", nl: "Fout" }
+forecast_model_note: { en: "Rise = a + k × sun still to come + b × (outdoor − indoor), fitted every 15 minutes on the hourly statistics of the last days.", nl: "Stijging = a + k × zon die nog komt + b × (buiten − binnen), elk kwartier opnieuw geleerd uit de uurstatistieken van de laatste dagen." }
+coming_days: { en: "Coming days", nl: "Komende dagen" }

@@ -1,0 +1,131 @@
+<% from '_zappi.jinja' import zappi with context %>
+<% set mode_e = zappi.charger_mode %>
+<% set green_e = zappi.charger_min_green %>
+# Charger (myenergi Zappi): the script of the ev-charger capability (ha-kit module charger-zappi, see
+# charger-zappi/LOGIC.md). Written by charger-zappi/deploy.py through the config API (same as the script editor).
+# Single writer: only ev-charging (automation ev_charging_apply) calls script.ev_charger_set_mode. This script never
+# decides WHEN to charge; it translates a normalised mode into the Zappi's charge mode and Minimum Green Level.
+# User-facing texts come from charger-zappi/strings.yaml; {mode}, {brand}, {level} are filled in at run time.
+
+ev_charger_set_mode:
+  alias: "<@ t('script_alias') @>"
+  icon: mdi:ev-station
+  description: >-
+    <@ t('script_description') @>
+  # The newest call wins: a second call stops the wait of the first one (cloud lag) and applies its own mode.
+  mode: restart
+  fields:
+    mode:
+      name: "<@ t('field_mode_name') @>"
+      description: "<@ t('field_mode_description') @>"
+      required: true
+      example: solar_only
+      selector:
+        select:
+          options:
+            - solar_only
+            - solar_min
+            - fast
+            - stop
+    solar_share:
+      name: "<@ t('field_share_name') @>"
+      description: "<@ t('field_share_description') @>"
+      example: 50
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 1
+          unit_of_measurement: "%"
+    reason:
+      name: "<@ t('field_reason_name') @>"
+      description: "<@ t('field_reason_description') @>"
+      example: "<@ t('field_reason_example') @>"
+      selector:
+        text: {}
+  sequence:
+    - variables:
+        txt:
+          logbook: "<@ t('logbook_name') @>"
+          unknown_mode: "<@ t('log_unknown_mode') @>"
+          unavailable: "<@ t('log_unavailable') @>"
+          mode_set: "<@ t('log_mode_set') @>"
+          no_follow: "<@ t('log_mode_no_follow') @>"
+          share_set: "<@ t('log_share_set') @>"
+          modes:
+            solar_only: "<@ t('mode_solar_only') @>"
+            solar_min: "<@ t('mode_solar_min') @>"
+            fast: "<@ t('mode_fast') @>"
+            stop: "<@ t('mode_stop') @>"
+        wanted: "{{ (mode | default('')) | string | lower | trim }}"
+        brand: "{{ {'solar_only': 'Eco+', 'solar_min': 'Eco', 'fast': 'Fast', 'stop': 'Stopped'}.get(wanted, '') }}"
+        label: "{{ txt.modes.get(wanted, wanted) }}"
+        # Reason for the logbook (HA strips the rendered text, so the separator is added in the message itself).
+        why: "{{ reason if reason is defined and reason not in [none, ''] else '' }}"
+        # -1 = no solar_share given: the Minimum Green Level stays as it is.
+        share: >-
+          {% set s = solar_share | default(none) %}
+          {{ s | int(-1) if s not in [none, ''] else -1 }}
+        # Clamped to what the number entity accepts (myenergi: 0-100).
+        level: >-
+          {% set lo = state_attr('<@ green_e @>', 'min') | int(0) %}
+          {% set hi = state_attr('<@ green_e @>', 'max') | int(100) %}
+          {{ [[share, lo] | max, hi] | min }}
+    - if:
+        - condition: template
+          value_template: "{{ brand == '' }}"
+      then:
+        - action: logbook.log
+          data:
+            name: "{{ txt.logbook }}"
+            entity_id: sensor.ev_charger_mode
+            message: "{{ txt.unknown_mode | replace('{mode}', wanted) }}{{ (' · ' ~ why) if why else '' }}"
+        - stop: unknown mode
+    # The myenergi cloud integration drops out now and then; without the select there is nothing to send.
+    - if:
+        - condition: template
+          value_template: "{{ not has_value('<@ mode_e @>') }}"
+      then:
+        - action: logbook.log
+          data:
+            name: "{{ txt.logbook }}"
+            entity_id: sensor.ev_charger_mode
+            message: "{{ txt.unavailable | replace('{mode}', label) }}{{ (' · ' ~ why) if why else '' }}"
+        - stop: charger unavailable
+    # Minimum Green Level first, so the Zappi starts in the new mode with the right level. Only on a difference.
+    - if:
+        - condition: template
+          value_template: >-
+            {{ share >= 0 and has_value('<@ green_e @>') and states('<@ green_e @>') | int(-1) != level }}
+      then:
+        - action: number.set_value
+          continue_on_error: true
+          target:
+            entity_id: <@ green_e @>
+          data:
+            value: "{{ level }}"
+        - action: logbook.log
+          data:
+            name: "{{ txt.logbook }}"
+            entity_id: sensor.ev_charger_mode
+            message: "{{ txt.share_set | replace('{level}', level | string) }}{{ (' · ' ~ why) if why else '' }}"
+    - if:
+        - condition: template
+          value_template: "{{ states('<@ mode_e @>') != brand }}"
+      then:
+        - action: select.select_option
+          continue_on_error: true
+          target:
+            entity_id: <@ mode_e @>
+          data:
+            option: "{{ brand }}"
+        # Cloud lag: the select follows after the next poll (scan_interval). Return anyway after 60 s.
+        - wait_template: "{{ is_state('sensor.ev_charger_mode', wanted) }}"
+          timeout: "00:01:00"
+          continue_on_timeout: true
+        - action: logbook.log
+          data:
+            name: "{{ txt.logbook }}"
+            entity_id: sensor.ev_charger_mode
+            message: >-
+              {{ (txt.mode_set if wait.completed else txt.no_follow) | replace('{mode}', label) | replace('{brand}', brand) }}{{ (' · ' ~ why) if why else '' }}

@@ -1,0 +1,68 @@
+<% from '_energy_plan.jinja' import grid_import, grid_export, solar, house_role, battery, battery_power, battery_sign,
+   usable_kwh, fc_remaining, fc_today, fc_updated, forecast, charger, sun_end_w, charge_efficiency, history_days, lat,
+   lon, tz with context %>
+<# command_line entry of the energy plan -> /config/command_line/energy_plan.yaml (merged by the base module's
+   command_line: !include_dir_merge_list command_line/). The script reads the recorder database (SQLite) read-only.
+   The name stays English in every language: Home Assistant derives the entity id of a command_line sensor from its
+   name (sensor.energy_plan_margin, part of the contract in docs/phase4-contracts.md).
+   Shell safety (Home Assistant runs the command in a shell): entity ids are checked by safe_entity() and every
+   house.yaml value passes through shell_quote or | float / | int; the Home Assistant templates only put out numbers or none. #>
+<% for role, eid in [('grid_import_w', grid_import), ('grid_export_w', grid_export), ('solar_power_w', solar), ('house_power_w', house_role), ('battery_soc', battery), ('battery_power_w', battery_power), ('solar_forecast_remaining_today', fc_remaining), ('solar_forecast_today', fc_today), ('solar_forecast_updated', fc_updated)] if eid %><% set _ = safe_entity(eid, 'entities.' ~ role) %><% endfor %>
+# Module energy-plan: command_line (list). Reload: command_line.reload (Developer tools > YAML).
+# Solar left today after the house and the battery (energy-plan/energy_plan.py, see energy-plan/LOGIC.md).
+# Inputs from house.yaml; a state that is not a number is passed as "none" (the script then leaves it out).
+- sensor:
+    name: "Energy plan margin"
+    unique_id: energy_plan_margin
+    icon: mdi:solar-power-variant-outline
+    command: >-
+      python3 /config/energy-plan/energy_plan.py
+      --tz <@ tz | shell_quote @> --lat <@ lat | float @> --lon <@ lon | float @>
+      --pv <@ solar | shell_quote @> --import <@ grid_import | shell_quote @> --export <@ grid_export | shell_quote @>
+<% if house_role %>
+      --house <@ house_role | shell_quote @>
+<% endif %>
+<% if battery_power %>
+      --battery-power <@ battery_power | shell_quote @> --battery-sign <@ battery_sign | shell_quote @>
+<% endif %>
+<% if battery %>
+      --usable-kwh <@ usable_kwh | float @> --charge-efficiency <@ charge_efficiency | float @>
+      --soc {{ states('<@ battery @>') if is_number(states('<@ battery @>')) else 'none' }}
+<% endif %>
+<% if charger %>
+      --car <@ charger | shell_quote @>
+<% endif %>
+<% if forecast %>
+      --forecast-remaining {{ states('<@ fc_remaining @>') if is_number(states('<@ fc_remaining @>')) else 'none' }}
+      --forecast-today {{ states('<@ fc_today @>') if is_number(states('<@ fc_today @>')) else 'none' }}
+<% if fc_updated %>
+      --forecast-updated {{ as_timestamp(states('<@ fc_updated @>'), 0) | int }}
+<% else %>
+      --forecast-updated {{ states['<@ fc_remaining @>'].last_changed.timestamp() | int if states['<@ fc_remaining @>'] else 0 }}
+<% endif %>
+<% endif %>
+      --sun-end-w <@ sun_end_w | float @> --days <@ history_days | int @>
+    scan_interval: 300
+    command_timeout: 30
+    unit_of_measurement: kWh
+    # No value (missing input, too little history, script error) = unavailable: Home Assistant rejects a
+    # non-numeric state on a sensor with a unit. An unavailable sensor shows no attributes: to see the reason, run
+    # the command above in the Terminal app (README, "Troubleshooting"). A warning with a value is in error.
+    availability: "{{ value_json is defined and value_json.state is not none }}"
+    value_template: "{{ value_json.state }}"
+    json_attributes:
+      - after_sun
+      - sun_end
+      - sunset
+      - sun_end_offset_min
+      - battery
+      - battery_needed_kwh
+      - pv_remaining_kwh
+      - pv_remaining_forecast_kwh
+      - pv_remaining_history_kwh
+      - house_remaining_kwh
+      - source
+      - forecast_factor
+      - pv_today_kwh
+      - days
+      - error

@@ -1,0 +1,12 @@
+<# Theme choice from house.yaml, shared by deploy.py and www/cw-thema.js (import with context).
+   Ids are the file names in themes/ (language-free); the theme name HA shows comes from strings.yaml
+   (theme_name_<id>) in house.language. theme_ids must list every themes/<id>.yaml: tools/build_themes.py checks it. #>
+<% set theme_ids = ['organic', 'garden', 'coast', 'heath', 'graphite'] %>
+<% set base_cfg = base if base is defined and base is mapping else {} %>
+<% set chosen_themes = base_cfg.themes if base_cfg.themes is defined and base_cfg.themes else theme_ids %>
+<% if chosen_themes is string or chosen_themes is mapping %><@ fail('house.yaml base.themes must be a list of theme ids, e.g. [organic, garden]') @><% endif %>
+<% for id in chosen_themes if id not in theme_ids %><@ fail('house.yaml base.themes: unknown theme ' ~ id ~ ' (known: ' ~ theme_ids | join(', ') ~ ')') @><% endfor %>
+<% set default_cfg = base_cfg.default_theme if base_cfg.default_theme is defined and base_cfg.default_theme else 'organic' %>
+<% set default_light = default_cfg if default_cfg is string else (default_cfg.light if default_cfg.light is defined and default_cfg.light else 'organic') %>
+<% set default_dark = default_cfg if default_cfg is string else (default_cfg.dark if default_cfg.dark is defined and default_cfg.dark else default_light) %>
+<% for id in [default_light, default_dark] if id not in chosen_themes %><@ fail('house.yaml base.default_theme: ' ~ id ~ ' is not in base.themes') @><% endfor %>

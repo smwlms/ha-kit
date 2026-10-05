@@ -1,0 +1,42 @@
+# Module metadata, read by tools/fill.py (--list shows it as a table), tools/choose.py (ask:) and by tesla-driveway-lock/deploy.py (defaults).
+name: Tesla driveway lock
+description: A Tesla left unlocked on the driveway locks itself after X min; a garage photo on arrival decides first (optional)
+status: built, not tested on HA
+# gate: counter.tesla_commands_today (Tesla commands per day) lives there, see CONTRIBUTING.md ("Contracts");
+# its deploy.py --setup also enables the Teslemetry shift state this module reads.
+depends_on: [gate]
+requires:
+  integrations:
+    - Teslemetry
+    - Home Assistant Companion app (notifications)
+    - Google Generative AI (ai_task), only with the garage photo
+  hardware:
+    - Tesla
+    - garage camera with the fixed parking spots in view, only with the garage photo
+optional: true
+generate: []
+ask:
+  - id: tesla
+    question: Do you have a Tesla connected to Home Assistant through Teslemetry?
+  - id: gate
+    question: Do you have an electric gate or garage door that a relay (e.g. a Shelly) can pulse?
+  - id: driveway_lock
+    question: Lock a Tesla automatically when it stands unlocked on the driveway for a while?
+# Fields of house.yaml this module reads (example: house.example.yaml).
+house_fields:
+  - house.lat, house.lon (start of zone.driveway)
+  - house.language (texts, and the language of Gemini's description of the garage photo)
+  - cars[].prefix, name, driver, entities (optional), garage_spot (optional)
+  - teslemetry.lock, shift_state, location, located_at_home, status
+  - people[].key, notify, admin (optional)
+  - tesla_driveway_lock.garage_photo, ai_task, garage_hint (optional)
+  - entities.garage_camera, entities.garage_dark (optional)
+# Defaults that deploy.py sets ONCE, when the helper (or zone) does not exist yet. Afterwards the value is yours.
+# The master switch starts OFF: first check zone.driveway (LOGIC.md, test plan), then turn it on.
+defaults:
+  input_boolean.tesla_driveway_lock_enabled: "off"
+  input_number.tesla_driveway_lock_minutes: 15
+  zone.driveway: 10
+# tools/check.py: the other side of the optional switches, used in its all-modules house.
+check_variant:
+  tesla_driveway_lock: { garage_photo: true, ai_task: ai_task.google_ai_task }

@@ -1,0 +1,20 @@
+# Energy screens: helpers of the energy-flows view (ha-kit module energy, see energy/LOGIC.md).
+# Filled in from house.yaml by tools/fill.py; uploaded by energy/deploy.py to /config/packages/energy.yaml.
+# Start values are in module.yaml defaults: (set once by deploy.py), never initial: here.
+input_datetime:
+  energy_flows_date:
+    name: <@ t('helper_flows_date') | tojson @>
+    has_date: true
+    has_time: false
+    icon: mdi:calendar
+
+input_select:
+  # Fixed English options: the view shows them translated (buttons), automations may compare them.
+  energy_flows_unit:
+    name: <@ t('helper_flows_unit') | tojson @>
+    options: [kwh, percent]
+    icon: mdi:percent-outline
+  energy_profiles_period:
+    name: <@ t('helper_profiles_period') | tojson @>
+    options: [30_days, winter, spring, summer, autumn]
+    icon: mdi:calendar-range

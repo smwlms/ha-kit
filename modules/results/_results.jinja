@@ -1,0 +1,155 @@
+<#- Shared derivations of the module results from house.yaml, modules: and the capabilities (imported with context by
+    its files; never copied). Rule: results never names a brand entity. It reads the house.yaml roles, the contract ids
+    of the installed modules (docs/phase4-contracts.md) and its own sensors. A result line, a goal or a counter exists
+    only when the module that produces it is in modules: (kind table below). -#>
+<% set E = entities if entities is defined and entities else {} %>
+<% set R = results if results is defined and results else {} %>
+<% set T = tariff if tariff is defined and tariff else {} %>
+<% set HW = hot_water if hot_water is defined and hot_water else {} %>
+<% set caps = capabilities %>
+<% if 'tariff' not in caps %><@ fail('the module results needs a module that provides tariff (e.g. tariff-be) in modules:') @><% endif %>
+<% if not E.get('grid_import_kwh') %><@ fail('house.yaml: entities.grid_import_kwh is empty (required for results)') @><% endif %>
+<% if not E.get('grid_export_kwh') %><@ fail('house.yaml: entities.grid_export_kwh is empty (required for results)') @><% endif %>
+<#- Energy roles as lists (a list is summed, e.g. the day and night registers). -#>
+<% set imp = ([E.grid_import_kwh] if E.grid_import_kwh is string else E.grid_import_kwh) | list %>
+<% set exp = ([E.grid_export_kwh] if E.grid_export_kwh is string else E.grid_export_kwh) | list %>
+<% set solar = ([E.solar_energy_kwh] if E.get('solar_energy_kwh') is string else (E.get('solar_energy_kwh') or [])) | list %>
+<% set bat_in = ([E.battery_charge_kwh] if E.get('battery_charge_kwh') is string else (E.get('battery_charge_kwh') or [])) | list %>
+<% set bat_out = ([E.battery_discharge_kwh] if E.get('battery_discharge_kwh') is string else (E.get('battery_discharge_kwh') or [])) | list %>
+<% set CS = R.get('cost_sensors') or {} %>
+<% set cost = ([CS['import']] if CS.get('import') is string else (CS.get('import') or [])) | list %>
+<% set comp = ([CS['export']] if CS.get('export') is string else (CS.get('export') or [])) | list %>
+<#- Which producers are installed. ev_solar needs ev-charging (the smart logic) and an ev-charger adapter; the
+    sensor.ev_charger_solar_energy_today of the adapter is optional, the screen hides the line without it. -#>
+<% set has = {
+  'hot_water': 'hot-water' in modules,
+  'bath': 'hot-water' in modules and HW.get('bath') is sameas true,
+  'ev': 'ev-charging' in modules and 'ev-charger' in caps,
+  'charger': 'ev-charger' in caps,
+  'shading': 'shading' in modules,
+  'appliances': 'appliances-home-connect' in modules,
+  'solar': (E.get('solar_power_w') or E.get('solar_energy_kwh') or '') | length > 0,
+  'ev_charging': 'ev-charging' in modules,
+} %>
+<#- Kind table: kind -> producer. `extension` = a kind beyond the contract's first three (hot_water_solar,
+    hot_water_cheap_hour, ev_solar): its sensor exists with the producer installed, the screen shows it only once the
+    producer has sent one (event data: docs/phase4-contracts.md, section 5). `net` = the line also shows the export it missed.
+    `source: counter` = computed by results from a daily kWh counter instead of from events. Order = order on screen. -#>
+<% set kind_table = [
+  {'kind': 'ev_solar', 'on': has.ev, 'producer': 'ev-charging', 'source': 'counter', 'net': true, 'extension': false,
+   'color': 'zon', 'icon': 'mdi:car-electric', 'today_kwh': 'sensor.ev_charger_solar_energy_today'},
+  {'kind': 'hot_water_cheap_hour', 'on': has.hot_water, 'producer': 'hot-water', 'source': 'event', 'net': false,
+   'extension': false, 'color': 'green', 'icon': 'mdi:clock-check-outline', 'today_kwh': none},
+  {'kind': 'hot_water_solar', 'on': has.hot_water, 'producer': 'hot-water', 'source': 'event', 'net': true,
+   'extension': false, 'color': 'water', 'icon': 'mdi:water-boiler', 'today_kwh': none},
+  {'kind': 'ev_cheap', 'on': has.ev, 'producer': 'ev-charging', 'source': 'event', 'net': false, 'extension': true,
+   'color': 'net', 'icon': 'mdi:car-clock', 'today_kwh': none},
+  {'kind': 'appliance_solar', 'on': has.appliances, 'producer': 'appliances-home-connect', 'source': 'event',
+   'net': true, 'extension': true, 'color': 'zon', 'icon': 'mdi:washing-machine', 'today_kwh': none},
+  {'kind': 'appliance_cheap', 'on': has.appliances, 'producer': 'appliances-home-connect', 'source': 'event',
+   'net': false, 'extension': true, 'color': 'batt', 'icon': 'mdi:dishwasher', 'today_kwh': none},
+  {'kind': 'peak_avoided', 'on': has.ev or has.hot_water, 'producer': 'ev-charging, hot-water', 'source': 'event',
+   'net': false, 'extension': true, 'color': 'amber', 'icon': 'mdi:transmission-tower-off', 'today_kwh': none},
+] %>
+<% set kinds = kind_table | selectattr('on') | list %>
+<% set event_kinds = kinds | selectattr('source', 'eq', 'event') | list %>
+<#- Shading: the rooms whose blind closes on sun and heat (same rule as shading/_shading.jinja: a blind, a side, shading
+    not false, shading.sun_protection not false). -#>
+<% set SH = shading if shading is defined and shading else {} %>
+<% set sun_on = SH.get('sun_protection', true) is not sameas false %>
+<% set all_rooms = rooms if rooms is defined and rooms else [] %>
+<% set sun_rooms = (all_rooms | selectattr('blind', 'defined') | selectattr('blind') | selectattr('side', 'defined') | selectattr('side') | rejectattr('shading', 'sameas', false) | list) if has.shading and sun_on else [] %>
+<#- Solar missed today: exported while the tank or a connected car still had room (needs solar and a place to put it). -#>
+<% set solar_missed = has.solar and (has.hot_water or has.charger) %>
+<#- Day goals: morning and bath come from hot-water (ha_kit_day_goal), solar_used from results itself at 23:55. -#>
+<% set goals = [] %>
+<% if has.hot_water %>
+<% set _ = goals.append({'goal': 'morning', 'sensor': 'sensor.results_goal_morning', 'when': 'sunrise', 'icon': 'mdi:weather-sunset-up',
+   'target': 'input_number.hot_water_minimum', 'shower': 'input_number.hot_water_shower', 'shower_on': 'input_boolean.hot_water_shower_tomorrow'}) %>
+<% endif %>
+<% if has.bath %>
+<% set _ = goals.append({'goal': 'bath', 'sensor': 'sensor.results_goal_bath', 'when': 'entity', 'icon': 'mdi:bathtub-outline',
+   'time': 'input_datetime.hot_water_bath_check', 'target': 'input_number.hot_water_bath'}) %>
+<% endif %>
+<% if solar_missed %>
+<% set _ = goals.append({'goal': 'solar_used', 'sensor': 'sensor.results_goal_solar_used', 'when': 'fixed', 'at': '23:55', 'icon': 'mdi:solar-power',
+   'limit': 'input_number.results_solar_missed_max_kwh'}) %>
+<% endif %>
+<#- Logbook lines of the installed modules for "What the house did" (each module writes logbook.log on its master
+    switch, see docs/phase4-contracts.md section 2), plus results' own sensors and results.log_entities. -#>
+<% set log_entities = [] %>
+<% if has.hot_water %><% set _ = log_entities.append('input_boolean.hot_water_on_surplus') %><% endif %>
+<% if has.ev_charging %><% set _ = log_entities.extend(['input_boolean.ev_charging_smart', 'input_boolean.ev_charging_car_amps_auto']) %><% endif %>
+<% if has.charger %><% set _ = log_entities.append('sensor.ev_charger_mode') %><% endif %>
+<% if 'heat-pump' in caps %><% set _ = log_entities.append('sensor.heat_pump_state') %><% endif %>
+<% if 'hot-water-heater' in caps %><% set _ = log_entities.append('sensor.hot_water_temperature') %><% endif %>
+<% if has.shading %><% set _ = log_entities.append('input_boolean.shading_automatic') %><% endif %>
+<% if 'climate' in modules %><% set _ = log_entities.extend(['input_boolean.climate_floor_mode_auto', 'input_boolean.climate_ventilation_cooling']) %><% endif %>
+<% if has.appliances %>
+<% for a in (appliances if appliances is defined and appliances else []) %><% set _ = log_entities.append('input_boolean.appliance_' ~ a.key ~ '_smart_waiting') %><% endfor %>
+<% endif %>
+<% for k in event_kinds %><% set _ = log_entities.append('sensor.results_saving_' ~ k.kind) %><% endfor %>
+<% if solar_missed %><% set _ = log_entities.append('sensor.results_solar_missed_today') %><% endif %>
+<% for x in (R.get('log_entities') or []) %><% set _ = log_entities.append(x | string) %><% endfor %>
+<% set log_entities = log_entities | unique | list %>
+<% set view_path = (R.get('view_path') or 'results') | string %>
+<% set minimum_kw = ((T.get('capacity') or {}).get('minimum_kw') or 0) %>
+<#- The card config (lovelace/results.yaml): every entity id, list and text the screen needs. Texts: every key of
+    card_keys plus the four texts per installed kind (kind_<kind>, _on, _off, how_<kind>). A new card text goes into
+    strings.yaml AND card_keys. -#>
+<% set card_keys = [
+  'locale', 'title', 'advanced_view', 'eur', 'kwh', 'cents_per_kwh', 'peak_kw', 'times', 'today_word',
+  'yesterday_word', 'so_far', 'loading', 'saved_today', 'saved_today_info', 'no_kinds', 'this_week', 'this_month',
+  'goals_done', 'goals_missed_one', 'goals_missed', 'goals_pending', 'energy_title', 'col_today', 'col_week',
+  'col_month', 'row_use', 'row_use_sub', 'row_solar', 'row_import', 'row_export', 'row_cost', 'row_capacity',
+  'row_capacity_sub', 'row_fixed', 'row_fixed_sub', 'row_comp', 'row_total', 'row_total_sub', 'row_self',
+  'row_self_sub', 'row_bat_in', 'row_bat_out', 'energy_note_exact', 'energy_note_estimate', 'energy_note_capacity',
+  'energy_note_capacity_full', 'energy_note_fixed', 'energy_note_unpriced', 'energy_note_peak', 'cmp_title',
+  'cmp_dynamic', 'cmp_dynamic_sub', 'cmp_variable', 'cmp_fixed', 'cmp_price', 'cmp_saved', 'cmp_lost', 'cmp_note',
+  'ly_title', 'ly_now', 'ly_then', 'ly_bought', 'ly_less', 'ly_more', 'ly_note', 'months_title', 'col_bought',
+  'col_calculated', 'col_invoice', 'col_last_year', 'months_note', 'months_note_exact', 'months_note_invoice',
+  'goals_title', 'goal_morning', 'goal_bath', 'goal_solar_used', 'goal_morning_short', 'goal_bath_short',
+  'goal_solar_used_short', 'goal_morning_rule', 'goal_bath_rule', 'goal_solar_used_rule', 'goal_rule',
+  'goal_measured', 'goal_solar_live', 'when_sunrise', 'when_at', 'history_title', 'parts_title', 'part_extra',
+  'part_net', 'shading', 'shading_on_one', 'shading_on', 'shading_off', 'log_title', 'log_title_adv', 'log_empty',
+  'log_nothing', 'log_loading_runs', 'log_too_slow', 'trigger_by', 'trigger_pattern', 'trigger_time', 'trigger_sun',
+  'trigger_event', 'state_on', 'state_off', 'state_open', 'state_closed', 'state_opening', 'state_closing',
+  'state_heat', 'state_cool', 'state_fan_only', 'state_heat_cool', 'state_auto', 'how_title', 'how_saving', 'how_net',
+  'how_goals', 'how_shading'] %>
+<% set strings = {} %>
+<% for k in card_keys %><% set _ = strings.update({k: t(k)}) %><% endfor %>
+<% for k in kinds %>
+<% for key in ['kind_' ~ k.kind, 'kind_' ~ k.kind ~ '_on', 'kind_' ~ k.kind ~ '_off', 'how_' ~ k.kind] %><% set _ = strings.update({key: t(key)}) %><% endfor %>
+<% endfor %>
+<% set card_kinds = [] %>
+<% for k in kinds %>
+<% set _ = card_kinds.append({'kind': k.kind, 'sensor': 'sensor.results_saving_' ~ k.kind, 'color': k.color, 'net': k.net,
+   'extension': k.extension, 'today_kwh': k.today_kwh}) %>
+<% endfor %>
+<% set card_goals = [] %>
+<% for g in goals %><% set _ = card_goals.append(g) %><% endfor %>
+<% set last_year = [] %>
+<% for r in (R.get('last_year') or []) %>
+<% if r.get('month') and r.get('eur') is number %><% set _ = last_year.append({'month': r.month | string, 'kwh': r.get('kwh') or 0, 'eur': r.eur}) %><% endif %>
+<% endfor %>
+<% set card = {
+  'type': 'custom:results-screen-card',
+  'kinds': card_kinds,
+  'shading': 'sensor.results_shading_closed_count' if sun_rooms else none,
+  'goals': card_goals,
+  'solar_missed': 'sensor.results_solar_missed_today' if solar_missed else none,
+  'meters': {'imp': imp, 'exp': exp, 'solar': solar, 'bat_in': bat_in, 'bat_out': bat_out, 'cost': cost, 'comp': comp},
+  'prices': {'imp': 'sensor.power_price_import', 'exp': 'sensor.power_price_export'},
+  'capacity': {'average': 'sensor.capacity_average_peak_kw', 'month_peak': 'sensor.capacity_month_peak_kw',
+               'rate': 'input_number.tariff_capacity_eur_per_kw_year', 'start_peak': 'input_number.capacity_start_peak_kw',
+               'minimum_kw': minimum_kw},
+  'fixed_fee': 'input_number.tariff_fixed_eur_per_year',
+  'invoices': {'sensor': 'sensor.results_invoices', 'helper': 'input_number.results_invoice_last_month'},
+  'exact_from': (R.get('exact_from') or '') | string,
+  'last_year': last_year,
+  'compare': {'variable': 'input_number.results_compare_variable', 'fixed': 'input_number.results_compare_fixed',
+              'export': 'input_number.results_compare_export'},
+  'log_entities': log_entities,
+  'strings': strings,
+} %>
+<% set view = {'title': t('view_title'), 'path': view_path, 'icon': 'mdi:piggy-bank-outline', 'type': 'panel', 'cards': [card]} %>

@@ -1,0 +1,107 @@
+<% from '_tariff.jinja' import reg_quarter, quarter_meter, minimum_kw with context %>
+{#- Tariff (Belgium): price formula and capacity helpers (ha-kit module tariff-be, see tariff-be/LOGIC.md).
+    Filled in from house.yaml by tools/fill.py: edit house.yaml (tariff:) or the kit and deploy again, do not edit this
+    file in Home Assistant. The JavaScript twin is /local/ha-kit/tariff/tariff.js (same formula, same coefficients).
+
+    Formula (spot = Nord Pool day-ahead price of the slot in EUR/MWh; /10 = c€/kWh):
+      import = ((<@ tariff['import'].factor @> x spot/10 + <@ tariff['import'].markup @>) x <@ tariff['import'].vat @> + levies + grid fee day|night) / 100   [EUR/kWh]
+      export = (<@ tariff['export'].factor @> x spot/10 - <@ tariff['export'].deduction @>) / 100                                          [EUR/kWh, may be < 0]
+    Grid fees and levies are helpers (c€/kWh incl. VAT) so you can follow the yearly tariff sheet without filling in.
+
+    is_night(ts)              'True' when ts falls in the night register: <@ tariff.night.start @>:00-<@ tariff.night.end @>:00<@ ' and the whole weekend' if tariff.night.get('weekend') else '' @> (local time)
+    import_price(spot, ts, grid_day, grid_night, levies)   EUR/kWh, 4 decimals; the last three default to the helpers
+    export_price(spot)        EUR/kWh, 4 decimals
+    price_at(ts)              import price of the slot of sensor.power_price_import that contains ts; '' when unknown
+    reference_price()         mean import price of the coming 24 h; '' when unknown
+    kw(entity_id)             power of a sensor in kW (reads unit_of_measurement: W is divided by 1000); '' when unknown
+    rest_hours(minimum)       hours left in the running quarter hour, at least `minimum`
+    quarter_energy()          kWh taken from the grid in the running quarter hour so far
+    peaks_with(old, month, reading)   [[YYYY-MM, kW], ...] of the last 12 months with `reading` as peak of `month`
+    average_peak(peaks)       mean of 12 month peaks (missing months = input_number.capacity_start_peak_kw when > 0),
+                              every month at least <@ minimum_kw @> kW
+    Use: {% from 'tariff.jinja' import price_at %}{{ price_at(now() + timedelta(hours=3)) | float(0) }} -#}
+
+{% macro is_night(ts) -%}
+{%- set d = ts if ts is datetime else as_datetime(ts) -%}
+{%- if d is not none -%}
+{%- set t = as_local(d) -%}
+{%- set n_start, n_end, weekend = <@ tariff.night.start @>, <@ tariff.night.end @>, <@ 'true' if tariff.night.get('weekend') else 'false' @> -%}
+{%- set hours = (t.hour >= n_start or t.hour < n_end) if n_start > n_end else (t.hour >= n_start and t.hour < n_end) -%}
+{{ hours or (weekend and t.weekday() >= 5) }}
+{%- endif -%}
+{%- endmacro %}
+
+{% macro import_price(spot, ts, grid_day=none, grid_night=none, levies=none) -%}
+{%- set gd = grid_day if grid_day is not none else states('input_number.tariff_grid_fee_day') | float(<@ tariff.grid.day @>) -%}
+{%- set gn = grid_night if grid_night is not none else states('input_number.tariff_grid_fee_night') | float(<@ tariff.grid.night @>) -%}
+{%- set lv = levies if levies is not none else states('input_number.tariff_levies') | float(<@ tariff.grid.levies @>) -%}
+{%- set grid = gn if (is_night(ts) | trim) == 'True' else gd -%}
+{%- set energy = (<@ tariff['import'].factor @> * (spot | float) / 10 + <@ tariff['import'].markup @>) * <@ tariff['import'].vat @> -%}
+{{ ((energy + lv + grid) / 100) | round(4) }}
+{%- endmacro %}
+
+{% macro export_price(spot) -%}
+{{ ((<@ tariff['export'].factor @> * (spot | float) / 10 - <@ tariff['export'].deduction @>) / 100) | round(4) }}
+{%- endmacro %}
+
+{% macro price_at(ts) -%}
+{%- set d = ts if ts is datetime else as_datetime(ts) -%}
+{%- set starts = state_attr('sensor.power_price_import', 'starts') or [] -%}
+{%- set prices = state_attr('sensor.power_price_import', 'prices') or [] -%}
+{%- if d is not none and starts | count > 0 and starts | count == prices | count -%}
+{%- set x = as_timestamp(d) -%}
+{%- set slot = (as_timestamp(starts[1]) - as_timestamp(starts[0])) if starts | count > 1 else 900 -%}
+{%- set ns = namespace(p='') -%}
+{%- for s in starts -%}
+{%- set a = as_timestamp(s) -%}
+{%- if a <= x and x < a + slot -%}{%- set ns.p = prices[loop.index0] -%}{%- endif -%}
+{%- endfor -%}
+{{ ns.p }}
+{%- endif -%}
+{%- endmacro %}
+
+{% macro reference_price() -%}
+{%- set m = state_attr('sensor.power_price_import', 'mean_coming') -%}
+{{ m if m is number else '' }}
+{%- endmacro %}
+
+{% macro kw(entity_id) -%}
+{%- set v = states(entity_id) | float(none) -%}
+{%- if v is not none -%}
+{{ ((v / 1000) if state_attr(entity_id, 'unit_of_measurement') == 'W' else v) | round(3) }}
+{%- endif -%}
+{%- endmacro %}
+
+{% macro rest_hours(minimum=0) -%}
+{{ [(15 - now().minute % 15) / 60 - now().second / 3600, minimum] | max }}
+{%- endmacro %}
+
+{% macro quarter_energy() -%}
+<% if reg_quarter %>
+{#- The meter's quarter register (<@ reg_quarter @>) rises during the quarter and ends at the quarter's average:
+    energy so far = register / 4. -#}
+{%- set q = kw('<@ reg_quarter @>') | trim -%}
+{{ ((q | float) / 4) | round(4) if q != '' else '' }}
+<% else %>
+{%- set q = states('<@ quarter_meter @>') | float(none) -%}
+{{ q | round(4) if q is not none else '' }}
+<% endif %>
+{%- endmacro %}
+
+{% macro peaks_with(old, month, reading) -%}
+{%- set p = (old if old is list else []) | list -%}
+{%- if month and reading is number -%}
+{%- set before = p | selectattr(0, 'eq', month) | map(attribute=1) | first | default(0) -%}
+{%- set p = (p | rejectattr(0, 'eq', month) | list + [[month, [before, reading] | max]]) | sort(attribute=0) -%}
+{%- endif -%}
+{{ p[-12:] | to_json }}
+{%- endmacro %}
+
+{% macro average_peak(peaks) -%}
+{%- set known = peaks | map(attribute=1) | list -%}
+{%- set start = states('input_number.capacity_start_peak_kw') | float(0) -%}
+{%- set values = known + ([start] * (12 - known | count) if start > 0 else []) -%}
+{%- set ns = namespace(total=0) -%}
+{%- for v in values -%}{%- set ns.total = ns.total + [v, <@ minimum_kw @>] | max -%}{%- endfor -%}
+{{ (ns.total / (values | count)) | round(2) if values | count > 0 else <@ minimum_kw @> }}
+{%- endmacro %}

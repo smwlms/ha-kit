@@ -1,0 +1,73 @@
+# User-facing texts of the module tesla-route, one key per text: {en: ..., nl: ...}. Used in the module's files as
+# <@ t('key') @> (tools/fill.py picks house.language, default en; a missing language falls back to en with a warning).
+# The cards get them as JSON (<@ t('key') | tojson @> in www/*.js), so any character is allowed.
+# {who}, {car}, {min}, ... stay in the text and are filled in by the card in the browser (fmt()); keep them when
+# you translate.
+
+# --- formats ---
+locale: { en: en-GB, nl: nl-BE } # numbers and times on the cards (BCP 47 tag for toLocaleString)
+geocode_language: { en: en, nl: nl } # language of place names from Mapbox reverse geocoding
+speed_unit: { en: km/h, nl: km/u }
+and: { en: and, nl: en }
+
+# --- both cards ---
+map_unavailable: { en: Map not available., nl: Kaart niet beschikbaar. }
+dest_home: { en: Home, nl: Thuis } # the Tesla favourite "Home" as shown on the cards
+dest_work: { en: Work, nl: Werk } # the Tesla favourite "Work"
+
+# --- tesla-map-card ---
+map_config_error: { en: "tesla-map-card: list at least one car under 'cars'", nl: "tesla-map-card: geef minstens één auto op onder 'cars'" }
+map_card_name: { en: Tesla map, nl: Tesla kaart }
+map_home: { en: home, nl: thuis }
+
+# --- tesla-arrival-card ---
+arrival_config_error: { en: "tesla-arrival-card: list at least one car under 'cars'", nl: "tesla-arrival-card: geef minstens één auto op onder 'cars'" }
+arrival_card_name: { en: Tesla arrival card, nl: Aankomstkaart Tesla }
+arrival_card_description: { en: "Teslas on the road, arrival time, route and gate", nl: "Tesla onderweg, aankomstuur, route en poort" }
+on_the_way_home: { en: On the way home, nl: Onderweg naar huis }
+on_the_road: { en: On the road, nl: Onderweg }
+driving: { en: Driving, nl: Rijdt }
+legend_driven: { en: driven, nl: gereden }
+legend_traffic: { en: "smooth · busy · jam", nl: "vlot · druk · file" }
+source_route: { en: route, nl: route }
+source_tesla: { en: Tesla route, nl: route Tesla }
+source_mapbox: { en: Mapbox route, nl: route Mapbox }
+source_osrm: { en: OSRM route, nl: route OSRM }
+when_soon: { en: soon, nl: binnenkort }
+when_within_minute: { en: within a minute, nl: binnen een minuut }
+when_minutes: { en: "in {min} min", nl: "over {min} min" }
+title_home_one: { en: "{who} is home {when}", nl: "{who} is thuis {when}" }
+title_home_many: { en: "{who} are home {when}", nl: "{who} zijn thuis {when}" }
+title_trip_one: { en: "{who} is driving to {dest}", nl: "{who} rijdt naar {dest}" }
+title_trip_many: { en: "{who} are driving to {dest}", nl: "{who} rijden naar {dest}" }
+title_drive_one: { en: "{who} is driving, without navigation", nl: "{who} rijdt, zonder navigatie" }
+title_drive_many: { en: "{who} are driving, without navigation", nl: "{who} rijden, zonder navigatie" }
+sub_arrival: { en: "arrival {when}", nl: "aankomst {when}" }
+sub_in_car: { en: "in the {car}", nl: "in de {car}" }
+sub_usual_driver: { en: (usual driver), nl: (vaste bestuurder) }
+sub_km_left: { en: "{km} km to go", nl: "nog {km} km" }
+sub_departed: { en: "left at {time}", nl: "vertrokken {time}" }
+sub_traffic: { en: "+{min} min traffic", nl: "+{min} min file" }
+sub_battery_at_arrival: { en: "arriving with {soc} %", nl: "aankomst met {soc} %" }
+a_destination: { en: a destination, nl: een bestemming }
+gate: { en: Gate, nl: Poort }
+gate_moving: { en: Gate moving, nl: Poort beweegt }
+gate_is_open: { en: Gate is open, nl: Poort staat open }
+gate_is_closed: { en: Gate is closed, nl: Poort is dicht }
+gate_unreachable: { en: Gate state unreachable, nl: Poortstand onbereikbaar }
+gate_handled: { en: "Handled on arrival at {time}", nl: "Bij aankomst behandeld om {time}" }
+gate_already_open: { en: "Already open: no automatic pulse", nl: "Al open: geen automatische puls" }
+gate_auto_off: { en: Automatic opening is off, nl: Automatisch openen staat uit }
+gate_test_mode: { en: "Test mode: you only get a notification, no pulse", nl: "Testmodus: je krijgt enkel een melding, geen puls" }
+gate_not_away:
+  en: "Will not open by itself: the {car} has not been further than {km} km from home for {min} min yet"
+  nl: "Opent niet zelf: de {car} was nog geen {min} min verder dan {km} km van huis"
+gate_opens_at: { en: "Opens by itself at {m} m from home", nl: "Opent vanzelf op {m} m van huis" }
+button_open: { en: Open, nl: Open }
+button_close: { en: Close, nl: Sluit }
+confirm_open: { en: "Open the gate?", nl: "Poort openen?" }
+confirm_close: { en: "Close the gate?", nl: "Poort sluiten?" }
+close_reason: { en: close from arrival card, nl: sluiten via aankomstkaart }
+
+# --- integration teslemetry_route ---
+sensor_unit_points: { en: points, nl: punten }

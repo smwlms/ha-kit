@@ -1,0 +1,454 @@
+<# Doorbell automations. Rendered by tools/fill.py; HA templates ({{ }}) pass through untouched.
+   Optional devices (speakers, Nest Hub, TV, package camera) drop out when empty in house.yaml.
+   With the module 'parcel-service' in modules: the expected-parcel-day steps are rendered in as well.
+   User-facing texts come from strings.yaml: directly with t(), or (when Home Assistant builds the text at run time)
+   through the automation variable txt, filled in with t() and completed with | replace('{name}', value).
+   doorbell.ai_task decides whether the photo goes to an AI service: empty or auto = the first ai_task entity (if one
+   exists, the photo IS sent), an entity id = that one, none = never. #>
+<% from '_ai_task.jinja' import ai_entity %>
+<% set parcel_service = 'parcel-service' in modules %>
+<% set speakers = doorbell.speakers | default([], true) %>
+<% set hub = doorbell.nest_hub | default(none) %>
+<% set tv = doorbell.tv | default(none) %>
+<% set package_cam = entities.doorbell_package_camera | default(none) %>
+<% set package_event = entities.doorbell_package | default(none) %>
+<% set notify_keys = doorbell.recipients | default(none) %>
+<% set recipients = people | selectattr('key', 'in', notify_keys) | list if notify_keys else people %>
+<% set tap = doorbell.tap_url | default(none) or 'entityId:' ~ entities.doorbell_camera %>
+<% set devices = ([t('device_speakers')] if speakers else []) + ([t('device_hub')] if hub else []) + ([t('device_tv')] if tv else []) %>
+<% set announce = t('ring_description_announce', devices=devices | join(', ')) if devices else '' %>
+<% set tts = 'media-source://tts/' ~ doorbell.tts ~ '?language=' ~ house.language ~ '&message=' %>
+# Module doorbell: automations (HA YAML, list). Pushed through the config API by doorbell/deploy.py.
+- id: doorbell_ring
+  alias: <@ t('ring_alias') | tojson @>
+  description: >-
+    <@ t('ring_description', recipients=recipients | map(attribute='name') | join(', '), announce=announce, calendar=doorbell.calendar) @><% if parcel_service %> <@ t('ring_description_parcel') @><% endif %> <@ t('see_logic') @>
+  mode: parallel
+  max: 5
+  triggers:
+    - trigger: event.received
+      target:
+        entity_id: <@ entities.doorbell_button @>
+      options:
+        event_type:
+          - ring
+      id: ring
+    - trigger: event
+      event_type: mobile_app_notification_action
+      event_data:
+        action: DOORBELL_AT_DOOR
+      id: at_door
+    - trigger: event
+      event_type: mobile_app_notification_action
+      event_data:
+        action: DOORBELL_COMING
+      id: coming
+  conditions: []
+  variables:
+    # Texts that Home Assistant completes at run time (house.language, from doorbell/strings.yaml).
+    txt:
+      ringing: <@ t('ringing') | tojson @>
+      short_courier_parcel: <@ t('short_courier_parcel') | tojson @>
+      short_someone_parcel: <@ t('short_someone_parcel') | tojson @>
+      short_courier: <@ t('short_courier') | tojson @>
+      short_nobody: <@ t('short_nobody') | tojson @>
+      short_people: <@ t('short_people') | tojson @>
+      short_someone: <@ t('short_someone') | tojson @>
+      ground_sentence: <@ t('ground_sentence') | tojson @>
+      ground_words: <@ t('ground_words') | tojson @>
+      title_parcel_at_door: <@ t('title_parcel_at_door') | tojson @>
+      message_outcome: <@ t('message_outcome') | tojson @>
+      log_rang: <@ t('log_rang') | tojson @>
+<% if hub %>
+      hub_outcome: <@ t('hub_outcome') | tojson @>
+<% endif %>
+<% if parcel_service %>
+      button_garage_ajar: <@ t('button_garage_ajar') | tojson @>
+      button_garage_open: <@ t('button_garage_open') | tojson @>
+      parcel_day_message_ajar: <@ t('parcel_day_message_ajar') | tojson @>
+      parcel_day_message_open: <@ t('parcel_day_message_open') | tojson @>
+      title_auto_ajar: <@ t('title_auto_ajar') | tojson @>
+      title_auto_open: <@ t('title_auto_open') | tojson @>
+      title_parcel_expected: <@ t('title_parcel_expected') | tojson @>
+      message_auto_ajar: <@ t('message_auto_ajar') | tojson @>
+      message_auto_open: <@ t('message_auto_open') | tojson @>
+      message_no_parcel: <@ t('message_no_parcel') | tojson @>
+      message_gate_not_closed: <@ t('message_gate_not_closed') | tojson @>
+      log_auto_ajar: <@ t('log_auto_ajar') | tojson @>
+      log_auto_open: <@ t('log_auto_open') | tojson @>
+<% endif %>
+  actions:
+    - choose:
+        - conditions:
+            - condition: trigger
+              id: ring
+          sequence:
+            - parallel:
+<% if speakers %>
+                - alias: "Announce on the speakers: overlays the music and restores it afterwards; an unavailable speaker is skipped"
+                  action: media_player.play_media
+                  continue_on_error: true
+                  target:
+                    entity_id: <@ speakers | tojson @>
+                  data:
+                    media_content_id: "<@ tts @><@ t('ringing') | urlencode @>"
+                    media_content_type: music
+                    announce: true
+                    extra:
+                      volume: <@ doorbell.volume | default(50, true) @>
+<% endif %>
+                - sequence:
+                    - variables:
+                        ring_time: "{{ now().strftime('%H:%M') }}"
+                        ai_entity: <@ ai_entity(doorbell.ai_task | default(none)) @>
+                        photo: "doorbell/archive/{{ now().strftime('%Y%m%d-%H%M%S') }}-ring.jpg"
+                        start: "{{ now().isoformat() }}"
+                        # Identifies this ring (state of the event entity = its timestamp); goes along in action_data.
+                        ring_id: "{{ states('<@ entities.doorbell_button @>') }}"
+                        buttons_normal:
+                          - action: DOORBELL_AT_DOOR
+                            title: <@ t('button_leave_at_door') | tojson @>
+<% if parcel_service %>
+                          - action: DOORBELL_GARAGE
+                            title: <@ t('button_parcel_garage') | tojson @>
+                            authenticationRequired: true
+<% endif %>
+                          - action: DOORBELL_COMING
+                            title: <@ t('button_coming') | tojson @>
+<% if parcel_service %>
+                        parcel_day: "{{ states('input_datetime.parcel_expected') == now().date() | string }}"
+                        open_s: "{{ states('input_number.parcel_service_open') | int(30) }}"
+                        ajar: "{{ states('input_number.parcel_service_ajar') | float(0) > 0 }}"
+                        buttons_parcel:
+                          - action: PARCEL_GARAGE
+                            title: >-
+                              {{ (txt.button_garage_ajar if states('input_number.parcel_service_ajar') | float(0) > 0
+                                  else txt.button_garage_open)
+                                 | replace('{seconds}', states('input_number.parcel_service_open') | int(30) | string) }}
+                            authenticationRequired: true
+<% endif %>
+                    - variables:
+                        photo_ground: "{{ photo | replace('-ring.jpg', '-ring-ground.jpg') }}"
+                    - alias: Snapshot of this moment into the 31-day archive; /media needs a login (unlike /local)
+                      action: camera.snapshot
+                      continue_on_error: true
+                      target:
+                        entity_id: <@ entities.doorbell_camera @>
+                      data:
+                        filename: "/media/{{ photo }}"
+<% if hub %>
+                    - alias: "Nest Hub: says it, then shows the photo (script.doorbell_hub, queued, non-blocking)"
+                      action: script.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: script.doorbell_hub
+                      data:
+                        variables:
+                          text: <@ t('ringing') | tojson @>
+                          photo: "{{ photo }}"
+<% endif %>
+<% if tv %>
+                    - alias: Doorbell picture on the TV (TvOverlay), non-blocking; the script checks whether the TV is on
+                      action: script.turn_on
+                      continue_on_error: true
+                      target:
+                        entity_id: script.doorbell_tv
+<% endif %>
+<% if parcel_service %>
+                    - alias: "Parcel service (expected parcel day): critical alert with the ajar button; otherwise the normal notification"
+                      if:
+                        - condition: template
+                          value_template: "{{ parcel_day }}"
+                      then:
+<% for p in recipients %>
+                        - alias: "Critical alert to <@ p.name @> (first press on any phone wins)"
+                          action: notify.<@ p.notify @>
+                          continue_on_error: true
+                          data:
+                            title: <@ t('parcel_day_title') | tojson @>
+                            message: >-
+                              {{ (txt.parcel_day_message_ajar if ajar else txt.parcel_day_message_open)
+                                 | replace('{time}', ring_time) | replace('{seconds}', open_s | string) }}
+                            data:
+                              image: "/media/local/{{ photo }}"
+                              url: <@ tap @>
+                              tag: doorbell
+                              push:
+                                sound:
+                                  name: default
+                                  critical: 1
+                                  volume: 1
+                                interruption-level: critical
+                              actions: "{{ buttons_parcel }}"
+                              action_data:
+                                ring: "{{ ring_id }}"
+<% endfor %>
+                        - action: logbook.log
+                          data:
+                            name: <@ t('logbook_name') | tojson @>
+                            message: <@ t('log_parcel_day_ring') | tojson @>
+                            entity_id: input_datetime.parcel_expected
+                      else:
+<% for p in recipients %>
+                        - alias: "Notification to <@ p.name @>"
+                          action: notify.<@ p.notify @>
+                          continue_on_error: true
+                          data:
+                            title: <@ t('ringing') | tojson @>
+                            message: <@ t('someone_at_door', time='{{ ring_time }}') | tojson @>
+                            data:
+                              image: "/media/local/{{ photo }}"
+                              url: <@ tap @>
+                              tag: doorbell
+                              push:
+                                sound: default
+                                interruption-level: time-sensitive
+                              actions: "{{ buttons_normal }}"
+                              action_data:
+                                ring: "{{ ring_id }}"
+<% endfor %>
+<% else %>
+<% for p in recipients %>
+                    - alias: "Notification to <@ p.name @>"
+                      action: notify.<@ p.notify @>
+                      continue_on_error: true
+                      data:
+                        title: <@ t('ringing') | tojson @>
+                        message: <@ t('someone_at_door', time='{{ ring_time }}') | tojson @>
+                        data:
+                          image: "/media/local/{{ photo }}"
+                          url: <@ tap @>
+                          tag: doorbell
+                          push:
+                            sound: default
+                            interruption-level: time-sensitive
+                          actions: "{{ buttons_normal }}"
+<% endfor %>
+<% endif %>
+<% if package_cam %>
+                    - alias: "Second photo from the downward package camera (after the first notification): children and hands are often only visible from above, and it shows a parcel on the ground"
+                      action: camera.snapshot
+                      continue_on_error: true
+                      target:
+                        entity_id: <@ package_cam @>
+                      data:
+                        filename: "/media/{{ photo_ground }}"
+<% endif %>
+                    - alias: "Vision model (AI Task, Gemini) describes the photo: parcel in hand, courier, no names. Skipped when doorbell.ai_task is none (no photo leaves the house) or no ai_task entity exists."
+                      if:
+                        - condition: template
+                          value_template: "{{ ai_entity != '' }}"
+                      then:
+                        - action: ai_task.generate_data
+                          continue_on_error: true
+                          response_variable: ai
+                          data:
+                            entity_id: "{{ ai_entity }}"
+                            task_name: <@ t('ai_task_name') | tojson @>
+                            instructions: |-
+                              <@ (t('ai_prompt_two_photos' if package_cam else 'ai_prompt_one_photo') ~ '\n' ~ t('ai_answer_language')) | indent(30) @>
+                            structure:
+                              parcel_in_hand:
+                                description: <@ t('ai_field_parcel_in_hand') | tojson @>
+                                required: true
+                                selector:
+                                  boolean: {}
+                              courier:
+                                description: <@ t('ai_field_courier') | tojson @>
+                                required: true
+                                selector:
+                                  boolean: {}
+                              people:
+                                description: <@ t('ai_field_people') | tojson @>
+                                required: true
+                                selector:
+                                  number:
+                                    min: 0
+                                    max: 10
+                                    mode: box
+                              description:
+                                description: <@ t('ai_field_description') | tojson @>
+                                required: true
+                                selector:
+                                  text: {}
+                              parcel_on_ground:
+                                description: <@ t('ai_field_parcel_on_ground') | tojson @>
+                                required: true
+                                selector:
+                                  boolean: {}
+                            attachments:
+                              - media_content_id: "media-source://media_source/local/{{ photo }}"
+                                media_content_type: image/jpeg
+<% if package_cam %>
+                              - media_content_id: "media-source://media_source/local/{{ photo_ground }}"
+                                media_content_type: image/jpeg
+<% endif %>
+                        - if:
+                            - condition: template
+                              value_template: "{{ ai is defined and ai.data is mapping }}"
+                          then:
+                            - variables:
+                                parcel: "{{ ai.data.parcel_in_hand | bool(false) }}"
+                                courier: "{{ ai.data.courier | bool(false) }}"
+                                people_count: "{{ ai.data.people | int(1) }}"
+                                description: "{{ (ai.data.description | default('') | string | trim)[:200] }}"
+<% if package_event %>
+                                # Gemini sees a parcel on the ground, or Protect reported one less than 15 min ago.
+                                parcel_ground: >-
+                                  {{ (ai.data.parcel_on_ground | default(false) | bool(false))
+                                     or (now() - as_datetime(states('<@ package_event @>'), now() - timedelta(days=1))).total_seconds() < 900 }}
+<% else %>
+                                parcel_ground: "{{ ai.data.parcel_on_ground | default(false) | bool(false) }}"
+<% endif %>
+                            - variables:
+                                short: >-
+                                  {{ txt.short_courier_parcel if parcel and courier else txt.short_someone_parcel if parcel
+                                     else txt.short_courier if courier else txt.short_nobody if people_count == 0
+                                     else txt.short_people | replace('{count}', people_count | string) if people_count > 1
+                                     else txt.short_someone }}
+                                # Left out when Gemini's sentence already mentions the ground (txt.ground_words).
+                                # No leading space: Home Assistant strips template results, the space is added where used.
+                                ground_sentence: >-
+                                  {{ txt.ground_sentence if parcel_ground and not parcel
+                                     and txt.ground_words.split(',') | select('in', description | lower) | list | count == 0
+                                     else '' }}
+<% if parcel_service %>
+                                auto_open: "{{ parcel_day and (parcel or courier) and is_state('binary_sensor.gate_open', 'off') }}"
+                            - alias: "Parcel service: parcel or courier seen on the expected day -> garage open/ajar automatically (no button)"
+                              if:
+                                - condition: template
+                                  value_template: "{{ auto_open }}"
+                              then:
+                                - action: script.turn_on
+                                  target:
+                                    entity_id: script.doorbell_reply
+                                  data:
+                                    variables:
+                                      button: parcel_service
+                                      ring: "{{ ring_id }}"
+                                - action: logbook.log
+                                  data:
+                                    name: <@ t('logbook_name') | tojson @>
+                                    message: "{{ (txt.log_auto_ajar if ajar else txt.log_auto_open) | replace('{short}', short | lower) }}"
+                                    entity_id: input_datetime.parcel_expected
+                            - variables:
+                                title: >-
+                                  {{ (txt.title_auto_ajar if ajar else txt.title_auto_open) if auto_open
+                                     else txt.title_parcel_expected | replace('{short}', short) if parcel_day
+                                     else txt.title_parcel_at_door if parcel or parcel_ground else txt.ringing }}
+                                message: >-
+                                  {{ txt.message_outcome | replace('{short}', short) | replace('{time}', ring_time) }}{{
+                                  ' ' ~ description if description }}{{ ' ' ~ ground_sentence if ground_sentence }}{{
+                                  ' ' ~ ((txt.message_auto_ajar if ajar else txt.message_auto_open) | replace('{seconds}', open_s | string)) if auto_open
+                                  else ' ' ~ txt.message_no_parcel if parcel_day and not (parcel or courier)
+                                  else ' ' ~ txt.message_gate_not_closed if parcel_day else '' }}
+                                buttons: "{{ [] if auto_open else buttons_parcel if parcel_day else buttons_normal }}"
+<% else %>
+                            - variables:
+                                title: "{{ txt.title_parcel_at_door if parcel or parcel_ground else txt.ringing }}"
+                                message: >-
+                                  {{ txt.message_outcome | replace('{short}', short) | replace('{time}', ring_time) }}{{
+                                  ' ' ~ description if description }}{{ ' ' ~ ground_sentence if ground_sentence }}
+                                buttons: "{{ buttons_normal }}"
+<% endif %>
+                            - action: input_text.set_value
+                              target:
+                                entity_id: input_text.doorbell_visit
+                              data:
+                                value: "{{ short }} · {{ ring_time }}"
+                            - action: input_text.set_value
+                              target:
+                                entity_id: input_text.doorbell_description
+                              data:
+                                value: "{{ description if description else short }}"
+<% for p in recipients %>
+                            - alias: "Same tag: silently replaces the first notification to <@ p.name @> (photo stays)"
+                              action: notify.<@ p.notify @>
+                              continue_on_error: true
+                              data:
+                                title: "{{ title }}"
+                                message: "{{ message }}"
+                                data:
+                                  image: "/media/local/{{ photo }}"
+                                  url: <@ tap @>
+                                  tag: doorbell
+                                  push:
+                                    interruption-level: passive
+                                  actions: "{{ buttons }}"
+                                  action_data:
+                                    ring: "{{ ring_id }}"
+<% endfor %>
+                            - action: logbook.log
+                              data:
+                                name: <@ t('logbook_name') | tojson @>
+                                message: "{{ txt.log_rang | replace('{short}', short | lower) }}"
+                                entity_id: input_text.doorbell_visit
+<% if hub %>
+                            - alias: Nest Hub repeats what Gemini saw (not for a plain 'someone' or 'nobody in view')
+                              if:
+                                - condition: template
+                                  value_template: "{{ short not in [txt.short_someone, txt.short_nobody] }}"
+                              then:
+                                - action: script.turn_on
+                                  continue_on_error: true
+                                  target:
+                                    entity_id: script.doorbell_hub
+                                  data:
+                                    variables:
+                                      text: "{{ txt.hub_outcome | replace('{short}', short) }}"
+                                      photo: "{{ photo }}"
+<% endif %>
+                            - alias: Visit log (read by the cw-bezoeken card)
+                              action: calendar.create_event
+                              continue_on_error: true
+                              target:
+                                entity_id: <@ doorbell.calendar @>
+                              data:
+                                summary: "{{ short }}"
+                                description: |-
+                                  {{ description }}{{ ' ' ~ ground_sentence if ground_sentence }}
+                                  <@ t('photo_label') @>: {{ photo }}
+                                start_date_time: "{{ start }}"
+                                end_date_time: "{{ (as_datetime(start) + timedelta(minutes=1)).isoformat() }}"
+                          else:
+                            - action: logbook.log
+                              data:
+                                name: <@ t('logbook_name') | tojson @>
+                                message: <@ t('log_no_description') | tojson @>
+                                entity_id: input_text.doorbell_visit
+                            - alias: Visit log without description
+                              action: calendar.create_event
+                              continue_on_error: true
+                              target:
+                                entity_id: <@ doorbell.calendar @>
+                              data:
+                                summary: <@ t('calendar_rang') | tojson @>
+                                description: |-
+                                  <@ t('calendar_no_description') @>
+                                  <@ t('photo_label') @>: {{ photo }}
+                                start_date_time: "{{ start }}"
+                                end_date_time: "{{ (as_datetime(start) + timedelta(minutes=1)).isoformat() }}"
+                      else:
+                        - alias: Visit log without Gemini
+                          action: calendar.create_event
+                          continue_on_error: true
+                          target:
+                            entity_id: <@ doorbell.calendar @>
+                          data:
+                            summary: <@ t('calendar_rang') | tojson @>
+                            description: "<@ t('photo_label') @>: {{ photo }}"
+                            start_date_time: "{{ start }}"
+                            end_date_time: "{{ (as_datetime(start) + timedelta(minutes=1)).isoformat() }}"
+        - conditions:
+            - condition: trigger
+              id:
+                - at_door
+                - coming
+          sequence:
+            - alias: "Shared with the dashboard buttons: LCD text for 3 min"
+              action: script.turn_on
+              target:
+                entity_id: script.doorbell_reply
+              data:
+                variables:
+                  button: "{{ trigger.id }}"

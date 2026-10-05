@@ -1,0 +1,35 @@
+# User-facing texts of the module tariff-be, one key per text: {en: ..., nl: ...}. Used as <@ t('key') @>.
+# Rules: no double quotes or backslashes (they go between double quotes in YAML), no single quotes in texts used
+# inside a Home Assistant template (logbook_*), no emoji. {kw} is filled in by Home Assistant at run time.
+
+# --- sensors (templates/tariff.yaml); the entity ids are fixed, only the names follow house.language ---
+sensor_price_import: { en: "Power price import", nl: "Stroomprijs afname" }
+sensor_price_export: { en: "Power price export", nl: "Stroomprijs injectie" }
+sensor_price_level: { en: "Power price level", nl: "Stroomprijs niveau" }
+sensor_price_cheap: { en: "Power cheap now", nl: "Stroom nu goedkoop" }
+sensor_tariff_period: { en: "Meter tariff period", nl: "Tariefperiode meter" }
+sensor_grid_import_total: { en: "Grid import total", nl: "Netafname totaal" }
+sensor_grid_import_quarter: { en: "Grid import this quarter", nl: "Netafname dit kwartier" }
+sensor_quarter_expected: { en: "Quarter hour expected", nl: "Kwartiervermogen verwacht" }
+sensor_month_peak: { en: "Month peak", nl: "Maandpiek" }
+sensor_average_peak: { en: "Capacity average peak", nl: "Capaciteit gemiddelde piek" }
+sensor_headroom: { en: "Peak headroom", nl: "Piekruimte" }
+
+# --- helpers (package.yaml) ---
+helper_grid_fee_day: { en: "Grid fee day", nl: "Nettarief dag" }
+helper_grid_fee_night: { en: "Grid fee night", nl: "Nettarief nacht" }
+helper_levies: { en: "Levies on import", nl: "Toeslagen afname" }
+helper_capacity_eur: { en: "Capacity tariff per year", nl: "Capaciteitstarief per jaar" }
+helper_fixed_eur: { en: "Fixed power costs per year", nl: "Vaste kosten stroom per jaar" }
+helper_cheap_below: { en: "Power cheap at or below", nl: "Stroom goedkoop vanaf" }
+helper_start_peak: { en: "Capacity start peak", nl: "Capaciteit startpiek" }
+helper_margin: { en: "Peak margin", nl: "Piekmarge" }
+helper_peak_may_rise: { en: "Peak may rise at a negative price", nl: "Piek mag omhoog bij negatieve prijs" }
+
+# --- automation and logbook (automations.yaml) ---
+automation_start_peak: { en: "Capacity start peak from the meter", nl: "Capaciteit startpiek van de meter" }
+automation_start_peak_description:
+  en: "Copies the average of the month peaks that the digital meter keeps itself into input_number.capacity_start_peak_kw. That value fills the months of the capacity tariff that Home Assistant has not measured yet (ha-kit tariff-be)."
+  nl: "Neemt het gemiddelde van de maandpieken dat de digitale meter zelf bijhoudt over in input_number.capacity_start_peak_kw. Die waarde vult de maanden van het capaciteitstarief aan die Home Assistant nog niet zelf gemeten heeft (ha-kit tariff-be)."
+logbook_name: { en: "Tariff", nl: "Tarief" }
+logbook_start_peak: { en: "start peak taken from the meter: {kw} kW", nl: "startpiek overgenomen van de meter: {kw} kW" }

@@ -1,0 +1,350 @@
+<% from '_tariff.jinja' import area, spot, import_w, import_kwh, reg_month, reg_quarter, own_quarter, import_total, quarter_meter, minimum_kw, connection_kw, cheap_below with context %>
+# Tariff (Belgium): template sensors (ha-kit module tariff-be, see tariff-be/LOGIC.md).
+# Filled in from house.yaml by tools/fill.py; uploaded by tariff-be/deploy.py to /config/templates/tariff.yaml.
+# The formula lives in custom_templates/tariff.jinja (import_price, export_price): one place for every sensor.
+# Entity ids, states and attributes are the capability contract `tariff` (docs/phase4-contracts.md, section 3):
+# other modules read them, so they stay English and never change with house.language.
+
+# --- Prices: all-in import and export price per Nord Pool slot (quarter hour), today and tomorrow ---------------
+# Every 15 min (and when a fee helper changes) the prices of today and tomorrow are fetched from Nord Pool. The config
+# entry comes from entities.spot_price at run time (config_entry_id), so no entry id is written in a file.
+- trigger:
+    - trigger: time_pattern
+      minutes: "/15"
+      seconds: 5
+    - trigger: homeassistant
+      event: start
+    - trigger: event
+      event_type: event_template_reloaded
+    - trigger: state
+      entity_id:
+        - input_number.tariff_grid_fee_day
+        - input_number.tariff_grid_fee_night
+        - input_number.tariff_levies
+  action:
+    - action: nordpool.get_prices_for_date
+      data:
+        config_entry: "{{ config_entry_id('<@ spot @>') }}"
+        date: "{{ now().date() }}"
+        areas: <@ area @>
+        currency: EUR
+      response_variable: today
+      continue_on_error: true
+    - action: nordpool.get_prices_for_date
+      data:
+        config_entry: "{{ config_entry_id('<@ spot @>') }}"
+        date: "{{ (now() + timedelta(days=1)).date() }}"
+        areas: <@ area @>
+        currency: EUR
+      response_variable: tomorrow
+      continue_on_error: true
+    - variables:
+        # Every slot of today and tomorrow: start (ISO, UTC as Nord Pool gives it), ts/end_ts (epoch s), imp/exp (EUR/kWh).
+        slots: >
+          {% from 'tariff.jinja' import import_price, export_price %}
+          {% set gd = states('input_number.tariff_grid_fee_day') | float(<@ tariff.grid.day @>) %}
+          {% set gn = states('input_number.tariff_grid_fee_night') | float(<@ tariff.grid.night @>) %}
+          {% set lv = states('input_number.tariff_levies') | float(<@ tariff.grid.levies @>) %}
+          {% set a = '<@ area @>' %}
+          {% set t1 = (today[a] if today is defined and today is mapping and a in today else []) or [] %}
+          {% set t2 = (tomorrow[a] if tomorrow is defined and tomorrow is mapping and a in tomorrow else []) or [] %}
+          {% set ns = namespace(l=[]) %}
+          {% for p in (t1 + t2) if p.price is number %}
+            {% set ns.l = ns.l + [{'start': p.start if p.start is string else p.start.isoformat(),
+                                   'ts': as_timestamp(p.start), 'end_ts': as_timestamp(p.end),
+                                   'imp': import_price(p.price, p.start, gd, gn, lv) | float,
+                                   'exp': export_price(p.price) | float}] %}
+          {% endfor %}
+          {{ ns.l | sort(attribute='ts') }}
+        # The running slot first, then every slot that starts within the coming 24 h (96 quarters at most).
+        coming: >
+          {% set t = now().timestamp() %}
+          {{ (slots | selectattr('end_ts', '>', t) | selectattr('ts', '<', t + 86400) | list)[:96] }}
+        tomorrow_known: >
+          {% set a = '<@ area @>' %}
+          {{ tomorrow is defined and tomorrow is mapping and ((tomorrow[a] if a in tomorrow else []) or []) | count > 0 }}
+        # Cheapest and priciest consecutive 2 h of the coming slots: {start, end, mean} or none.
+        windows: >
+          {% set l = coming %}
+          {% set slot = (l[1].ts - l[0].ts) if l | count > 1 else 900 %}
+          {% set w = [(7200 / slot) | round(0) | int, 1] | max %}
+          {% set ns = namespace(lo=none, lo_i=0, hi=none, hi_i=0) %}
+          {% for i in range(0, [l | count - w + 1, 0] | max) %}
+            {% set m = (l[i:i + w] | map(attribute='imp') | sum) / w %}
+            {% if ns.lo is none or m < ns.lo %}{% set ns.lo = m %}{% set ns.lo_i = i %}{% endif %}
+            {% if ns.hi is none or m > ns.hi %}{% set ns.hi = m %}{% set ns.hi_i = i %}{% endif %}
+          {% endfor %}
+          {% if ns.lo is none %}
+            {{ {'cheapest': none, 'priciest': none} }}
+          {% else %}
+            {{ {'cheapest': {'start': l[ns.lo_i].start,
+                             'end': (as_datetime(l[ns.lo_i].start) + timedelta(seconds=w * slot)).isoformat(),
+                             'mean': ns.lo | round(4)},
+                'priciest': {'start': l[ns.hi_i].start,
+                             'end': (as_datetime(l[ns.hi_i].start) + timedelta(seconds=w * slot)).isoformat(),
+                             'mean': ns.hi | round(4)}} }}
+          {% endif %}
+  sensor:
+    - name: "<@ t('sensor_price_import') @>"
+      unique_id: power_price_import
+      default_entity_id: sensor.power_price_import
+      unit_of_measurement: EUR/kWh
+      state_class: measurement
+      icon: mdi:cash-clock
+      state: "{{ coming[0].imp if coming | count > 0 else none }}"
+      attributes:
+        starts: "{{ coming | map(attribute='start') | list }}"
+        prices: "{{ coming | map(attribute='imp') | list }}"
+        min_coming: "{{ (coming | map(attribute='imp') | min) if coming else none }}"
+        max_coming: "{{ (coming | map(attribute='imp') | max) if coming else none }}"
+        mean_coming: "{{ ((coming | map(attribute='imp') | sum) / (coming | count)) | round(4) if coming else none }}"
+        tomorrow_known: "{{ tomorrow_known }}"
+        cheapest_2h: "{{ windows.cheapest }}"
+        priciest_2h: "{{ windows.priciest }}"
+
+    - name: "<@ t('sensor_price_export') @>"
+      unique_id: power_price_export
+      default_entity_id: sensor.power_price_export
+      unit_of_measurement: EUR/kWh
+      state_class: measurement
+      icon: mdi:transmission-tower-export
+      state: "{{ coming[0].exp if coming | count > 0 else none }}"
+      attributes:
+        starts: "{{ coming | map(attribute='start') | list }}"
+        prices: "{{ coming | map(attribute='exp') | list }}"
+        negative_coming: "{{ coming | selectattr('exp', '<', 0) | map(attribute='start') | list }}"
+
+    # Rank of the running slot among the coming 24 h (relative, it happens every day); negative = export costs money.
+    - name: "<@ t('sensor_price_level') @>"
+      unique_id: power_price_level
+      default_entity_id: sensor.power_price_level
+      icon: mdi:traffic-light-outline
+      state: >
+        {% set l = coming | map(attribute='imp') | list %}
+        {% if l | count == 0 %}unknown
+        {% elif coming[0].exp < 0 %}negative
+        {% else %}
+          {% set rank = (l | select('<', l[0]) | list | count) / (l | count) %}
+          {% if rank < 0.2 %}very_cheap
+          {% elif rank < 0.4 %}cheap
+          {% elif rank < 0.6 %}normal
+          {% elif rank < 0.8 %}expensive
+          {% else %}very_expensive{% endif %}
+        {% endif %}
+
+# Cheap now: absolute threshold, not the relative level (that one is "cheap" every day). Off without prices.
+- binary_sensor:
+    - name: "<@ t('sensor_price_cheap') @>"
+      unique_id: power_price_cheap
+      default_entity_id: binary_sensor.power_price_cheap
+      icon: mdi:cash-check
+      state: >
+        {% set i = states('sensor.power_price_import') | float(none) %}
+        {% set e = states('sensor.power_price_export') | float(none) %}
+        {% set limit = states('input_number.power_price_cheap_below') | float(<@ cheap_below @>) %}
+        {{ (e is not none and e < 0) or (i is not none and i <= limit) }}
+
+  sensor:
+    # Which register of the meter counts now (Belgian day/night meter): tariff.night in house.yaml.
+    - name: "<@ t('sensor_tariff_period') @>"
+      unique_id: power_tariff_period
+      default_entity_id: sensor.power_tariff_period
+      icon: mdi:theme-light-dark
+      state: >
+        {% from 'tariff.jinja' import is_night %}
+        {{ 'night' if (is_night(now()) | trim) == 'True' else 'day' }}
+<% if own_quarter and import_kwh | length > 1 %>
+
+    # Sum of the import registers (day + night) as the source of the quarter-hour meter (utility_meter in the package).
+    - name: "<@ t('sensor_grid_import_total') @>"
+      unique_id: tariff_grid_import_total
+      default_entity_id: sensor.tariff_grid_import_total
+      unit_of_measurement: kWh
+      device_class: energy
+      state_class: total_increasing
+      icon: mdi:transmission-tower-import
+      state: >
+        {{ <@ import_kwh | tojson @> | map('states') | map('float', 0) | sum | round(3) }}
+      availability: >
+        {{ <@ import_kwh | tojson @> | select('has_value') | list | count == <@ import_kwh | length @> }}
+<% endif %>
+
+    # --- Capacity tariff -------------------------------------------------------------------------------------------
+    # Projected average of the running quarter hour: energy so far + current import power x time left, x 4.
+    - name: "<@ t('sensor_quarter_expected') @>"
+      unique_id: capacity_quarter_expected_kw
+      default_entity_id: sensor.capacity_quarter_expected_kw
+      unit_of_measurement: kW
+      device_class: power
+      state_class: measurement
+      icon: mdi:speedometer
+      state: >
+        {% from 'tariff.jinja' import kw, quarter_energy, rest_hours %}
+        {% set e = quarter_energy() | float(0) %}
+        {% set p = kw('<@ import_w @>') | float(0) %}
+        {{ ((e + p * (rest_hours() | float)) * 4) | round(2) }}
+      availability: "{{ has_value('<@ import_w @>') }}"
+
+    # Grid power that may still be drawn this quarter without raising the month peak. limit = max(month peak,
+    # minimum) - margin; with a negative import price and input_boolean.capacity_peak_may_rise on: the connection.
+    # Negative = this quarter is already above the limit.
+    - name: "<@ t('sensor_headroom') @>"
+      unique_id: capacity_headroom_kw
+      default_entity_id: sensor.capacity_headroom_kw
+      unit_of_measurement: kW
+      device_class: power
+      state_class: measurement
+      icon: mdi:arrow-collapse-up
+      state: >
+        {% from 'tariff.jinja' import quarter_energy, rest_hours %}
+        {% set price = states('sensor.power_price_import') | float(1) %}
+        {% set peak = [states('sensor.capacity_month_peak_kw') | float(0), <@ minimum_kw @>] | max %}
+        {% set rise = price < 0 and is_state('input_boolean.capacity_peak_may_rise', 'on') %}
+        {% set limit = <@ connection_kw @> if rise else peak - states('input_number.capacity_margin_kw') | float(0.3) %}
+        {% set e = quarter_energy() | float(0) %}
+        {{ ([limit, (limit / 4 - e) / (rest_hours(1 / 30) | float)] | min) | round(2) }}
+      attributes:
+        limit_kw: >
+          {% set price = states('sensor.power_price_import') | float(1) %}
+          {% set peak = [states('sensor.capacity_month_peak_kw') | float(0), <@ minimum_kw @>] | max %}
+          {% set rise = price < 0 and is_state('input_boolean.capacity_peak_may_rise', 'on') %}
+          {{ (<@ connection_kw @> if rise else peak - states('input_number.capacity_margin_kw') | float(0.3)) | round(2) }}
+      availability: "{{ has_value('sensor.capacity_month_peak_kw') }}"
+
+# Highest quarter of this month (kW). Attribute month = the month that peak belongs to, at = start of that quarter.
+<% if reg_month %>
+# From the meter's month-peak register (<@ reg_month @>). The meter resets it at the start of a month; readings in the
+# first 20 minutes of a month are ignored (the old value may still come through).
+- trigger:
+    - trigger: state
+      entity_id: <@ reg_month @>
+      not_to: [unknown, unavailable]
+    - trigger: time_pattern
+      minutes: "/15"
+      seconds: 30
+    - trigger: homeassistant
+      event: start
+    - trigger: event
+      event_type: event_template_reloaded
+  variables:
+    early: "{{ now().day == 1 and now().hour == 0 and now().minute < 20 }}"
+    reading: >
+      {% from 'tariff.jinja' import kw %}
+      {% set v = kw('<@ reg_month @>') | trim %}
+      {{ (v | float) if v != '' else none }}
+    quarter_start: >
+      {% set n = now().replace(second=0, microsecond=0) %}
+      {{ (n - timedelta(minutes=n.minute % 15 + 15)).isoformat() }}
+  sensor:
+    - name: "<@ t('sensor_month_peak') @>"
+      unique_id: capacity_month_peak_kw
+      default_entity_id: sensor.capacity_month_peak_kw
+      unit_of_measurement: kW
+      device_class: power
+      state_class: measurement
+      icon: mdi:chart-bell-curve
+      state: >
+        {% if early or reading is none %}
+          {{ this.state if this.state | is_number else none }}
+        {% else %}
+          {{ reading | round(3) }}
+        {% endif %}
+      attributes:
+        month: >
+          {% set old = this.attributes.get('month') %}
+          {{ old if (early or reading is none) and old else now().strftime('%Y-%m') }}
+        at: >
+          {% set old_month = this.attributes.get('month') %}
+          {% set before = this.state | float(0) %}
+          {% if early or reading is none %}
+            {{ this.attributes.get('at') }}
+          {% elif old_month != now().strftime('%Y-%m') %}
+            {{ quarter_start if reading > 0 else none }}
+          {% elif reading > before %}
+            {{ quarter_start }}
+          {% else %}
+            {{ this.attributes.get('at') }}
+          {% endif %}
+<% else %>
+# Computed: the quarter-hour meter (<@ quarter_meter @>, utility_meter in the package) x 4 at the end of every quarter.
+- trigger:
+    - trigger: time_pattern
+      minutes: "/15"
+      seconds: 2
+    - trigger: homeassistant
+      event: start
+    - trigger: event
+      event_type: event_template_reloaded
+  variables:
+    # The quarter that just ended, and the month it belongs to (the last quarter of a month counts for that month).
+    quarter_start: >
+      {% set n = now().replace(second=0, microsecond=0) %}
+      {{ (n - timedelta(minutes=n.minute % 15 + 15)).isoformat() }}
+    quarter_month: "{{ as_datetime(quarter_start).strftime('%Y-%m') }}"
+    reading: >
+      {% set v = state_attr('<@ quarter_meter @>', 'last_period') | float(none) %}
+      {{ (v * 4) | round(3) if v is not none else none }}
+  sensor:
+    - name: "<@ t('sensor_month_peak') @>"
+      unique_id: capacity_month_peak_kw
+      default_entity_id: sensor.capacity_month_peak_kw
+      unit_of_measurement: kW
+      device_class: power
+      state_class: measurement
+      icon: mdi:chart-bell-curve
+      state: >
+        {% set same = this.attributes.get('month') == quarter_month %}
+        {% set before = this.state | float(0) if same else 0 %}
+        {{ [before, reading if reading is not none else 0] | max | round(3) }}
+      attributes:
+        month: "{{ quarter_month }}"
+        at: >
+          {% set same = this.attributes.get('month') == quarter_month %}
+          {% if reading is not none and reading > 0 and (not same or reading > this.state | float(0)) %}
+            {{ quarter_start }}
+          {% elif same %}
+            {{ this.attributes.get('at') }}
+          {% else %}
+            {{ none }}
+          {% endif %}
+<% endif %>
+
+# Mean of the last 12 month peaks (capacity tariff). Remembers the highest peak per month in the attribute peaks;
+# months not measured yet count as input_number.capacity_start_peak_kw (when > 0). Every month at least
+# tariff.capacity.minimum_kw (<@ minimum_kw @> kW).
+- trigger:
+    - trigger: state
+      entity_id: sensor.capacity_month_peak_kw
+    - trigger: state
+      entity_id:
+        - input_number.capacity_start_peak_kw
+        - input_number.tariff_capacity_eur_per_kw_year
+    - trigger: homeassistant
+      event: start
+    - trigger: event
+      event_type: event_template_reloaded
+  variables:
+    reading_month: "{{ state_attr('sensor.capacity_month_peak_kw', 'month') }}"
+    reading: "{{ states('sensor.capacity_month_peak_kw') | float(none) }}"
+  sensor:
+    - name: "<@ t('sensor_average_peak') @>"
+      unique_id: capacity_average_peak_kw
+      default_entity_id: sensor.capacity_average_peak_kw
+      unit_of_measurement: kW
+      device_class: power
+      state_class: measurement
+      icon: mdi:transmission-tower
+      state: >
+        {% from 'tariff.jinja' import peaks_with, average_peak %}
+        {{ average_peak(peaks_with(this.attributes.get('peaks'), reading_month, reading) | from_json) }}
+      attributes:
+        peaks: >
+          {% from 'tariff.jinja' import peaks_with %}
+          {{ peaks_with(this.attributes.get('peaks'), reading_month, reading) | from_json }}
+        months_known: >
+          {% from 'tariff.jinja' import peaks_with %}
+          {{ peaks_with(this.attributes.get('peaks'), reading_month, reading) | from_json | count }}
+        cost_eur_per_year: >
+          {% from 'tariff.jinja' import peaks_with, average_peak %}
+          {% set avg = average_peak(peaks_with(this.attributes.get('peaks'), reading_month, reading) | from_json) | float %}
+          {{ (avg * states('input_number.tariff_capacity_eur_per_kw_year') | float(<@ tariff.capacity.eur_per_kw_year @>)) | round(2) }}

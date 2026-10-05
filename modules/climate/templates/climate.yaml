@@ -1,0 +1,77 @@
+<% from '_climate.jinja' import weather with context %>
+# Climate: weather of the coming hours and days (ha-kit module climate, see climate/LOGIC.md "Weather days").
+# Filled in from house.yaml by tools/fill.py; uploaded by climate/deploy.py to /config/templates/climate.yaml
+# (module base: template: !include_dir_merge_list templates/). Read by the floor decision, the indoor forecast
+# (command_line/climate.yaml), the macro cloud_cover() and the climate screen.
+# Weather entity: <@ weather @> (needs an hourly and a daily forecast; a missing one leaves its attributes empty).
+- trigger:
+    - trigger: time_pattern
+      minutes: "/30"
+      seconds: 20
+    - trigger: homeassistant
+      event: start
+    - trigger: event
+      event_type: event_template_reloaded
+  action:
+    # The response variables must not be called like an attribute below: an attribute overrides the variable.
+    - action: weather.get_forecasts
+      target:
+        entity_id: <@ weather @>
+      data:
+        type: hourly
+      response_variable: fc_hourly
+      continue_on_error: true
+    - action: weather.get_forecasts
+      target:
+        entity_id: <@ weather @>
+      data:
+        type: daily
+      response_variable: fc_daily
+      continue_on_error: true
+  sensor:
+    - name: <@ t('sensor_weather_days') | tojson @>
+      unique_id: climate_weather_days
+      default_entity_id: sensor.climate_weather_days
+      unit_of_measurement: "°C"
+      device_class: temperature
+      icon: mdi:weather-partly-cloudy
+      # State: the highest outdoor temperature still to come today (none when the forecast has no hours left today).
+      state: >
+        {% set l = (fc_hourly | default({})).get('<@ weather @>', {}).get('forecast', []) if fc_hourly is defined else [] %}
+        {% set ns = namespace(t=[]) %}
+        {% for f in l if f.temperature is number and as_datetime(f.datetime) is not none and as_local(as_datetime(f.datetime)).date() == now().date() %}
+        {% set ns.t = ns.t + [f.temperature] %}
+        {% endfor %}
+        {{ (ns.t | max) if ns.t else none }}
+      attributes:
+        # 36 hours: start (ISO), temperature (°C), cloud coverage (%, none when the weather entity has none)
+        hours: >
+          {% set l = (fc_hourly | default({})).get('<@ weather @>', {}).get('forecast', []) if fc_hourly is defined else [] %}
+          {{ l[:36] | map(attribute='datetime') | list }}
+        hour_temp: >
+          {% set l = (fc_hourly | default({})).get('<@ weather @>', {}).get('forecast', []) if fc_hourly is defined else [] %}
+          {{ l[:36] | map(attribute='temperature', default=none) | list }}
+        hour_cloud: >
+          {% set l = (fc_hourly | default({})).get('<@ weather @>', {}).get('forecast', []) if fc_hourly is defined else [] %}
+          {{ l[:36] | map(attribute='cloud_coverage', default=none) | list }}
+        # Mean outdoor temperature of the forecast hours from now until 18:00 today (indoor forecast).
+        outdoor_mean_until_18: >
+          {% set l = (fc_hourly | default({})).get('<@ weather @>', {}).get('forecast', []) if fc_hourly is defined else [] %}
+          {% set ns = namespace(t=[]) %}
+          {% for f in l if f.temperature is number and as_datetime(f.datetime) is not none and as_datetime(f.datetime) < today_at('18:00') %}
+          {% set ns.t = ns.t + [f.temperature] %}
+          {% endfor %}
+          {{ ((ns.t | sum) / (ns.t | count)) | round(1) if ns.t else none }}
+        # 5 days, today first: date (ISO), max, min, condition
+        days: >
+          {% set l = (fc_daily | default({})).get('<@ weather @>', {}).get('forecast', []) if fc_daily is defined else [] %}
+          {{ l[:5] | map(attribute='datetime') | list }}
+        day_max: >
+          {% set l = (fc_daily | default({})).get('<@ weather @>', {}).get('forecast', []) if fc_daily is defined else [] %}
+          {{ l[:5] | map(attribute='temperature', default=none) | list }}
+        day_min: >
+          {% set l = (fc_daily | default({})).get('<@ weather @>', {}).get('forecast', []) if fc_daily is defined else [] %}
+          {{ l[:5] | map(attribute='templow', default=none) | list }}
+        day_condition: >
+          {% set l = (fc_daily | default({})).get('<@ weather @>', {}).get('forecast', []) if fc_daily is defined else [] %}
+          {{ l[:5] | map(attribute='condition', default=none) | list }}

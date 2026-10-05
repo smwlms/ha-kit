@@ -1,0 +1,76 @@
+<% if not entities.gate_relay %><@ fail('house.yaml: entities.gate_relay is empty (required for the module gate)') @><% endif %>
+<% set gate_sensor = entities.get('gate_sensor') %>
+# Gate: helpers (ha-kit module gate, see gate/LOGIC.md "Settings").
+# Uploaded by gate/deploy.py to /config/packages/gate.yaml (module base: packages: !include_dir_named packages/).
+# No `initial` on anything you tune yourself: Home Assistant keeps the last value over a restart. gate/deploy.py
+# sets the default from module.yaml (defaults:) once, when a helper is created for the first time; that is also
+# how the test mode starts ON.
+# Not here: zone.gate_approach (created by deploy.py --setup as a UI zone, so you can drag it and change its radius).
+
+input_boolean:
+  gate_auto_open_enabled:            # master switch for automation.gate_auto_open (default off)
+    name: "<@ t('helper_auto_open_enabled') @>"
+    icon: mdi:gate-arrow-right
+  gate_auto_open_dry_run:            # test mode (default ON): evaluate, log and notify "would open/close", no pulse
+    name: "<@ t('helper_dry_run') @>"
+    icon: mdi:test-tube
+<% if gate_sensor %>
+  gate_auto_close_enabled:           # automation.gate_close_after_departure (default off)
+    name: "<@ t('helper_auto_close_enabled') @>"
+    icon: mdi:gate-arrow-left
+<% endif %>
+
+input_number:
+  gate_away_minutes:                 # condition A: minutes beyond gate_far_distance (default 5)
+    name: "<@ t('helper_away_minutes') @>"
+    min: 0
+    max: 120
+    step: 5
+    unit_of_measurement: min
+  gate_far_distance:                 # condition A: "far enough" from zone.home (default 1500)
+    name: "<@ t('helper_far_distance') @>"
+    min: 300
+    max: 10000
+    step: 100
+    mode: box
+    unit_of_measurement: m
+  gate_nav_home_tolerance:           # condition C: navigation destination within this distance of zone.home (default 150)
+    name: "<@ t('helper_nav_home_tolerance') @>"
+    min: 50
+    max: 500
+    step: 25
+    unit_of_measurement: m
+<% if gate_sensor %>
+  gate_open_alert_minutes:           # automation.gate_open_too_long (default 10)
+    name: "<@ t('helper_open_alert_minutes') @>"
+    min: 1
+    max: 120
+    step: 1
+    mode: box
+    unit_of_measurement: min
+  gate_close_distance:               # automation.gate_close_after_departure (default 50)
+    name: "<@ t('helper_close_distance') @>"
+    min: 20
+    max: 300
+    step: 5
+    mode: box
+    unit_of_measurement: m
+<% endif %>
+
+input_datetime:
+  gate_last_pulse:                   # script.gate_pulse: ignore a new pulse within 30 s of this one
+    name: "<@ t('helper_last_pulse') @>"
+    has_date: true
+    has_time: true
+  gate_last_auto_open:               # cooldown: at most one automatic opening (or question) per 5 min
+    name: "<@ t('helper_last_auto_open') @>"
+    has_date: true
+    has_time: true
+
+counter:
+  # Tesla commands sent today (Teslemetry credits); reset at midnight by automation.tesla_commands_counter_reset.
+  # Other modules that send commands (charging, tesla-driveway-lock) count here too: define it nowhere else.
+  tesla_commands_today:
+    name: "<@ t('helper_tesla_commands_today') @>"
+    icon: mdi:counter
+    restore: true

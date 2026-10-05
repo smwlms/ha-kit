@@ -1,0 +1,197 @@
+<% from '_ev_charging.jinja' import plan_cars, has_tariff, battery, voltage, phases, max_power_kw, house_reserve_kw,
+   efficiency, waze_region, forecast_today, forecast_tomorrow, battery_first_kwh with context %>
+<# The charge plan per plan car (cars[].charge_plan: true) -> /config/templates/ev_plan.yaml. One trigger-based
+   template sensor per car; the macros are in custom_templates/ev_charging.jinja. #>
+# EV charging: the charge plan per car (ha-kit module ev-charging, see ev-charging/LOGIC.md "Charge plan").
+# Filled in from house.yaml by tools/fill.py; uploaded by ev-charging/deploy.py to /config/templates/ev_plan.yaml.
+# Target = the highest of the manual target (input_number.ev_plan_<car>_target + input_datetime
+# .ev_plan_<car>_departure) and the calendar target (cars[].plan_calendar); departure = the earliest of both.
+# automation.ev_charging_apply carries the plan out through sensor.ev_charging_wanted (owner plan).
+<% if not plan_cars %>
+# No car with charge_plan: true and battery_kwh in house.yaml: no charge plan.
+[]
+<% endif %>
+<% for c in plan_cars %>
+<% set p = c.prefix %>
+- trigger:
+    - trigger: time_pattern
+      minutes: "/15"
+      seconds: 20
+    - trigger: homeassistant
+      event: start
+    - trigger: event
+      event_type: event_template_reloaded
+    - trigger: state
+      entity_id:
+        - input_boolean.ev_plan_<@ p @>
+        - input_number.ev_plan_<@ p @>_target
+        - input_datetime.ev_plan_<@ p @>_departure
+        - input_number.ev_plan_<@ p @>_margin
+        - input_number.ev_plan_<@ p @>_reserve
+        - input_number.ev_plan_<@ p @>_solar_confidence
+        - <@ c.cable @>
+  action:
+    - variables:
+        appointments: []
+        raw: []
+        waze: "{{ integration_entities('waze_travel_time') | count > 0 }}"
+<% if c.calendar %>
+    # Calendar <@ c.calendar @>: the appointments of the coming 36 h WITH a location and a start time (not all-day).
+    # A distance in the title or description ("(45 km)", one way) wins over Waze.
+    - if:
+        - condition: template
+          value_template: "{{ has_value('<@ c.calendar @>') }}"
+      then:
+        - action: calendar.get_events
+          target:
+            entity_id: <@ c.calendar @>
+          data:
+            duration:
+              hours: 36
+          response_variable: cal
+          continue_on_error: true
+        - variables:
+            raw: >
+              {% set ev = cal['<@ c.calendar @>'].events if cal is defined and cal is mapping and '<@ c.calendar @>' in cal else [] %}
+              {% set ns = namespace(l=[]) %}
+              {% for e in ev if (e.location | default('', true) | trim) != '' and 'T' in (e.start | string) and as_datetime(e.start) > now() %}
+                {% set text = (e.description | default('', true)) ~ ' ' ~ (e.summary | default('', true)) %}
+                {% set km = text | regex_findall('(\d+(?:[.,]\d+)?)\s*km', True) %}
+                {% set ns.l = ns.l + [{'start': e.start, 'title': e.summary | default(<@ t('appointment') | tojson @>, true), 'location': e.location | trim,
+                   'km': (km | first | replace(',', '.') | float) if km else none, 'minutes': none}] %}
+              {% endfor %}
+              {{ ns.l[:8] }}
+        - repeat:
+            for_each: "{{ raw }}"
+            sequence:
+              - if:
+                  - condition: template
+                    value_template: "{{ waze and repeat.item.km is none }}"
+                then:
+                  - action: waze_travel_time.get_travel_times
+                    data:
+                      # zone.home as origin: a "lat,lon" text from a template becomes a tuple and is refused
+                      origin: zone.home
+                      destination: "{{ repeat.item.location }}"
+                      region: <@ waze_region @>
+                      units: metric
+                      vehicle_type: car
+                      realtime: false
+                    response_variable: w
+                    continue_on_error: true
+                  - variables:
+                      appointments: >
+                        {% set r = w.routes | first if w is defined and w is mapping and w.routes is defined and w.routes | count > 0 else none %}
+                        {{ appointments + [dict(repeat.item, km=(r.distance | float | round(1)) if r else none, minutes=(r.duration | float | round(0)) if r else none)] }}
+                else:
+                  - variables:
+                      appointments: "{{ appointments + [repeat.item] }}"
+<% endif %>
+    - variables:
+        cal_t: >
+          {% from 'ev_charging.jinja' import calendar_target %}
+          {{ calendar_target(appointments, <@ c.consumption @>, states('input_number.ev_plan_<@ p @>_margin') | float(15),
+             states('input_number.ev_plan_<@ p @>_reserve') | float(20), <@ c.battery_kwh @>) | from_json }}
+        hand_target: >
+          {% set ts = state_attr('input_datetime.ev_plan_<@ p @>_departure', 'timestamp') %}
+          {% set v = ts | as_datetime | as_local if ts is number else none %}
+          {{ states('input_number.ev_plan_<@ p @>_target') | int(0) if v and v > now() else 0 }}
+        hand_departure: >
+          {{ (state_attr('input_datetime.ev_plan_<@ p @>_departure', 'timestamp') | as_datetime | as_local).isoformat() if hand_target | int > 0 else none }}
+        target: "{{ [hand_target | int, cal_t.target | int(0)] | max }}"
+        departure: >
+          {% set l = [] %}
+          {% if hand_target | int > 0 %}{% set l = l + [hand_departure] %}{% endif %}
+          {% if cal_t.target | int(0) > 0 and cal_t.departure %}{% set l = l + [cal_t.departure] %}{% endif %}
+          {{ (l | map('as_datetime') | min).isoformat() if l else none }}
+        source: >
+          {% if hand_target | int > 0 and cal_t.target | int(0) > 0 %}manual_and_calendar{% elif hand_target | int > 0 %}manual{% elif cal_t.target | int(0) > 0 %}calendar{% else %}none{% endif %}
+        current: "{{ states('<@ c.battery @>') | float(-1) }}"
+        pl: >
+          {% if target | int > 0 and departure and current | float >= 0 %}
+            {% from 'ev_charging.jinja' import plan %}
+            {% set m = 'sensor.energy_plan_margin' %}
+            {% set after = state_attr(m, 'after_sun') in [true, 'true', 'True'] %}
+            {% set today = 0 if after else [states(m) | float(0), 0] | max %}
+            {% set up = state_attr('sun.sun', 'next_rising') %}
+<% if forecast_today or forecast_tomorrow %>
+            {% set fc = '<@ forecast_today @>' if up and as_local(as_datetime(up)).date() == now().date() else '<@ forecast_tomorrow @>' %}
+            {% set sun_day = states(fc) | float(0) if fc else 0 %}
+<% else %>
+            {% set sun_day = 0 %}
+<% endif %>
+<% if has_tariff %>
+            {% set prices = state_attr('sensor.power_price_import', 'prices') or [] %}
+            {% set starts = state_attr('sensor.power_price_import', 'starts') or [] %}
+            {% set grid = state_attr('sensor.capacity_headroom_kw', 'limit_kw') | float(<@ max_power_kw + house_reserve_kw @>) %}
+<% else %>
+            {% set prices = [] %}
+            {% set starts = [] %}
+            {% set grid = <@ max_power_kw + house_reserve_kw @> %}
+<% endif %>
+<% if c.current %>
+            {% set ctl = is_state('input_boolean.ev_charging_car_amps_auto', 'on') %}
+            {% set min_a = states('input_number.ev_charging_min_amps') | int(5) %}
+<% else %>
+            {% set ctl = false %}
+            {% set min_a = 6 %}
+<% endif %>
+            {% set avoid = state_attr(m, 'sun_end') if is_state('binary_sensor.energy_plan_battery_behind', 'on') else none %}
+            {{ plan(now().isoformat(), current | float, target | int, departure, <@ c.battery_kwh @>, prices, starts,
+                    grid, <@ house_reserve_kw @>, today, state_attr(m, 'sun_end'), up, sun_day,
+                    states('input_number.ev_plan_<@ p @>_solar_confidence') | float(70), <@ battery_first_kwh @>, 0.5, avoid,
+                    <@ efficiency @>, <@ max_power_kw @>, <@ voltage @>, <@ phases @>, min_a, ctl) | from_json }}
+          {% else %}{{ {} }}{% endif %}
+        r: >
+          {% set status = 'unknown' if current | float < 0 else 'no_target' if target | int == 0 else 'target_reached' if current | float >= target | int
+             else 'not_feasible' if not pl.feasible else 'charging_from_grid' if pl.charge_now != 'no' else 'planned' if pl.quarters > 0 else 'solar_enough' %}
+          {{ {
+            'status': status,
+            'switch': is_state('input_boolean.ev_plan_<@ p @>', 'on'),
+            'source': source | trim,
+            'target_percent': target | int,
+            'current_percent': current | float | round(1),
+            'departure': departure,
+            'needed_kwh': pl.needed_kwh | default(0),
+            'solar_kwh': pl.solar_kwh | default(0),
+            'solar_expected_kwh': pl.solar_expected_kwh | default(0),
+            'grid_kwh': pl.grid_kwh | default(0),
+            'planned_kwh': pl.planned_kwh | default(0),
+            'feasible': pl.feasible | default(true),
+            'shortfall_kwh': pl.shortfall_kwh | default(0),
+            'mode': pl.mode | default(none),
+            'power_kw': pl.power_kw | default(0),
+            'amps': pl.amps | default(0),
+            'peak_tight': pl.peak_tight | default(false),
+            'charge_now': pl.charge_now | default('no') if current | float < target | int else 'no',
+            'blocks': pl.blocks | default([]),
+            'quarters': pl.quarters | default(0),
+            'first_start': pl.first_start | default(none),
+            'cost_eur': pl.cost_eur | default(0),
+            'price_unknown': pl.price_unknown | default(0),
+            'calendar_target': cal_t.target | default(0),
+            'calendar_km': cal_t.km | default(0),
+            'calendar_needed_percent': cal_t.needed_percent | default(0),
+            'calendar_departure': cal_t.departure | default(none),
+            'calendar_day': cal_t.day | default(none),
+            'appointments': appointments | map(attribute='title') | list,
+            'appointments_without_distance': cal_t.without_distance | default([]),
+            'waze': waze
+          } }}
+  sensor:
+    # While a trigger arrives during the action (Waze calls), Home Assistant renders without the action variables:
+    # then the previous state and attributes stay (this).
+    - name: <@ t('sensor_plan', name=c.name) | tojson @>
+      unique_id: ev_plan_<@ p @>
+      default_entity_id: sensor.ev_plan_<@ p @>
+      icon: mdi:car-clock
+      state: "{{ r.status if r is defined else this.state }}"
+      attributes:
+<% for a in ['switch', 'source', 'target_percent', 'current_percent', 'departure', 'needed_kwh', 'solar_kwh',
+   'solar_expected_kwh', 'grid_kwh', 'planned_kwh', 'feasible', 'shortfall_kwh', 'mode', 'power_kw', 'amps',
+   'peak_tight', 'charge_now', 'blocks', 'quarters', 'first_start', 'cost_eur', 'price_unknown', 'calendar_target',
+   'calendar_km', 'calendar_needed_percent', 'calendar_departure', 'calendar_day', 'appointments',
+   'appointments_without_distance', 'waze'] %>
+        <@ a @>: "{{ (r if r is defined else this.attributes).get('<@ a @>') }}"
+<% endfor %>
+<% endfor %>

@@ -1,0 +1,3 @@
+# Must FAIL in tools/check.py: parcel-service depends on doorbell and gate, which are not in modules:.
+house: { timezone: Europe/Brussels, language: en, lat: 52.37, lon: 5.22 }
+modules: [base, parcel-service]

@@ -1,0 +1,13 @@
+<# Shared preamble of the module shading: which rooms take part, derived from house.yaml. Every templated file
+   imports the names it needs:  <% from '_shading.jinja' import blinds, sun with context %> #>
+<% set all_rooms = rooms if rooms is defined and rooms else [] %>
+<% set blinds = all_rooms | selectattr('blind', 'defined') | selectattr('blind') | list %>
+<% set curtains = all_rooms | selectattr('curtain', 'defined') | selectattr('curtain') | list %>
+<% set sun_on = ((shading if shading is defined and shading else {}).get('sun_protection', true)) is not sameas false %>
+<# Facade normal per compass side (degrees). The old Dutch notation is only recognised to give a clear error. #>
+<% set normal = {'N': 0, 'NE': 45, 'E': 90, 'SE': 135, 'S': 180, 'SW': 225, 'W': 270, 'NW': 315} %>
+<% set dutch_sides = {'NO': 'NE', 'O': 'E', 'ZO': 'SE', 'Z': 'S', 'ZW': 'SW'} %>
+<% set sun = (blinds | selectattr('side', 'defined') | selectattr('side') | rejectattr('shading', 'sameas', false) | list) if sun_on else [] %>
+<% set sides = sun | map(attribute='side') | map('upper') | unique | list %>
+<% set weather = entities.get('weather') if entities is defined and entities else none %>
+<% set indoor = entities.get('indoor_temperature') if entities is defined and entities else none %>

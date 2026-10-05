@@ -1,0 +1,51 @@
+<% from '_results.jinja' import solar_missed with context %>
+# Results: helpers (ha-kit module results, see results/LOGIC.md "Settings").
+# Uploaded by results/deploy.py to /config/packages/results.yaml (module base: packages: !include_dir_named packages/).
+# No `initial` anywhere: results/deploy.py sets the start value from module.yaml (defaults:) once, when a helper is
+# created. After that the value is yours (Settings > Helpers).
+
+input_number:
+  results_invoice_last_month:        # amount of the last monthly invoice; kept by sensor.results_invoices for that month
+    name: "<@ t('helper_invoice') @>"
+    icon: mdi:receipt-text-outline
+    min: 0
+    max: 5000
+    step: 0.01
+    mode: box
+    unit_of_measurement: EUR
+<% if solar_missed %>
+  results_solar_missed_max_kwh:      # goal solar_used: met when less was sold while the tank or the car had room
+    name: "<@ t('helper_solar_missed_max') @>"
+    icon: mdi:solar-power-variant-outline
+    min: 0
+    max: 20
+    step: 0.1
+    mode: box
+    unit_of_measurement: kWh
+<% endif %>
+  # Other contracts to compare with on the screen: energy price in c€/kWh incl. VAT, WITHOUT grid fee and levies
+  # (those stay the same for every contract). 0 = that contract is not compared.
+  results_compare_variable:
+    name: "<@ t('helper_compare_variable') @>"
+    icon: mdi:cash-sync
+    min: 0
+    max: 100
+    step: 0.01
+    mode: box
+    unit_of_measurement: c€/kWh
+  results_compare_fixed:
+    name: "<@ t('helper_compare_fixed') @>"
+    icon: mdi:cash-lock
+    min: 0
+    max: 100
+    step: 0.01
+    mode: box
+    unit_of_measurement: c€/kWh
+  results_compare_export:            # what those contracts pay for export, c€/kWh
+    name: "<@ t('helper_compare_export') @>"
+    icon: mdi:solar-power
+    min: -20
+    max: 50
+    step: 0.01
+    mode: box
+    unit_of_measurement: c€/kWh

@@ -1,0 +1,178 @@
+<% from '_zappi.jinja' import zappi, connection_phases, phase_switching, battery_power, battery_discharge_w with context %>
+<% set mode_e = zappi.charger_mode %>
+<% set status_e = zappi.charger_status %>
+<% set plug_e = zappi.charger_plug %>
+<% set power_e = zappi.charger_power_w %>
+<% set green_e = zappi.charger_min_green %>
+<% set phase_e = zappi.charger_phase %>
+<% set energy_e = zappi.charger_energy_today %>
+<% set solar_e = zappi.charger_solar_energy_today %>
+# Charger (myenergi Zappi): the normalised sensors of the ev-charger capability (ha-kit module charger-zappi, see
+# charger-zappi/LOGIC.md). Filled in from house.yaml by tools/fill.py; uploaded by charger-zappi/deploy.py to
+# /config/templates/charger_zappi.yaml. Every other module reads sensor.ev_charger_* and binary_sensor.ev_charger_*,
+# never the Zappi entities (their ids contain the serial number). States are fixed English values.
+
+- sensor:
+    # solar_only = Eco+, solar_min = Eco, fast = Fast, stop = Stopped; anything else (offline) = unknown.
+    - name: "<@ t('sensor_mode') @>"
+      unique_id: ev_charger_mode
+      default_entity_id: sensor.ev_charger_mode
+      icon: mdi:ev-station
+      state: >
+        {{ {'Eco+': 'solar_only', 'Eco': 'solar_min', 'Fast': 'fast', 'Stopped': 'stop'}.get(states('<@ mode_e @>'), 'unknown') }}
+      attributes:
+        brand_mode: "{{ states('<@ mode_e @>') }}"
+        solar_share: "{{ states('<@ green_e @>') | int(none) }}"
+
+    # One state from the Zappi status and plug status (myenergi values: status Paused, Charging, Boosting,
+    # Completed; plug EV Disconnected, EV Connected, Waiting for EV, EV ready to charge, Charging, Fault).
+    - name: "<@ t('sensor_status') @>"
+      unique_id: ev_charger_status
+      default_entity_id: sensor.ev_charger_status
+      icon: mdi:ev-plug-type2
+      availability: "{{ has_value('<@ status_e @>') or has_value('<@ plug_e @>') }}"
+      state: >
+        {% set st = states('<@ status_e @>') %}
+        {% set plug = states('<@ plug_e @>') %}
+        {% set w = states('sensor.ev_charger_power') | float(0) %}
+        {% if st in ['Fault', 'Hot'] or plug == 'Fault' %}fault
+        {% elif plug in ['EV Disconnected', '', 'unknown', 'unavailable'] %}disconnected
+        {% elif st in ['Charging', 'Boosting', 'Diverting'] or plug == 'Charging' or w >= 100 %}charging
+        {% elif st == 'Completed' %}complete
+        {% elif st == 'Paused' %}waiting
+        {% else %}connected{% endif %}
+      attributes:
+        brand_status: "{{ states('<@ status_e @>') }}"
+        brand_plug: "{{ states('<@ plug_e @>') }}"
+
+    # W to the car; a kW sensor is converted with its unit_of_measurement.
+    - name: "<@ t('sensor_power') @>"
+      unique_id: ev_charger_power
+      default_entity_id: sensor.ev_charger_power
+      device_class: power
+      state_class: measurement
+      unit_of_measurement: W
+      availability: "{{ is_number(states('<@ power_e @>')) }}"
+      state: >
+        {% set v = states('<@ power_e @>') | float(0) %}
+        {{ (v * 1000 if state_attr('<@ power_e @>', 'unit_of_measurement') == 'kW' else v) | round(0) }}
+<% if solar_e %>
+
+    # kWh of surplus into the car today (Zappi green energy today); read by results.
+    - name: "<@ t('sensor_solar_energy_today') @>"
+      unique_id: ev_charger_solar_energy_today
+      default_entity_id: sensor.ev_charger_solar_energy_today
+      device_class: energy
+      state_class: total_increasing
+      unit_of_measurement: kWh
+      availability: "{{ is_number(states('<@ solar_e @>')) }}"
+      state: >
+        {% set v = states('<@ solar_e @>') | float(0) %}
+        {{ (v / 1000 if state_attr('<@ solar_e @>', 'unit_of_measurement') == 'Wh' else v) | round(3) }}
+<% endif %>
+<% if energy_e %>
+
+    # kWh to the car today (Zappi energy used today).
+    - name: "<@ t('sensor_energy_today') @>"
+      unique_id: ev_charger_energy_today
+      default_entity_id: sensor.ev_charger_energy_today
+      device_class: energy
+      state_class: total_increasing
+      unit_of_measurement: kWh
+      availability: "{{ is_number(states('<@ energy_e @>')) }}"
+      state: >
+        {% set v = states('<@ energy_e @>') | float(0) %}
+        {{ (v / 1000 if state_attr('<@ energy_e @>', 'unit_of_measurement') == 'Wh' else v) | round(3) }}
+<% endif %>
+<% if phase_e %>
+
+    # 1 or 3 from the phase setting. In auto the Zappi chooses itself: known only in Fast (all phases of the
+    # connection); otherwise unknown, attribute setting = auto.
+    - name: "<@ t('sensor_phases') @>"
+      unique_id: ev_charger_phases
+      default_entity_id: sensor.ev_charger_phases
+      icon: mdi:sine-wave
+      state: >
+        {% set p = states('<@ phase_e @>') %}
+        {% if p in ['1', '3'] %}{{ p | int }}
+        {% elif p == 'auto' and is_state('<@ mode_e @>', 'Fast') %}<@ connection_phases @>
+        {% else %}{{ none }}{% endif %}
+      attributes:
+        setting: "{{ states('<@ phase_e @>') }}"
+<% endif %>
+
+- binary_sensor:
+    - name: "<@ t('sensor_connected') @>"
+      unique_id: ev_charger_connected
+      default_entity_id: binary_sensor.ev_charger_connected
+      device_class: plug
+      availability: "{{ has_value('<@ plug_e @>') }}"
+      state: "{{ states('<@ plug_e @>') not in ['EV Disconnected', '', 'unknown', 'unavailable'] }}"
+<% if not energy_e %>
+
+# No energy-today entity of the Zappi (entities.charger_energy_today empty, no prefix): estimated from
+# sensor.ev_charger_power once a minute, back to 0 on the first evaluation of a new day. A trigger-based template
+# sensor keeps its value over a restart.
+- trigger:
+    - trigger: time_pattern
+      minutes: "/1"
+  sensor:
+    - name: "<@ t('sensor_energy_today') @>"
+      unique_id: ev_charger_energy_today
+      default_entity_id: sensor.ev_charger_energy_today
+      device_class: energy
+      state_class: total_increasing
+      unit_of_measurement: kWh
+      state: >
+        {% set w = states('sensor.ev_charger_power') | float(0) %}
+        {% set same_day = this.last_changed is defined and as_local(this.last_changed).date() == now().date() %}
+        {% set before = this.state | float(0) if same_day else 0 %}
+        {{ (before + [w, 0] | max / 60000) | round(3) }}
+      attributes:
+        source: estimated
+<% endif %>
+<% if phase_switching %>
+
+# Phase switching (adapter-internal, see LOGIC.md "Conditions and decisions"): is there room for 3 phases?
+# Hysteresis in power (on above the high threshold, off below the low one, unchanged in between) and in time
+# (on after 10 min, off after 2 min). Trigger-based so the state survives a restart (no drop to 1 phase).
+- trigger:
+    - trigger: state
+      entity_id:
+        - sensor.ev_charging_available_power_avg
+        - binary_sensor.energy_plan_battery_behind
+        - input_number.charger_zappi_three_phase_from_w
+        - input_number.charger_zappi_one_phase_below_w
+<% if battery_power %>
+        - <@ battery_power @>
+<% endif %>
+    - trigger: time_pattern
+      minutes: "/1"
+  binary_sensor:
+    - name: "<@ t('sensor_three_phase_wanted') @>"
+      unique_id: charger_zappi_three_phase_wanted
+      default_entity_id: binary_sensor.charger_zappi_three_phase_wanted
+      icon: mdi:numeric-3-circle-outline
+      delay_on: "00:10:00"
+      delay_off: "00:02:00"
+      state: >
+        {% set avg = states('sensor.ev_charging_available_power_avg') | float(none) %}
+        {% set up = states('input_number.charger_zappi_three_phase_from_w') | float(4600) %}
+        {% set down = states('input_number.charger_zappi_one_phase_below_w') | float(3800) %}
+        {% set discharge = <@ battery_discharge_w @> %}
+        {% if avg is none or is_state('binary_sensor.energy_plan_battery_behind', 'on') or discharge > 300 %}false
+        {% elif avg > up %}true
+        {% elif avg < down %}false
+        {% else %}{{ this.state == 'on' }}{% endif %}
+      attributes:
+        available_w: "{{ states('sensor.ev_charging_available_power_avg') | float(none) }}"
+        battery_discharge_w: "{{ (<@ battery_discharge_w @>) | round(0) }}"
+        reason: >
+          {% set avg = states('sensor.ev_charging_available_power_avg') | float(none) %}
+          {% if avg is none %}no_data
+          {% elif is_state('binary_sensor.energy_plan_battery_behind', 'on') %}battery_behind
+          {% elif (<@ battery_discharge_w @>) > 300 %}battery_discharge
+          {% elif avg > states('input_number.charger_zappi_three_phase_from_w') | float(4600) %}surplus_high
+          {% elif avg < states('input_number.charger_zappi_one_phase_below_w') | float(3800) %}surplus_low
+          {% else %}in_band{% endif %}
+<% endif %>

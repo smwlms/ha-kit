@@ -1,0 +1,29 @@
+# Module metadata, read by tools/fill.py (--list), tools/choose.py (ask:) and tools/check.py.
+# Contract: docs/phase4-contracts.md ("home-screen"). Layer: core (UI).
+name: Home screen
+description: "Start dashboard with one chip or card per installed module (a chip disappears when its module is missing), price advice, energy tiles, quick toggles"
+status: built, not tested on HA
+# No hard dependency: every block follows the feature flags rendered from modules: and the capabilities. It only
+# reads the entities of other modules (contract ids); it provides nothing they read.
+depends_on: []
+provides: []
+requires:
+  integrations: []
+  hardware: []
+optional: true
+generate: []
+ask:
+  - id: home_screen
+    question: "Add a start screen with a chip per installed function?"
+# Fields of house.yaml this module reads (example: house.example.yaml).
+house_fields:
+  - "modules (feature flags), capabilities (tariff, heat-pump)"
+  - "people[].key, name, person; cars[] (with tesla-route: prefix, name, driver, color, badge, charge_plan); rooms[].slug, name, blind, curtain"
+  - "entities.indoor_temperature, outdoor_temperature, weather (optional chips); with energy-plan: solar_power_w, battery_soc, battery_power_w, grid_import_w, grid_export_w, house_power_w, grid_phases; with gate: gate_sensor, gate_relay; with doorbell: doorbell_button, doorbell_camera, doorbell_package"
+  - "energy.battery_power_sign, tariff.capacity.minimum_kw, climate.comfort (all optional)"
+  - "home_screen.toggles, media_players, cameras, todo, map_token, paths, protect_url, view_path (all optional)"
+# No helpers, so nothing to set once.
+defaults: {}
+# check.py: the other side of the optional parts (no extras on the screen).
+check_variant:
+  home_screen: { protect_url: "https://192.0.2.1/protect/dashboard", view_path: start, paths: { climate: /lovelace/climate, cars: /lovelace/cars } }

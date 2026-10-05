@@ -1,0 +1,21 @@
+# Module metadata, read by tools/fill.py (--list shows it as a table), tools/choose.py (ask:).
+name: Tesla route
+description: Route of the driving Teslas (own integration teslemetry_route), map card and arrival card
+status: built
+# The arrival card shows a gate row when module gate is installed, but works without it (no hard dependency).
+depends_on: []
+requires:
+  integrations: [Teslemetry (Fleet Telemetry streaming), Home Assistant Companion app (optional, who is in the car)]
+  hardware: [Tesla]
+optional: false
+generate: []
+ask:
+  - id: tesla
+    question: Do you have a Tesla connected to Home Assistant through Teslemetry?
+# Fields of house.yaml this module reads (example: house.example.yaml in the kit root).
+house_fields:
+  - cars[].prefix, name, driver, color (optional), badge (optional, lightning or plaid or an own svg), entities (optional)
+  - people[].key, name, phone
+  - teslemetry.*
+  - house.language (texts, number and time format of the cards)
+  - modules (with gate the arrival card gets the gate row), entities.gate_relay, entities.gate_sensor

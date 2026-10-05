@@ -1,0 +1,9 @@
+# User-facing texts of the module room-sensor, one key per text: {en: ..., nl: ...}. Used in the module's files as
+# <@ t('key') @> (tools/fill.py picks house.language, default en; a missing language falls back to en with a warning).
+# These are ESPHome entity names: Home Assistant derives the entity ids from them (friendly name + entity name),
+# so changing a text changes the entity id. The nl texts are the names of the first version of the module: keep them,
+# so installations filled in with language nl keep their entity ids.
+entity_temperature: { en: Temperature, nl: Temperatuur }
+entity_humidity: { en: Humidity, nl: Luchtvochtigheid }
+entity_temperature_offset: { en: Temperature offset, nl: Temperatuur-correctie }
+entity_firmware_update: { en: Firmware update (disabled), nl: Firmware-update (uitgeschakeld) }

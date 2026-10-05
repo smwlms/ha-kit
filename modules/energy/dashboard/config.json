@@ -1,0 +1,40 @@
+<# Input of the dashboard builder (dashboard/build.py, run by deploy.py): the card config of the energy screen, the
+   config of the analysis data generators, the feature flags, the dashboards and the texts of the analysis views, all
+   rendered from house.yaml by tools/fill.py (_energy.jinja). JSON: no YAML quoting, no Home Assistant template checks. #>
+<% from '_energy.jinja' import card, analysis, has, dashboards with context %>
+<% set an_keys = [
+  'an_30_days', 'an_above', 'an_advantage', 'an_at_most_grid', 'an_average', 'an_average_30', 'an_average_peak',
+  'an_average_peak_info', 'an_average_per_day', 'an_average_week', 'an_base_load', 'an_battery_charges',
+  'an_battery_discharges', 'an_capacity_price', 'an_capacity_tariff', 'an_car', 'an_car_charging',
+  'an_car_profile', 'an_car_source', 'an_cause', 'an_charge', 'an_charge_level', 'an_charged', 'an_charged_kwh',
+  'an_charger', 'an_chip_average_peak', 'an_chip_month_peak', 'an_chip_quarter', 'an_comparison',
+  'an_cost_per_day', 'an_costs', 'an_course', 'an_dashboard_title', 'an_day_average', 'an_day_peak',
+  'an_day_profile', 'an_days', 'an_days_full', 'an_direct_sun', 'an_discharged', 'an_dynamic', 'an_effect',
+  'an_empty_at', 'an_evening', 'an_export', 'an_export_day', 'an_export_night', 'an_export_per_hour',
+  'an_export_price', 'an_export_price_short', 'an_extra_module', 'an_fixed', 'an_fixed_fee', 'an_floor',
+  'an_flows', 'an_flows_title', 'an_from_battery', 'an_from_grid', 'an_from_sun_or_battery', 'an_full',
+  'an_grid_fee_day', 'an_grid_fee_night', 'an_grid_kwh', 'an_grid_per_day', 'an_heat_pump', 'an_highest',
+  'an_house', 'an_house_per_day', 'an_house_without_car', 'an_import', 'an_import_day', 'an_import_night',
+  'an_import_per_hour', 'an_import_price', 'an_import_price_short', 'an_investment', 'an_kwh_to_shift',
+  'an_last_30_days', 'an_last_year', 'an_levies', 'an_longer', 'an_lower_bound', 'an_measured', 'an_median_30',
+  'an_meter', 'an_midnight', 'an_module_potential', 'an_module_shift', 'an_module_total_1', 'an_module_total_2',
+  'an_month_peak', 'an_month_peak_info', 'an_months_long', 'an_months_short', 'an_net_quarter', 'an_netted',
+  'an_next', 'an_night', 'an_not_empty', 'an_not_explained', 'an_not_full', 'an_now', 'an_of_the_day',
+  'an_of_which_car', 'an_one_quarter', 'an_parameters', 'an_peak_cut', 'an_peak_register_hour',
+  'an_peak_source_hourly', 'an_peak_source_meter', 'an_peak_source_none', 'an_per_day', 'an_per_day_cap',
+  'an_per_device', 'an_per_hour', 'an_per_kwh', 'an_per_month', 'an_per_night', 'an_per_phase', 'an_per_quarter',
+  'an_per_year', 'an_period_30_days', 'an_pick_date', 'an_previous', 'an_price_now_line', 'an_quarter',
+  'an_quarter_info', 'an_quarters', 'an_quarters_above', 'an_reserve', 'an_rest', 'an_rest_of_house', 'an_return',
+  'an_running', 'an_saving', 'an_saving_per_day', 'an_saving_total', 'an_screen_title', 'an_season_autumn',
+  'an_season_spring', 'an_season_summer', 'an_season_winter', 'an_seasons', 'an_self_sufficient',
+  'an_soc_over_day', 'an_solar', 'an_solar_and_grid', 'an_solar_export_kwh', 'an_split', 'an_starts',
+  'an_sun_window', 'an_sun_window_short', 'an_target', 'an_target_limit', 'an_to_battery', 'an_to_car',
+  'an_to_grid', 'an_to_house', 'an_today', 'an_today_cap', 'an_total', 'an_variable', 'an_variable_fixed',
+  'an_ventilation', 'an_ventilation_now', 'an_view_battery', 'an_view_consumers', 'an_view_flows',
+  'an_view_period', 'an_view_power', 'an_view_tariff', 'an_view_trends', 'an_vs_fixed', 'an_vs_variable',
+  'an_week_text', 'an_weekdays_long', 'an_where_energy_went', 'an_where_sun_went', 'an_where_use_came_from',
+  'an_without_battery', 'an_year_short', 'an_you_paid', 'an_your_export', 'an_your_export_short', 'an_your_import'] %>
+<% set an_strings = {} %>
+<% for k in an_keys %><% set _ = an_strings.update({k: t(k)}) %><% endfor %>
+<@ {'language': t('language_code'), 'dashboards': dashboards, 'features': has, 'card': card, 'analysis': analysis,
+    'strings': an_strings} | tojson(indent=1) @>

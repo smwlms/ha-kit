@@ -1,0 +1,15 @@
+# Package 'doorbell' -> /config/packages/doorbell.yaml (loaded by homeassistant: packages: !include_dir_named packages/).
+# Helpers written by the doorbell automations and read by the dashboard (visit list, Home chip).
+# No 'initial': the values are restored over a restart.
+input_text:
+  doorbell_visit:
+    # Short outcome + time, label first: "Someone with a parcel · 14:32". Written ~5-10 s after the ring
+    # (after Gemini); its change also refreshes the cw-bezoeken card.
+    name: <@ t('helper_visit') | tojson @>
+    icon: mdi:doorbell-video
+    max: 40
+  doorbell_description:
+    # The sentence of the vision model, e.g. "A courier in a yellow uniform with a big box."
+    name: <@ t('helper_description') | tojson @>
+    icon: mdi:text-box-outline
+    max: 255

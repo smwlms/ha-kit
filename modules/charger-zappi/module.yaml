@@ -1,0 +1,45 @@
+# Module metadata, read by tools/fill.py (--list), tools/choose.py (ask:), tools/check.py and charger-zappi/deploy.py
+# (defaults). Contract: docs/phase4-contracts.md, "ev-charger".
+name: Charger (myenergi Zappi)
+description: "myenergi Zappi as EV charger for ev-charging: mode mapping, minimum green level, normalised sensors, 1 or 3 phases by surplus"
+status: built, not tested on HA
+# Layer: brand adapter. Phase switching only when ev-charging is in modules: (it reads its available-power average).
+depends_on: []
+provides: [ev-charger]
+requires:
+  integrations:
+    - "myenergi (custom integration CJNE/ha-myenergi through HACS, cloud; there is no core integration)"
+  hardware:
+    - "myenergi Zappi (phase switching: a Zappi on a 3-phase connection)"
+optional: true
+generate: []
+ask:
+  - id: ev_charger
+    question: "Which EV charger do you have?"
+    options: ["myenergi Zappi", "other", "none"]
+    need: "myenergi Zappi"
+# Fields of house.yaml this module reads (example: house.example.yaml).
+house_fields:
+  - "entities.charger_status, charger_mode, charger_plug, charger_power_w, charger_min_green (required, or charger_zappi.prefix)"
+  - "entities.charger_phase, charger_energy_today, charger_solar_energy_today (optional, or charger_zappi.prefix)"
+  - "charger_zappi.prefix (optional): myenergi entity prefix with the serial; derives every entities.charger_* left empty"
+  - "ev_charging.phases (optional, default 3): phase switching only on a 3-phase connection"
+  - "entities.battery_power_w + energy.battery_power_sign (optional): battery discharge for the phase switching"
+# Start values that deploy.py sets ONCE, when the helper is new (never `initial`). The ids are part of the contract.
+# The three helpers exist only with phase switching (see LOGIC.md); without it they are skipped.
+defaults:
+  input_boolean.charger_zappi_phase_auto: "on"
+  input_number.charger_zappi_three_phase_from_w: 4600
+  input_number.charger_zappi_one_phase_below_w: 3800
+# check.py: the all-modules house derives every Zappi entity from the prefix (the example writes them out).
+check_variant:
+  charger_zappi: { prefix: myenergi_zappi_0000000 }
+  entities:
+    charger_status: null
+    charger_mode: null
+    charger_plug: null
+    charger_power_w: null
+    charger_min_green: null
+    charger_phase: null
+    charger_energy_today: null
+    charger_solar_energy_today: null

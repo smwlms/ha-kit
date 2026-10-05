@@ -1,0 +1,70 @@
+<# Shared preamble of the module presence, imported at the top of every templated file:
+     <% from '_presence.jinja' import P, tracked, places, ... with context %>
+   Derives from house.yaml who and what this module follows. The full check of house.yaml with clear errors is in
+   package.yaml. Only names set at the top level are importable (not inside a for loop). #>
+<% if presence is not defined or not presence %><@ fail('house.yaml has no section presence: (example: section presence: in house.example.yaml)') @><% endif %>
+<% set P = presence %>
+<# People with a phone take part; cars come from cars: (Teslemetry). #>
+<% set tracked = people | selectattr('phone', 'defined') | selectattr('phone') | list %>
+<% set car_list = cars if cars is defined and cars else [] %>
+<% set place_kinds = ['work', 'school', 'drop_off', 'family'] %>
+<# Only to give a clear error for a house.yaml written for the Dutch kinds. #>
+<% set dutch_kinds = {'werk': 'work', 'afzetpunt': 'drop_off', 'familie': 'family'} %>
+<% set places = (P.get('places') or []) | selectattr('key', 'defined') | selectattr('name', 'defined') | selectattr('kind', 'defined') | selectattr('kind', 'in', place_kinds) | list %>
+<% set school = places | selectattr('kind', 'eq', 'school') | first | default(none) %>
+<% set drop_offs = places | selectattr('kind', 'eq', 'drop_off') | list %>
+<% set family = places | selectattr('kind', 'eq', 'family') | list %>
+<% set work = places | selectattr('kind', 'eq', 'work') | list %>
+<% set runs = school is not none or family | length > 0 %>
+<% set calendar = P.get('calendar') or 'calendar.presence' %>
+<% set stay_calendar = P.get('stay_calendar') or 'calendar.stays' %>
+<% set work_zone = {} %>
+<% for w in work %>
+<% set _ = work_zone.update({w.person: 'zone.' ~ w.key}) %>
+<% endfor %>
+<% set children = P.get('children') or t('children_default') %>
+<# School windows (house.yaml presence.school_windows, else module.yaml defaults): windows.drop_off, .pick_up,
+   .family, each {day: "HH:MM-HH:MM" or a list}, days mon tue wed thu fri sat sun. #>
+<% set day_keys = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] %>
+<% set day_names = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] %>
+<% set windows = {} %>
+<% for k in ['drop_off', 'pick_up', 'family'] %>
+<% set w = {} %>
+<% for d, r in ((P.get('school_windows') or {}).get(k) or module.defaults.school_windows[k]).items() %>
+<% if d not in day_keys %><@ fail('presence.school_windows.' ~ k ~ ': unknown day ' ~ d ~ ' (use mon tue wed thu fri sat sun)') @><% endif %>
+<% set _ = w.update({d: r}) %>
+<% endfor %>
+<% set _ = windows.update({k: w}) %>
+<% endfor %>
+<# Texts that are read back (calendar titles, detail keys, ...): the text of EVERY language in strings.yaml, the
+   install language first, so events written in another language are still recognised. t.table is the parsed
+   strings.yaml of tools/fill.py; without it only the install language is known. #>
+<% set S = t.table if t.table is defined else {} %>
+<% set every = {} %>
+<% for k in ['kind_home', 'kind_home_from_work', 'kind_drop_off', 'kind_pick_up', 'kind_work', 'kind_charge', 'kind_stay',
+              'word_and', 'unknown', 'stay_spots', 'stay_travel', 'stay_night',
+              'det_away', 'det_left_work', 'det_car', 'det_place', 'det_source', 'det_duration', 'det_arrival',
+              'det_departure', 'det_work_trips', 'det_appointments', 'det_location', 'det_battery'] %>
+<% set _ = every.update({k: ([t(k)] + ((S.get(k) or {}).values() | select('string') | list)) | unique | list}) %>
+<% endfor %>
+<# label -> canonical name, for the calendar titles and the detail keys. #>
+<% set kind_of = {} %>
+<% for k in ['home', 'home_from_work', 'drop_off', 'pick_up', 'work', 'charge'] %>
+<% for label in every['kind_' ~ k] %>
+<% set _ = kind_of.update({label: k}) %>
+<% endfor %>
+<% endfor %>
+<% set det_of = {} %>
+<% for k in ['away', 'left_work', 'car', 'place', 'source', 'duration', 'arrival', 'departure', 'work_trips', 'appointments', 'location', 'battery'] %>
+<% for label in every['det_' ~ k] %>
+<% set _ = det_of.update({label: k}) %>
+<% endfor %>
+<% endfor %>
+<% set stay_of = {} %>
+<% for k in ['spots', 'travel', 'night'] %>
+<% for label in every['stay_' ~ k] %>
+<% set _ = stay_of.update({label: k}) %>
+<% endfor %>
+<% endfor %>
+<# Title of the event kinds in the install language, by canonical name (script presence_log). #>
+<% set kind_title = {'home': t('kind_home'), 'home_from_work': t('kind_home_from_work'), 'drop_off': t('kind_drop_off'), 'pick_up': t('kind_pick_up'), 'work': t('kind_work'), 'charge': t('kind_charge')} %>

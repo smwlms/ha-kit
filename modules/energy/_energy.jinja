@@ -1,0 +1,310 @@
+<# Shared preamble of the module energy: every role, feature flag, path and text, derived from house.yaml, modules:
+   and the capabilities at fill time. Imported by dashboard/config.json, www/energy-flows.js and www/analysis/config.js:
+     <% from '_energy.jinja' import card, analysis, flows_cfg, dashboards with context %>
+   Rule: the JavaScript and the dashboard builder have no entity id of their own. Every id below is a house.yaml role or
+   a contract id of an installed module (docs/phase4-contracts.md). A block whose role or module is missing gets no
+   feature flag and no role, so nothing draws it. #>
+<% from '_esphome.jinja' import prefix as esphome_prefix %>
+<% set E = entities if entities is defined and entities else {} %>
+<% set EN = energy if energy is defined and energy else {} %>
+<% set T = tariff if tariff is defined and tariff else {} %>
+<% set caps = capabilities %>
+<# --- required roles --- #>
+<% for key in ['grid_import_w', 'grid_export_w', 'grid_import_kwh', 'grid_export_kwh'] %>
+<% if not E.get(key) %><@ fail('house.yaml has no entities.' ~ key ~ ' (required for the module energy)') @><% endif %>
+<% endfor %>
+<% set imp_kwh = [E.grid_import_kwh] if E.grid_import_kwh is string else E.grid_import_kwh | list %>
+<% set exp_kwh = [E.grid_export_kwh] if E.grid_export_kwh is string else E.grid_export_kwh | list %>
+<% if EN.get('battery_power_sign') and EN.battery_power_sign not in ['charge_positive', 'discharge_positive'] %><@ fail('house.yaml energy.battery_power_sign must be charge_positive or discharge_positive') @><% endif %>
+<% if E.get('battery_power_w') and not EN.get('battery_power_sign') %><@ fail('house.yaml has entities.battery_power_w but no energy.battery_power_sign (charge_positive or discharge_positive)') @><% endif %>
+<% set battery_sign = EN.get('battery_power_sign') or 'discharge_positive' %>
+<# --- derived roles --- #>
+<% set V = ventilation if ventilation is defined and ventilation else {} %>
+<% set vent_prefix = (esphome_prefix(V.name, V.get('display_name')) | trim) if ('ventilation-zehnder' in modules and V.get('name') and not V.get('mac_suffix')) else '' %>
+<% set vent_w = E.get('ventilation_power_w') or ('sensor.' ~ vent_prefix ~ '_power' if vent_prefix else none) %>
+<% set has = {
+  'solar': (E.get('solar_power_w') or '') != '',
+  'battery': (E.get('battery_soc') or '') != '',
+  'battery_power': (E.get('battery_power_w') or '') != '',
+  'phases': (E.get('grid_phases') or []) | length > 0,
+  'charger': 'ev-charger' in caps,
+  'ev_charging': 'ev-charging' in modules,
+  'zappi': 'charger-zappi' in modules,
+  'hot_water_heater': 'hot-water-heater' in caps,
+  'hot_water': 'hot-water' in modules,
+  'heat_pump': 'heat-pump' in caps,
+  'tariff': 'tariff' in caps,
+  'plan': 'energy-plan' in modules,
+  'results': 'results' in modules,
+  'co2': (E.get('co2_fossil_percent') or '') != '',
+  'forecast': (E.get('solar_forecast_today') or E.get('solar_forecast_remaining_today') or E.get('solar_forecast_tomorrow') or '') != '',
+  'compare': ('tariff' in caps) and (T.get('compare') or {}) | length > 0,
+  'ventilation': (vent_w or '') != '',
+} %>
+<% set _ = has.update({'capacity': has.tariff or (E.get('grid_month_peak_kw') or '') != ''}) %>
+<# --- consumers: house.yaml energy.consumers, plus the ComfoClime of ventilation-zehnder --- #>
+<% set consumer_list = [] %>
+<% for c in EN.get('consumers') or [] %>
+<% if not c.get('name') %><@ fail('house.yaml energy.consumers[' ~ loop.index0 ~ '] needs a name') @><% endif %>
+<% if not c.get('power_w') and not c.get('energy_kwh') %><@ fail('house.yaml energy.consumers: ' ~ c.name ~ ' needs power_w or energy_kwh') @><% endif %>
+<% set _ = consumer_list.append({'key': 'consumer_' ~ loop.index, 'name': c.name, 'power': c.get('power_w') or none, 'energy': c.get('energy_kwh') or none,
+   'icon': c.get('icon') or 'mdi:power-plug-outline', 'flow': c.get('flow', true) and (c.get('power_w') or '') != '', 'start_w': c.get('start_w') or 100}) %>
+<% endfor %>
+<% if vent_prefix and V.get('comfoclime') %>
+<% set _ = consumer_list.append({'key': 'comfoclime', 'name': 'ComfoClime', 'power': 'sensor.' ~ vent_prefix ~ '_comfoclime_heat_pump_power', 'energy': none,
+   'icon': 'mdi:air-conditioner', 'flow': false, 'start_w': 100}) %>
+<% endif %>
+<# --- paths --- #>
+<% set D = EN.get('dashboards') or {} %>
+<% set dashboards = {'screen': D.get('screen') or 'energy-screen', 'analysis': D.get('analysis') or 'energy-analysis'} %>
+<% for k, v in dashboards.items() %>
+<% if '-' not in v %><@ fail('house.yaml energy.dashboards.' ~ k ~ ': the url_path of a dashboard needs a hyphen (Home Assistant rule), e.g. energy-analysis') @><% endif %>
+<% endfor %>
+<% set P = EN.get('paths') or {} %>
+<% set paths = {'analysis': '/' ~ dashboards.analysis ~ '/period', 'flows': '/' ~ dashboards.screen ~ '/flows'} %>
+<% if has.results and P.get('results') %><% set _ = paths.update({'results': P.results}) %><% endif %>
+<% if P.get('cars') %><% set _ = paths.update({'cars': P.cars}) %><% endif %>
+<# --- roles of the energy screen: role -> entity id, only the ones that exist in this house --- #>
+<% set roles = {'grid_import': E.grid_import_w, 'grid_export': E.grid_export_w} %>
+<% for key, role in [('solar_power', 'solar_power_w'), ('solar_energy', 'solar_energy_kwh'), ('battery_soc', 'battery_soc'),
+   ('battery_power', 'battery_power_w'), ('battery_charge_kwh', 'battery_charge_kwh'), ('battery_discharge_kwh', 'battery_discharge_kwh'),
+   ('forecast_today', 'solar_forecast_today'), ('forecast_remaining', 'solar_forecast_remaining_today'),
+   ('forecast_tomorrow', 'solar_forecast_tomorrow'), ('co2', 'co2_fossil_percent')] %>
+<% if E.get(role) %><% set _ = roles.update({key: E[role]}) %><% endif %>
+<% endfor %>
+<% if not has.battery %><% for k in ['battery_power', 'battery_charge_kwh', 'battery_discharge_kwh'] %><% set _ = roles.pop(k, none) %><% endfor %><% endif %>
+<% if E.get('house_power_w') %><% set _ = roles.update({'house_power': E.house_power_w}) %>
+<% elif has.plan %><% set _ = roles.update({'house_power': 'sensor.energy_plan_house_power'}) %><% endif %>
+<% set month_peak = E.get('grid_month_peak_kw') or ('sensor.capacity_month_peak_kw' if has.tariff else none) %>
+<% set quarter = E.get('grid_quarter_kw') or ('sensor.capacity_quarter_expected_kw' if has.tariff else none) %>
+<% if month_peak %><% set _ = roles.update({'month_peak': month_peak}) %><% endif %>
+<% if quarter %><% set _ = roles.update({'quarter': quarter}) %><% endif %>
+<% if has.tariff %>
+<% set _ = roles.update({'price_import': 'sensor.power_price_import', 'price_export': 'sensor.power_price_export',
+   'price_level': 'sensor.power_price_level', 'capacity_headroom': 'sensor.capacity_headroom_kw'}) %>
+<% endif %>
+<% if has.plan %>
+<% set _ = roles.update({'plan_margin': 'sensor.energy_plan_margin', 'surplus': 'binary_sensor.energy_plan_surplus'}) %>
+<% if has.battery %><% set _ = roles.update({'battery_behind': 'binary_sensor.energy_plan_battery_behind'}) %><% endif %>
+<% endif %>
+<% if has.charger %>
+<% set _ = roles.update({'charger_power': 'sensor.ev_charger_power', 'charger_mode': 'sensor.ev_charger_mode',
+   'charger_status': 'sensor.ev_charger_status', 'charger_connected': 'binary_sensor.ev_charger_connected',
+   'charger_energy_today': 'sensor.ev_charger_energy_today', 'charger_solar_energy_today': 'sensor.ev_charger_solar_energy_today',
+   'charger_phases': 'sensor.ev_charger_phases', 'charger_set_mode': 'script.ev_charger_set_mode'}) %>
+<% endif %>
+<% if has.zappi %><% set _ = roles.update({'phase_auto': 'input_boolean.charger_zappi_phase_auto'}) %><% endif %>
+<% if has.ev_charging %>
+<% set _ = roles.update({'ev_car': 'sensor.ev_charging_car', 'ev_status': 'sensor.ev_charging_status',
+   'ev_smart': 'input_boolean.ev_charging_smart', 'ev_amps_auto': 'input_boolean.ev_charging_car_amps_auto',
+   'ev_cheap': 'input_boolean.ev_charging_cheap_enabled', 'ev_owner': 'input_select.ev_charging_owner',
+   'ev_available_avg': 'sensor.ev_charging_available_power_avg', 'ev_battery_feeds_car': 'binary_sensor.ev_charging_battery_feeds_car',
+   'ev_energy_needed': 'sensor.ev_charging_energy_needed', 'ev_commands': 'counter.tesla_commands_today',
+   'ev_commands_max': 'input_number.ev_charging_car_commands_per_day'}) %>
+<# A mode chosen on the screen goes through ev-charging (owner manual until unplugged), never straight to the charger
+   script: a direct call would look like a call of the kit and be undone by the arbiter. #>
+<% set _ = roles.update({'charger_set_mode': 'script.ev_charging_manual_mode'}) %>
+<% if has.tariff %><% set _ = roles.update({'ev_cheap_status': 'sensor.ev_charging_cheap_status'}) %><% endif %>
+<% endif %>
+<% if has.hot_water_heater %>
+<% set _ = roles.update({'hot_water_temperature': 'sensor.hot_water_temperature', 'hot_water_heating': 'binary_sensor.hot_water_heating'}) %>
+<% endif %>
+<% if has.hot_water %>
+<% set _ = roles.update({'hot_water_shower_tomorrow': 'input_boolean.hot_water_shower_tomorrow', 'hot_water_shower': 'input_number.hot_water_shower',
+   'hot_water_minimum': 'input_number.hot_water_minimum', 'hot_water_morning': 'sensor.hot_water_cheapest_hour_before_sunrise',
+   'hot_water_bath_hour': 'sensor.hot_water_cheapest_hour_before_bath', 'hot_water_surplus_active': 'input_boolean.hot_water_surplus_active',
+   'hot_water_pays': 'binary_sensor.hot_water_heating_pays', 'hot_water_energy_needed': 'sensor.hot_water_energy_needed',
+   'hot_water_room': 'sensor.hot_water_room', 'hot_water_expected_export': 'sensor.hot_water_expected_export'}) %>
+<% endif %>
+<% if has.heat_pump %>
+<% set _ = roles.update({'heat_pump_state': 'sensor.heat_pump_state', 'heat_pump_power': 'sensor.heat_pump_power_estimated'}) %>
+<% endif %>
+<# --- lists of the screen --- #>
+<% set phases = [] %>
+<% for ph in E.get('grid_phases') or [] %>
+<% set row = {'import': ph.get('import_w') or none, 'export': ph.get('export_w') or none} %>
+<% if ph.get('voltage') %><% set _ = row.update({'voltage': ph.voltage}) %><% endif %>
+<% if ph.get('current') %><% set _ = row.update({'current': ph.current}) %><% endif %>
+<% if not row['import'] %><@ fail('house.yaml entities.grid_phases[' ~ loop.index0 ~ '] needs import_w') @><% endif %>
+<% set _ = phases.append(row) %>
+<% endfor %>
+<% set savings = [] %>
+<% if has.results %>
+<% if has.hot_water %><% set _ = savings.extend(['sensor.results_saving_hot_water_solar', 'sensor.results_saving_hot_water_cheap_hour']) %><% endif %>
+<% if has.ev_charging %><% set _ = savings.append('sensor.results_saving_ev_solar') %><% endif %>
+<% endif %>
+<% set settings = [] %>
+<% if has.plan %>
+<% set ids = ['input_number.energy_plan_surplus_kw', 'input_number.energy_plan_surplus_hysteresis_kw'] %>
+<% if has.battery %><% set ids = ids + ['input_number.energy_plan_battery_safety_kwh', 'input_number.energy_plan_battery_hysteresis_kwh'] %><% endif %>
+<% set _ = settings.append({'key': 'energy_plan', 'title': t('settings_energy_plan'), 'ids': ids}) %>
+<% endif %>
+<% if has.ev_charging %>
+<% set _ = settings.append({'key': 'ev_charging', 'title': t('settings_ev_charging'), 'ids': ['input_boolean.ev_charging_smart',
+   'input_boolean.ev_charging_car_amps_auto', 'input_boolean.ev_charging_cheap_enabled', 'input_number.ev_charging_solar_share',
+   'input_number.ev_charging_battery_floor', 'input_number.ev_charging_min_amps', 'input_number.ev_charging_car_commands_per_day',
+   'input_number.ev_charging_cheap_max_grid_kw', 'input_number.ev_charging_cheap_battery_full']}) %>
+<% endif %>
+<% if has.zappi %>
+<% set _ = settings.append({'key': 'charger', 'title': t('settings_charger'), 'ids': ['input_boolean.charger_zappi_phase_auto',
+   'input_number.charger_zappi_three_phase_from_w', 'input_number.charger_zappi_one_phase_below_w']}) %>
+<% endif %>
+<% if has.hot_water %>
+<% set HW = hot_water if hot_water is defined and hot_water else {} %>
+<% set ids = ['input_boolean.hot_water_shower_tomorrow', 'input_boolean.hot_water_on_surplus', 'input_boolean.hot_water_price_aware',
+   'input_number.hot_water_minimum', 'input_number.hot_water_shower'] %>
+<% if HW.get('bath') %><% set ids = ids + ['input_number.hot_water_bath', 'input_datetime.hot_water_bath_check'] %><% endif %>
+<% set ids = ids + ['input_number.hot_water_surplus_max', 'input_number.hot_water_surplus_from_kw', 'input_number.hot_water_battery_minimum',
+   'input_number.hot_water_heat_value'] %>
+<% set _ = settings.append({'key': 'hot_water', 'title': t('settings_hot_water'), 'ids': ids}) %>
+<% endif %>
+<# --- cars of house.yaml (detail sheet "charging", only with ev-charging): the Teslemetry roles that exist --- #>
+<% set TM = teslemetry if teslemetry is defined and teslemetry else {} %>
+<% set car_rows = [] %>
+<% if has.ev_charging %>
+<% for a in (cars if cars is defined and cars else []) %>
+<% set row = {'name': a.name, 'prefix': a.prefix} %>
+<% for key, role in [('battery', 'battery'), ('limit', 'charge_limit'), ('current', 'charge_current'), ('power', 'charger_power'), ('state', 'charging_state')] %>
+<% set ent = (a.get('entities') or {}).get(role) or ((TM.get(role) | replace('{p}', a.prefix)) if TM.get(role) else '') %>
+<% if ent %><% set _ = row.update({key: ent}) %><% endif %>
+<% endfor %>
+<% set _ = car_rows.append(row) %>
+<% endfor %>
+<% endif %>
+<# --- the flow diagram: power-flow-card-plus (HACS) --- #>
+<% set fe = {'grid': {'name': t('node_net_cap'), 'entity': {'consumption': E.grid_import_w, 'production': E.grid_export_w},
+   'color': {'consumption': 'var(--cw-net, #BB7644)', 'production': 'var(--cw-injectie, #874B22)'},
+   'color_icon': 'color_dynamically', 'color_circle': 'color_dynamically', 'display_state': 'one_way_no_zero'},
+   'home': {'name': t('node_huis_cap'), 'subtract_individual': true, 'color_icon': 'solar' if has.solar else true}} %>
+<% if has.solar %>
+<% set _ = fe.update({'solar': {'name': t('node_zon_cap'), 'entity': E.solar_power_w, 'color': 'var(--cw-zon, #E8A571)', 'color_icon': true, 'display_zero_state': true}}) %>
+<% endif %>
+<% if has.battery and has.battery_power %>
+<% set _ = fe.update({'battery': {'name': t('node_batt_cap'), 'entity': E.battery_power_w, 'state_of_charge': E.battery_soc,
+   'invert_state': battery_sign == 'charge_positive',
+   'color': {'consumption': 'var(--cw-batterij, #7F8B64)', 'production': 'var(--cw-batterij, #7F8B64)'},
+   'color_icon': 'color_dynamically', 'display_state': 'one_way_no_zero'}}) %>
+<% endif %>
+<% if has.co2 %>
+<% set _ = fe.update({'fossil_fuel_percentage': {'name': t('low_carbon'), 'entity': E.co2_fossil_percent, 'color': 'var(--cw-good, #7A8A5E)',
+   'color_icon': true, 'state_type': 'percentage', 'display_zero': true, 'display_zero_state': true}}) %>
+<% endif %>
+<% set individual = [] %>
+<% if has.charger %>
+<% set _ = individual.append({'entity': 'sensor.ev_charger_power', 'name': t('node_auto_cap'), 'icon': 'mdi:car-electric',
+   'color': 'var(--cw-wagen, #AEBF92)', 'color_icon': true, 'display_zero': true, 'display_zero_state': true}) %>
+<% endif %>
+<% if has.heat_pump %>
+<% set hp = {'entity': 'sensor.heat_pump_power_estimated', 'name': t('heat_pump'), 'icon': 'mdi:heat-pump',
+   'color': '#B07E45', 'color_icon': true, 'display_zero': true, 'display_zero_state': true} %>
+<% if has.hot_water_heater %><% set _ = hp.update({'secondary_info': {'entity': 'sensor.hot_water_temperature', 'unit_of_measurement': '°C', 'icon': 'mdi:water-thermometer'}}) %><% endif %>
+<% set _ = individual.append(hp) %>
+<% endif %>
+<% set tones = ['#B07A72', '#6F8784', '#9A6A3A', '#7A8FA0'] %>
+<% for c in consumer_list if c.flow %>
+<% if individual | length < 4 %>
+<% set _ = individual.append({'entity': c.power, 'name': c.name, 'icon': c.icon, 'color': tones[loop.index0 % 4], 'color_icon': true,
+   'display_zero': true, 'display_zero_state': true}) %>
+<% endif %>
+<% endfor %>
+<% if individual %><% set _ = fe.update({'individual': individual}) %><% endif %>
+<% set flow = {'type': 'custom:power-flow-card-plus', 'clickable_entities': true, 'base_decimals': 0, 'kilo_decimals': 1,
+   'kilo_threshold': 1000, 'min_flow_rate': 0.75, 'max_flow_rate': 6, 'entities': fe} %>
+<# --- user-facing texts of the screen (strings.yaml, house.language); {placeholders} are filled in by the card --- #>
+<% set screen_keys = [
+  'all_rest', 'all_rest_info', 'amps_auto', 'analysis', 'autarky_short', 'autarky_today', 'battery_aria',
+  'battery_charges', 'battery_charges_info', 'battery_feeds_car', 'battery_first', 'battery_full',
+  'battery_full_info', 'battery_gives', 'battery_gives_info', 'battery_tile_charges', 'battery_tile_gives',
+  'battery_tile_rest', 'busy', 'by_forecast', 'by_history', 'car_bar_aria', 'car_charges_info', 'car_charges_kw',
+  'car_commands', 'car_needs', 'car_state', 'cars', 'charge_current_set', 'charge_level', 'charge_level_pct',
+  'charge_mode', 'charge_power', 'charged_full', 'charged_today', 'charged_today_car', 'charger',
+  'charger_charging', 'charger_complete', 'charger_connected', 'charger_disconnected', 'charger_fault',
+  'charger_line', 'charger_unknown', 'charger_waiting', 'charging', 'charging_kw', 'charging_now', 'cheap_adv',
+  'cheap_now', 'cheap_off_info', 'cheapst_off', 'cheapst_no_cheap_power', 'cheapst_no_sun', 'cheapst_no_car', 'cheapst_car_full', 'cheapst_battery_behind', 'cheapst_battery_not_full', 'cheapst_battery_discharging', 'cheapst_month_peak', 'cheapst_grid_import_high', 'cheapst_too_little_surplus', 'cheapst_commands_used_up', 'cheapst_charger_busy', 'cheapst_grid_assist', 'cheap_off_line', 'cheap_off_title', 'cheap_power', 'cheap_use', 'cheap_use_aria',
+  'cheap_waits', 'cheap_waits_info', 'cheapest_2h', 'cheapest_2h_info', 'close', 'coming_hours', 'details_battery',
+  'details_charging', 'details_grid', 'details_hot_water', 'details_house', 'details_solar', 'discharged_today',
+  'energy_analysis', 'estimated', 'export_cap', 'export_costs', 'export_costs_info', 'export_short', 'export_word',
+  'extended_view', 'fault', 'flow_info', 'flow_label', 'forecast_left_today', 'forecast_short', 'forecast_today',
+  'forecast_tomorrow', 'forecast_vs_history', 'fossil_on_grid', 'fossil_on_grid_cap', 'free', 'from_grid',
+  'from_grid_cap', 'from_grid_info', 'from_grid_kw', 'from_own', 'full', 'full_before_shade', 'full_by',
+  'full_by_info', 'generated', 'generated_today', 'giving_now', 'graph_loading', 'graph_today',
+  'graph_unavailable', 'grid_rest', 'grid_word', 'headroom', 'heat_pump', 'heating_word', 'hot_water', 'house_kw',
+  'house_left', 'house_left_info', 'house_left_label', 'house_power_sensor', 'house_word', 'hp_cooling',
+  'hp_heating', 'hp_hot_water', 'hp_idle', 'hp_unknown', 'hw_bath_hour', 'hw_by_sunrise', 'hw_heat_at',
+  'hw_heat_at_info', 'hw_heating', 'hw_on_surplus', 'hw_pays', 'hw_pays_no', 'hw_setpoint', 'hw_target',
+  'hw_target_info', 'hw_target_info_shower', 'hw_target_met', 'import_cap', 'import_per_kwh', 'import_word',
+  'kw_per_phase', 'kwh_from_grid', 'kwh_generated', 'kwh_to_grid', 'language_code', 'left_for_car',
+  'left_for_car_10', 'left_short', 'level_cheap', 'level_expensive', 'level_negative', 'level_normal',
+  'level_unknown', 'level_very_cheap', 'level_very_expensive', 'limit_pct', 'limit_word', 'live', 'live_title',
+  'locale', 'low_carbon', 'margin', 'margin_label', 'mode_fast', 'mode_reason', 'mode_solar_min',
+  'mode_solar_only', 'mode_stop', 'mode_unknown', 'month_peak', 'month_peak_label', 'needed_to_full', 'negative',
+  'no_car', 'no_car_info', 'node_auto', 'node_auto_cap', 'node_auto_the', 'node_batt', 'node_batt_cap',
+  'node_batt_the', 'node_huis', 'node_huis_cap', 'node_huis_the', 'node_net', 'node_net_cap', 'node_net_the',
+  'node_zon', 'node_zon_cap', 'node_zon_the', 'not_full_before_shade', 'not_full_by', 'not_full_by_info', 'now',
+  'now_cap', 'now_from_battery', 'now_from_grid', 'now_from_sun', 'now_to_car', 'now_to_grid', 'now_word',
+  'one_phase', 'own_caption', 'own_now_info', 'own_now_title', 'own_today_info', 'own_today_title', 'paused',
+  'paused_battery', 'paused_battery_info', 'paused_info', 'paused_plain', 'phase_row', 'phases', 'phases_auto',
+  'plan_battery', 'plan_car', 'plan_left_export', 'plan_note_enough', 'plan_note_wait', 'plan_tank', 'plan_until',
+  'price_aria', 'price_export', 'price_import', 'price_level', 'price_level_info', 'price_level_label',
+  'quarter_label', 'quarter_now', 'rest_word', 'results', 'saved_today', 'saved_today_info', 'self_used',
+  'self_used_cap', 'self_used_info', 'settings', 'settings_charger', 'settings_energy_plan',
+  'settings_ev_charging', 'settings_hide', 'settings_hot_water', 'settings_show', 'shower', 'shower_on',
+  'shower_word', 'smart_charging', 'smart_status', 'solar_kw', 'solar_left', 'solar_left_info', 'solar_left_label',
+  'solar_today', 'solar_today_info', 'solar_today_info_forecast', 'solar_today_kwh', 'solar_tomorrow',
+  'solar_tomorrow_info', 'solar_tomorrow_title', 'solar_word', 'source_forecast', 'source_history', 'stale',
+  'stale_title', 'status_car_full', 'status_grid_assist', 'status_manual', 'status_no_car', 'status_off',
+  'status_paused_battery', 'status_peak_limited', 'status_plan', 'status_solar', 'stopped', 'stopped_info',
+  'sun_gone', 'sun_gone_info', 'sun_gone_short', 'sun_leaves', 'sunset_at', 'tap_row_hint', 'the_car',
+  'three_phases', 'title', 'to_battery', 'to_car', 'to_grid', 'to_grid_dots', 'to_grid_info', 'to_grid_kw',
+  'to_house', 'today', 'today_cap', 'today_caption', 'today_from_grid', 'today_to_grid', 'tomorrow_word',
+  'use_now', 'use_now_without_car', 'use_today', 'use_word', 'used_today', 'waiting', 'waiting_sun',
+  'waiting_sun_info', 'water_c', 'water_temperature', 'word_no', 'word_off', 'word_yes'] %>
+<% set strings = {} %>
+<% for k in screen_keys %><% set _ = strings.update({k: t(k)}) %><% endfor %>
+<% set card = {'type': 'custom:energy-screen-card', 'features': has, 'roles': roles, 'battery_sign': battery_sign,
+   'grid_import_kwh': imp_kwh, 'grid_export_kwh': exp_kwh, 'phases': phases,
+   'consumers': consumer_list | selectattr('power') | list, 'savings': savings, 'settings': settings, 'cars': car_rows,
+   'paths': paths, 'flow': flow, 'strings': strings} %>
+<# --- the energy-analysis dashboard: data generators (window.haKitEnergyConfig) and the builder (dashboard/build.py) --- #>
+<% set charger_ids = {'charger_w': 'sensor.ev_charger_power', 'charger_kwh': 'sensor.ev_charger_energy_today'} if has.charger else {} %>
+<% set ids = {'imp_w': E.grid_import_w, 'exp_w': E.grid_export_w, 'imp_kwh': imp_kwh, 'exp_kwh': exp_kwh,
+   'phases': [],
+   'solar_w': E.get('solar_power_w') or none, 'solar_kwh': E.get('solar_energy_kwh') or none,
+   'soc': E.get('battery_soc') or none, 'bat_w': (E.get('battery_power_w') or none) if has.battery else none,
+   'chg_kwh': (E.get('battery_charge_kwh') or none) if has.battery else none, 'dis_kwh': (E.get('battery_discharge_kwh') or none) if has.battery else none,
+   'charger_w': charger_ids.get('charger_w'), 'charger_kwh': charger_ids.get('charger_kwh'),
+   'vent_w': vent_w, 'hp_w': 'sensor.heat_pump_power_estimated' if has.heat_pump else none,
+   'hp_kwh': E.get('heat_pump_energy_kwh') or none, 'hp_state': 'sensor.heat_pump_state' if has.heat_pump else none,
+   'spot': E.get('spot_price') if has.tariff else none, 'month_peak': month_peak, 'quarter': quarter} %>
+<% set phase_ids = [] %>
+<% for ph in phases %><% set _ = phase_ids.append({'imp': ph['import'], 'exp': ph['export']}) %><% endfor %>
+<% set _ = ids.update({'phases': phase_ids}) %>
+<% set cmp = T.get('compare') or {} %>
+<% set analysis = {'analysis_from': (EN.get('analysis_from') or '') | string, 'battery_sign': battery_sign, 'locale': t('locale'),
+   'ids': ids, 'consumers': consumer_list, 'battery_phase': EN.get('battery_phase') or none,
+   'peak_target_kw': EN.get('peak_target_kw') or 3, 'capacity_minimum_kw': ((T.get('capacity') or {}).get('minimum_kw') or 0) if has.tariff else 0,
+   'compare': ({'variable': cmp.get('variable'), 'fixed': cmp.get('fixed'), 'export': cmp.get('export') or 0,
+                'fee_eur_per_year': cmp.get('fee_eur_per_year')} if has.compare else none),
+   'fee_eur_per_year': T.get('fixed_eur_per_year') or 0,
+   'nordpool': {'area': T.get('area') or 'BE', 'currency': 'EUR'},
+   'away_below_kwh': EN.get('away_below_kwh') or 0,
+   'battery': {'module_kwh': EN.get('battery_module_kwh') or 0, 'efficiency': EN.get('battery_efficiency') or 0.9,
+               'reserve_percent': EN.get('battery_reserve_percent') or 20, 'full_percent': 95, 'investment_eur': EN.get('battery_investment_eur') or 0},
+   'helpers': {'profiles_period': 'input_select.energy_profiles_period'},
+   'strings': {'peak_source_meter': t('an_peak_source_meter'), 'peak_source_hourly': t('an_peak_source_hourly'),
+               'peak_source_none': t('an_peak_source_none'), 'peak_cut': t('an_peak_cut'), 'peak_register_hour': t('an_peak_register_hour')}} %>
+<# --- energy flows (www/energy-flows.js): energy meters ('change') or power roles ('mean') per quantity --- #>
+<% set fl_energy = {'imp': imp_kwh, 'exp': exp_kwh} %>
+<% set fl_power = {} %>
+<% if E.get('solar_energy_kwh') %><% set _ = fl_energy.update({'pv': [E.solar_energy_kwh]}) %>
+<% elif has.solar %><% set _ = fl_power.update({'pv': {'id': E.solar_power_w, 'sign': 1}}) %><% endif %>
+<% if has.battery and E.get('battery_charge_kwh') and E.get('battery_discharge_kwh') %>
+<% set _ = fl_energy.update({'chg': [E.battery_charge_kwh], 'dis': [E.battery_discharge_kwh]}) %>
+<% elif has.battery and has.battery_power %>
+<% set _ = fl_power.update({'bat': {'id': E.battery_power_w, 'sign': -1 if battery_sign == 'charge_positive' else 1}}) %>
+<% endif %>
+<% if has.charger %><% set _ = fl_energy.update({'ev': ['sensor.ev_charger_energy_today']}) %><% endif %>
+<% set flat = [] %>
+<% for v in fl_energy.values() %><% set _ = flat.extend(v) %><% endfor %>
+<% set flows_cfg = {'date': 'input_datetime.energy_flows_date', 'energy': fl_energy, 'power': fl_power, 'energy_ids': flat,
+   'power_ids': fl_power.values() | map(attribute='id') | list} %>

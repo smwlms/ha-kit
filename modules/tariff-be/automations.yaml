@@ -1,0 +1,40 @@
+<% from '_tariff.jinja' import reg_average with context %>
+# Tariff (Belgium): automations (ha-kit module tariff-be, see tariff-be/LOGIC.md). Written through the config API by
+# tariff-be/deploy.py. Only with entities.grid_average_peak_kw (the meter's own average of the month peaks).
+<% if reg_average %>
+- id: capacity_start_peak_from_meter
+  alias: "<@ t('automation_start_peak') @>"
+  description: "<@ t('automation_start_peak_description') @>"
+  mode: single
+  triggers:
+    - trigger: state
+      entity_id: <@ reg_average @>
+      not_to: [unknown, unavailable]
+    - trigger: homeassistant
+      event: start
+  conditions:
+    - condition: numeric_state
+      entity_id: <@ reg_average @>
+      above: 0
+    - condition: template
+      value_template: >
+        {% from 'tariff.jinja' import kw %}
+        {{ (kw('<@ reg_average @>') | float(0) | round(1)) != (states('input_number.capacity_start_peak_kw') | float(0) | round(1)) }}
+  actions:
+    - variables:
+        value: >
+          {% from 'tariff.jinja' import kw %}
+          {{ kw('<@ reg_average @>') | float(0) | round(1) }}
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.capacity_start_peak_kw
+      data:
+        value: "{{ value }}"
+    - action: logbook.log
+      data:
+        name: "<@ t('logbook_name') @>"
+        entity_id: input_number.capacity_start_peak_kw
+        message: "{{ '<@ t('logbook_start_peak') @>' | replace('{kw}', value | string) }}"
+<% else %>
+[]
+<% endif %>

@@ -1,0 +1,324 @@
+# User-facing texts of the module gate, one key per text: {en: ..., nl: ...}. Used in the module's files as
+# <@ t('key') @> (tools/fill.py picks house.language, default en; a missing language falls back to en with a warning).
+# Rules for these texts:
+# - no double quotes or backslashes: they are inserted between double quotes in YAML;
+# - {car}, {who}, {name}, ... without a value at fill time stay in the text and are filled in by Home Assistant at
+#   run time (replace('{car}', ...) in the automations and scripts); keep them when you translate;
+# - no emoji: the templates add them (a JSON escape of an emoji breaks in YAML).
+
+# --- helper names (package.yaml) ---
+helper_auto_open_enabled: { en: "Gate: open automatically", nl: "Poort automatisch openen" }
+helper_dry_run: { en: "Gate test mode", nl: "Poort testmodus" }
+helper_auto_close_enabled: { en: "Gate: close automatically after leaving", nl: "Poort automatisch sluiten bij vertrek" }
+helper_away_minutes: { en: "Gate minimum time away", nl: "Poort minimaal weg" }
+helper_far_distance: { en: "Gate far-enough distance", nl: "Poort ver genoeg afstand" }
+helper_nav_home_tolerance: { en: "Gate home destination tolerance", nl: "Poort tolerantie bestemming thuis" }
+helper_open_alert_minutes: { en: "Gate open alert after", nl: "Poort open-melding na" }
+helper_close_distance: { en: "Gate close after leaving at", nl: "Poort sluiten na vertrek op" }
+helper_last_pulse: { en: "Gate last pulse", nl: "Poort laatste puls" }
+helper_last_auto_open: { en: "Gate last automatic opening", nl: "Poort laatst automatisch geopend" }
+helper_tesla_commands_today: { en: "Tesla commands today", nl: "Tesla-commando's vandaag" }
+
+# --- zone (deploy.py --setup) ---
+zone_approach_name: { en: "Gate approach", nl: "Poort nadering" }
+
+# --- template sensors (templates/gate.yaml); {car} and {name} are filled in at fill time ---
+sensor_far_since: { en: "Gate {car} far away since", nl: "Poort {car} ver genoeg weg sinds" }
+sensor_away_long_enough: { en: "Gate {car} away long enough", nl: "Poort {car} weg lang genoeg" }
+sensor_navigating_home: { en: "Gate {car} navigating home", nl: "Poort {car} navigeert naar huis" }
+sensor_auto_open_ready: { en: "Gate ready to open automatically", nl: "Poort klaar om automatisch te openen" }
+sensor_update_interval: { en: "Gate update interval {name}", nl: "Poort updatetempo {name}" }
+sensor_phone_of: { en: "phone {name}", nl: "gsm {name}" }
+sensor_gate_open: { en: "Gate open", nl: "Poort open" }
+
+# --- shared words ---
+and: { en: "and", nl: "en" }
+unknown: { en: "unknown", nl: "onbekend" }
+button_close_gate: { en: "Close gate", nl: "Sluit poort" }
+button_open_gate: { en: "Open gate", nl: "Open poort" }
+gate_closed: { en: "Gate is closed", nl: "Poort is dicht" }
+gate_not_closed_yet: { en: "Gate not closed yet", nl: "Poort is nog niet dicht" }
+no_pulse_given: { en: "No pulse given.", nl: "Geen puls gegeven." }
+test_no_pulse: { en: "Test mode: no pulse given.", nl: "Testmodus: geen puls gegeven." }
+logbook_gate: { en: "Gate", nl: "Poort" }
+
+# --- automation gate_auto_open ---
+auto_open_alias: { en: "Gate: open automatically", nl: "Poort automatisch openen" }
+auto_open_description:
+  en: >-
+    Opens the gate when a Tesla comes home while navigating home, whoever is in it.
+    Trigger: a Tesla (or a phone) enters zone.gate_approach.
+    Per car: A = binary_sensor.gate_<car>_away_long_enough (was far away long enough),
+    C = binary_sensor.gate_<car>_navigating_home (destination home).
+    When the car does not navigate home, the gate does not open but a notification asks.
+    Guards: the car is in the approach zone, the gate is not open, at most once per 5 min
+    (input_datetime.gate_last_auto_open), master switch input_boolean.gate_auto_open_enabled,
+    test mode input_boolean.gate_auto_open_dry_run. Every evaluation goes into the logbook.
+  nl: >-
+    Opent de poort als een Tesla thuiskomt die naar huis navigeert, wie er ook in zit.
+    Trigger: een Tesla (of een gsm) komt zone.gate_approach binnen.
+    Per auto: A = binary_sensor.gate_<auto>_away_long_enough (lang genoeg ver weg geweest),
+    C = binary_sensor.gate_<auto>_navigating_home (bestemming thuis).
+    Navigeert de auto niet naar huis, dan opent de poort niet maar vraagt een melding het.
+    Bewakingen: de auto staat in de naderingszone, de poort staat niet open, max 1x per 5 min
+    (input_datetime.gate_last_auto_open), hoofdschakelaar input_boolean.gate_auto_open_enabled,
+    testmodus input_boolean.gate_auto_open_dry_run. Elke evaluatie komt in het logboek.
+log_opens: { en: "OPENS {car}", nl: "OPENT {car}" }
+log_test_mode: { en: "(test mode)", nl: "(testmodus)" }
+log_asks: { en: "ASKS via notification", nl: "VRAAGT via melding" }
+log_not_opening: { en: "does not open", nl: "opent niet" }
+log_line:
+  en: "| trigger {source} | in the zone: {in_zone} | gate {gate} {gate_ok} | cooldown {cooldown_ok} | {details}"
+  nl: "| trigger {source} | in de zone: {in_zone} | poort {gate} {gate_ok} | cooldown {cooldown_ok} | {details}"
+log_no_car: { en: "no car", nl: "geen auto" }
+log_no_sensor: { en: "no sensor", nl: "geen sensor" }
+log_car:
+  en: "{car}: {m} m from the gate, A {a} ({away}/{need} min far away), C {c} (destination '{dest}'), in it: {riders}"
+  nl: "{car}: {m} m van de poort, A {a} ({away}/{need} min ver weg), C {c} (bestemming '{dest}'), erin: {riders}"
+reason_auto_open: { en: "automatic ({car})", nl: "automatisch ({car})" }
+title_would_open: { en: "Gate would open", nl: "Poort zou openen" }
+title_opened: { en: "Gate opened", nl: "Poort geopend" }
+message_coming_home_who: { en: "Coming home in the {car}: {who}.", nl: "{who} komt thuis met de {car}." }
+message_coming_home: { en: "The {car} is coming home.", nl: "De {car} komt thuis." }
+title_ask_open: { en: "Open the gate?", nl: "Poort openen?" }
+message_ask_destination:
+  en: "The {car} is approaching with destination {dest}, so the gate will not open by itself."
+  nl: "De {car} nadert met als bestemming {dest}, dus de poort gaat niet vanzelf open."
+message_ask_no_navigation:
+  en: "The {car} is approaching without navigating home, so the gate will not open by itself."
+  nl: "De {car} nadert zonder navigatie naar huis, dus de poort gaat niet vanzelf open."
+
+# --- automation gate_notification_action ---
+notification_action_alias: { en: "Gate notification buttons", nl: "Poort meldingsknoppen" }
+notification_action_description:
+  en: >-
+    Buttons 'Close gate' (GATE_CLOSE) and 'Open gate' (GATE_OPEN) from the gate notifications, on every phone.
+  nl: >-
+    Knoppen 'Sluit poort' (GATE_CLOSE) en 'Open poort' (GATE_OPEN) uit de poortmeldingen, op elke gsm.
+notification_action_description_sensor:
+  en: >-
+    Closing only pulses when binary_sensor.gate_open reports open (a pulse on a closed gate opens it);
+    then whoever pressed gets 'Gate is closed' as soon as the end position is closed (or a warning after 1 min).
+  nl: >-
+    Sluiten geeft enkel een puls als binary_sensor.gate_open 'open' meldt (een puls op een dichte poort opent ze);
+    daarna krijgt wie drukte 'Poort is dicht' zodra de eindstand dicht is (of een waarschuwing na 1 min).
+notification_action_description_no_sensor:
+  en: Without a gate sensor closing always pulses and whoever pressed only gets 'Pulse given'.
+  nl: Zonder poortsensor geeft sluiten altijd een puls en krijgt wie drukte enkel 'Puls gegeven'.
+notification_action_description_parallel:
+  en: Parallel, so two people pressing both get an answer; gate_pulse ignores the second pulse (30 s).
+  nl: Parallel, zodat twee mensen die drukken allebei antwoord krijgen; gate_pulse negeert de tweede puls (30 s).
+title_already_closed: { en: "Gate already closed", nl: "Poort is al dicht" }
+reason_close_notification: { en: "close from notification", nl: "sluiten via melding" }
+message_closed_at: { en: "Closed at {time}.", nl: "Gesloten om {time}." }
+message_not_closed_after_minute:
+  en: "After 1 minute the gate still does not report closed. Please check."
+  nl: "Na 1 minuut meldt de poort nog geen eindstand dicht. Kijk even na."
+title_pulse_given: { en: "Pulse given", nl: "Puls gegeven" }
+message_pulse_given_no_sensor:
+  en: "At {time}. Without a gate sensor Home Assistant does not know whether the gate is closed."
+  nl: "Om {time}. Zonder poortsensor weet Home Assistant niet of de poort dicht is."
+
+# --- automation gate_open_too_long ---
+open_too_long_alias: { en: "Gate open too long", nl: "Poort staat te lang open" }
+open_too_long_description:
+  en: >-
+    Notifies everyone when binary_sensor.gate_open has been open longer than input_number.gate_open_alert_minutes,
+    with the button 'Close gate' (GATE_CLOSE). Repeats while the gate stays open (at most 6 times). When the gate
+    closes, the notification disappears.
+  nl: >-
+    Meldt aan iedereen als binary_sensor.gate_open langer dan input_number.gate_open_alert_minutes open staat, met
+    de knop 'Sluit poort' (GATE_CLOSE). Herhaalt zolang de poort open blijft (max. 6 keer). Gaat de poort dicht,
+    dan verdwijnt de melding.
+open_too_long_description_parcel:
+  en: >-
+    Stays silent while script.parcel_garage (module parcel-service) holds the gate open: that script reports
+    itself when the gate does not close.
+  nl: >-
+    Zwijgt zolang script.parcel_garage (module parcel-service) de poort open houdt: dat script meldt zelf als
+    de poort niet dichtgaat.
+title_open_minutes: { en: "Gate has been open for {minutes} min", nl: "Poort staat al {minutes} min open" }
+message_open_since: { en: "Open since {time}.", nl: "Open sinds {time}." }
+
+# --- automation gate_close_after_departure ---
+close_after_departure_alias: { en: "Gate: close after leaving", nl: "Poort sluiten na vertrek" }
+close_after_departure_description:
+  en: >-
+    A Tesla drives off and gets further than input_number.gate_close_distance from zone.home while
+    binary_sensor.gate_open reports open: the gate closes automatically (script.gate_close_manual), so you see it
+    close. When another Tesla is leaving too (near home and in D/R or speed > 2 km/h), it waits until that one is
+    out as well (at most 3 min, otherwise nothing). Then a notification to whoever left (phones, else the usual
+    driver) with the button 'Open gate'. Switch: input_boolean.gate_auto_close_enabled. In test mode no pulse, only
+    the notification 'Gate would close'.
+  nl: >-
+    Een Tesla rijdt weg en komt verder dan input_number.gate_close_distance van zone.home terwijl
+    binary_sensor.gate_open 'open' meldt: de poort gaat automatisch dicht (script.gate_close_manual), zodat je ze
+    ziet sluiten. Rijdt een andere Tesla ook weg (bij huis en in D/R of snelheid > 2 km/u), dan wacht ze tot die ook
+    buiten is (max. 3 min, anders niets). Daarna een melding aan wie vertrok (gsm's, anders de vaste bestuurder)
+    met de knop 'Open poort'. Schakelaar: input_boolean.gate_auto_close_enabled. In testmodus geen puls, enkel
+    de melding 'Poort zou sluiten'.
+log_would_close:
+  en: "WOULD CLOSE (test mode): the {car} is further than {m} m"
+  nl: "ZOU SLUITEN (testmodus): de {car} is verder dan {m} m"
+reason_after_departure: { en: "automatic after leaving ({car})", nl: "automatisch na vertrek ({car})" }
+title_would_close: { en: "Gate would close", nl: "Poort zou sluiten" }
+message_left_test:
+  en: "You left in the {car}. Test mode: no pulse given."
+  nl: "Je reed weg met de {car}. Testmodus: geen puls gegeven."
+message_left_closed:
+  en: "You left in the {car}; the gate closed automatically."
+  nl: "Je reed weg met de {car}; de poort is automatisch dichtgegaan."
+message_left_not_closed:
+  en: "You left in the {car}. The gate got a pulse, but after 1 minute it still does not report closed."
+  nl: "Je reed weg met de {car}. De poort kreeg een puls, maar meldt na 1 minuut nog geen eindstand dicht."
+
+# --- automation phone_location_permission_watch ---
+location_watch_alias: { en: "Watch phone location access", nl: "Gsm-locatietoegang bewaken" }
+location_watch_description:
+  en: >-
+    Notifies the administrator(s) and the owner of the phone when the location access of the Companion app is no
+    longer 'Authorized Always'. Also notifies the administrator(s) when it is fine again.
+  nl: >-
+    Meldt aan de beheerder(s) en de eigenaar van de gsm als de locatietoegang van de Companion-app niet meer
+    'Authorized Always' is. Ook een melding aan de beheerder(s) als het weer in orde is.
+a_phone: { en: "a phone", nl: "een gsm" }
+title_location_ok: { en: "Location of {name} back on Always", nl: "Locatie {name} weer op Altijd" }
+title_location_lost: { en: "Location access of {name} is no longer Always", nl: "Locatietoegang {name} staat niet meer op Altijd" }
+message_location_ok: { en: "HA sees {name} leave and arrive again.", nl: "HA ziet vertrek en aankomst van {name} weer." }
+message_location_lost:
+  en: >-
+    Now: {state}. HA no longer sees {name} leave or come home (gate, arrival card). On the phone of {name}:
+    Settings, Privacy & Security, Location Services, Home Assistant, Always.
+  nl: >-
+    Nu: {state}. HA ziet {name} niet meer vertrekken of thuiskomen (poort, aankomstkaart). Op de gsm van {name}:
+    Instellingen, Privacy en beveiliging, Locatievoorzieningen, Home Assistant, Altijd.
+
+# --- automation tesla_commands_counter_reset ---
+counter_reset_alias: { en: "Reset Tesla command counter", nl: "Tesla-commandoteller op nul" }
+counter_reset_description:
+  en: Sets counter.tesla_commands_today to zero at midnight (counts the commands of the charge cable button).
+  nl: Zet counter.tesla_commands_today om middernacht op nul (telt de commando's van de laadkabel-knop).
+
+# --- script gate_pulse ---
+pulse_alias: { en: "Gate pulse (internal)", nl: "Poort puls (intern)" }
+pulse_description_switch:
+  en: >-
+    One pulse on {relay} (impulse relay with auto-off). Waits up to 45 s when the relay is offline: wifi relays
+    sometimes drop out briefly. A second call during a running pulse (relay 'on') is ignored.
+  nl: >-
+    Eén puls op {relay} (impulsrelais met auto-off). Wacht tot 45 s als het relais offline is: wifi-relais vallen
+    soms even weg. Een tweede oproep tijdens een lopende puls (relais 'on') wordt genegeerd.
+pulse_description_button:
+  en: One press on {relay} (gate module with a button).
+  nl: Eén druk op {relay} (poortmodule met een knop).
+pulse_description_cover:
+  en: "One operation of {relay} (cover): open when it is closed, otherwise close."
+  nl: "Eén bediening van {relay} (cover): openen als ze dicht is, anders sluiten."
+pulse_description_common:
+  en: >-
+    A new pulse within 30 s of the previous one is ignored (input_datetime.gate_last_pulse), unless force: true:
+    two pulses shortly after each other make the gate stop or reverse.
+  nl: >-
+    Een nieuwe puls binnen 30 s na de vorige wordt genegeerd (input_datetime.gate_last_pulse), tenzij force: true:
+    twee pulsen kort na elkaar laten de poort stoppen of keren.
+field_reason_name: { en: "Reason", nl: "Reden" }
+field_reason_description: { en: "Goes into the logbook.", nl: "Komt in het logboek." }
+field_reason_example: { en: "manual", nl: "handmatig" }
+field_force_name: { en: "Force", nl: "Forceren" }
+field_force_description:
+  en: Pulse even when the previous pulse was less than 30 s ago.
+  nl: Ook een puls geven als de vorige minder dan 30 s geleden was.
+log_unreachable: { en: "no pulse: gate control unreachable ({reason})", nl: "geen puls: poortbediening onbereikbaar ({reason})" }
+title_not_operated: { en: "Gate not operated", nl: "Poort niet bediend" }
+message_unreachable: { en: "The gate control is unreachable.", nl: "De poortbediening is onbereikbaar." }
+log_pulse_ignored:
+  en: "pulse ignored: previous pulse {seconds} s ago ({reason})"
+  nl: "puls genegeerd: vorige puls {seconds} s geleden ({reason})"
+log_pulse_given: { en: "pulse given ({reason})", nl: "puls gegeven ({reason})" }
+
+# --- script gate_open_manual ---
+open_manual_alias: { en: "Open gate", nl: "Poort openen" }
+open_manual_description:
+  en: Opens the gate, independent of the automatic logic and of the master switch.
+  nl: Opent de poort, los van de automatische logica en van de hoofdschakelaar.
+open_manual_description_sensor:
+  en: >-
+    When binary_sensor.gate_open reports open (or the gate is moving), no pulse: a pulse on an open gate closes it.
+    When the gate state is unreachable, it does pulse.
+  nl: >-
+    Meldt binary_sensor.gate_open 'open' (of beweegt de poort), dan geen puls: een puls op een open poort sluit ze.
+    Is de poortstand onbereikbaar, dan wel een puls.
+open_manual_description_no_sensor:
+  en: "Without a gate sensor it always pulses: when the gate is already open, it closes."
+  nl: "Zonder poortsensor geeft het altijd een puls: staat de poort al open, dan sluit ze."
+title_not_closed: { en: "Gate is not closed", nl: "Poort staat niet dicht" }
+message_open_or_moving: { en: "The gate is open or moving. No pulse given.", nl: "De poort is open of beweegt. Geen puls gegeven." }
+reason_manual_open: { en: "manual open", nl: "handmatig openen" }
+
+# --- script gate_close_manual ---
+close_manual_alias: { en: "Close gate", nl: "Poort sluiten" }
+close_manual_description_sensor:
+  en: >-
+    Closes the gate with a pulse, only when binary_sensor.gate_open reports open. When it reports closed or is
+    unreachable, no pulse: a pulse on a closed gate opens it.
+  nl: >-
+    Sluit de poort met een puls, enkel als binary_sensor.gate_open 'open' meldt. Meldt hij 'dicht' of is hij
+    onbereikbaar, dan geen puls: een puls op een dichte poort opent ze.
+close_manual_description_no_sensor:
+  en: >-
+    Gives a pulse. Without a gate sensor Home Assistant does not know whether the gate is open: only press when you
+    see that it is open.
+  nl: >-
+    Geeft een puls. Zonder poortsensor weet Home Assistant niet of de poort open staat: druk enkel als je ziet dat
+    ze open is.
+field_reason_example_close: { en: "close from card", nl: "sluiten via kaart" }
+log_close_no_pulse:
+  en: "no pulse on close: gate reports {state} ({reason})"
+  nl: "geen puls bij sluiten: poort meldt {state} ({reason})"
+reason_close: { en: "close", nl: "sluiten" }
+
+# --- script tesla_unlock_charge_cable ---
+unlock_alias: { en: "Unlock Tesla charge cable", nl: "Laadkabel Tesla ontgrendelen" }
+unlock_description:
+  en: >-
+    Unlocks the charge cable of the Tesla that is plugged in at home (charge cable on and 'located at home' on).
+    When that car is still charging, charging stops first. When several cars are plugged in, a notification asks
+    which one (one button per car and 'All', valid for 2 min). With the field car only that car, and only when a
+    cable is plugged in (without a cable the car would open the charge port). Every command counts in
+    counter.tesla_commands_today.
+  nl: >-
+    Ontgrendelt de laadkabel van de Tesla die thuis aan de kabel hangt (laadkabel aan en 'thuis gelegen' aan).
+    Laadt die auto nog, dan eerst laden stoppen. Hangen meerdere auto's aan een kabel, dan vraagt een melding welke
+    (een knop per auto en 'Alle', 2 min geldig). Met het veld car enkel die auto, en alleen als er een kabel in zit
+    (zonder kabel zou de auto de laadklep openen). Elk commando telt in counter.tesla_commands_today.
+field_car_name: { en: "Car", nl: "Auto" }
+field_car_description: { en: "Empty = automatic; otherwise the prefix of the car.", nl: "Leeg = automatisch; anders de prefix van de auto." }
+title_no_cable: { en: "No charge cable to unlock", nl: "Geen laadkabel om te ontgrendelen" }
+message_no_cable: { en: "No Tesla is plugged in at home.", nl: "Geen Tesla hangt thuis aan de kabel." }
+title_which_cable: { en: "Which charge cable?", nl: "Welke laadkabel?" }
+message_which_cable: { en: "Several Teslas are plugged in.", nl: "Meerdere Tesla's hangen aan een kabel." }
+button_all: { en: "All", nl: "Alle" }
+log_cable_unlocked: { en: "charge cable unlocked", nl: "laadkabel ontgrendeld" }
+log_cable_not_unlocked:
+  en: "charge cable NOT unlocked (no confirmation within 30 s)"
+  nl: "laadkabel NIET ontgrendeld (geen bevestiging binnen 30 s)"
+title_cable_unlocked: { en: "{car}: charge cable unlocked", nl: "{car}: laadkabel ontgrendeld" }
+title_cable_not_unlocked: { en: "{car}: charge cable not unlocked", nl: "{car}: laadkabel niet ontgrendeld" }
+message_cable_unlocked: { en: "You can pull the plug.", nl: "Je kan de stekker uittrekken." }
+message_cable_not_unlocked:
+  en: "No confirmation from the car within 30 s. Try the Tesla app."
+  nl: "Geen bevestiging van de auto binnen 30 s. Probeer de Tesla-app."
+
+# --- scripts leaving and leaving_<car>; {car} is filled in at fill time ---
+leaving_alias: { en: "Leaving", nl: "Vertrekken" }
+leaving_description:
+  en: >-
+    Open the gate and unlock the charge cable, in one tap. Without car: the Tesla that is plugged in at home (with
+    several, a notification asks which one). With car: only that car.
+  nl: >-
+    Poort openen en de laadkabel ontgrendelen, in één tik. Zonder auto: de Tesla die thuis aan de kabel hangt
+    (bij meerdere vraagt een melding welke). Met auto: enkel die auto.
+leaving_car_alias: { en: "Leaving with the {car}", nl: "Vertrekken met de {car}" }
+leaving_car_description:
+  en: Open the gate and unlock the charge cable of the {car}, in one tap.
+  nl: Poort openen en de laadkabel van de {car} ontgrendelen, in één tik.

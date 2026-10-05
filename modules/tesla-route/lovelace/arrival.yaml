@@ -1,0 +1,62 @@
+<% set gate_sensor = entities.get('gate_sensor') %>
+# Arrival card: paste it on top of your home view (Edit dashboard > Add card > Manual).
+# Resource /local/tesla-arrival-card.js (tesla-route/deploy.py). The card takes no space while no car is on the road.
+# Filled in from house.yaml: every entity_id is written out, the card has nothing about your house built in.
+type: custom:tesla-arrival-card
+# Public Mapbox token (pk.…) for a map with live traffic, a route coloured by congestion and destination names.
+# Create it WITHOUT URL restriction (Home Assistant sends referrer same-origin). Leave it out for OpenStreetMap + OSRM.
+# Every Home Assistant user can read it: use a separate token only for this card, with a usage alert (see README).
+# mapbox_token: pk.…
+# routing: none sends no car or destination coordinates to Mapbox or OSRM (no route or place names; the Tesla's own
+# route is still drawn). Default: auto.
+# routing: none
+home: zone.home
+cars:
+<% for a in cars %>
+  - p: <@ a.prefix @>
+    name: <@ a.name | tojson @>
+<% if a.get('driver') %>
+    driver: <@ a.driver @>
+<% endif %>
+<% if a.get('color') %>
+    color: "<@ a.color @>"
+<% endif %>
+<% if a.get('badge') %>
+    badge: <@ a.badge | tojson @>
+<% endif %>
+    entities:
+      loc: <@ car_entity(a, 'location') @>
+      dest: <@ car_entity(a, 'route') @>
+      destName: <@ car_entity(a, 'destination') @>
+      eta: <@ car_entity(a, 'time_to_arrival') @>
+      dist: <@ car_entity(a, 'distance_to_arrival') @>
+      delay: <@ car_entity(a, 'traffic_delay') @>
+      socArr: <@ car_entity(a, 'battery_at_arrival') @>
+      shift: <@ car_entity(a, 'shift_state') @>
+      speed: <@ car_entity(a, 'speed') @>
+      online: <@ car_entity(a, 'status') @>
+      route: <@ car_entity(a, 'tesla_route') @>
+<% if 'gate' in modules %>
+      nav: binary_sensor.gate_<@ a.prefix @>_navigating_home
+      away: binary_sensor.gate_<@ a.prefix @>_away_long_enough
+<% endif %>
+<% endfor %>
+# Phones: who is in which car (phone within 300 m of the car at the time of its last position).
+people:
+<% for x in people if x.get('phone') %>
+  - name: <@ x.name | tojson @>
+    key: <@ x.key @>
+    tracker: device_tracker.<@ x.phone @>
+<% endfor %>
+<% if 'gate' in modules %>
+# Gate row (module gate): state, what happens on arrival, button Open / Close.
+gate:
+<% if gate_sensor %>
+  sensor: binary_sensor.gate_open
+<% endif %>
+<% if entities.gate_relay.startswith('switch.') %>
+  relay: <@ entities.gate_relay @>
+<% endif %>
+  open_script: script.gate_open_manual
+  close_script: script.gate_close_manual
+<% endif %>

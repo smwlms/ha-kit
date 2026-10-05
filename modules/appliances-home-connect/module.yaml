@@ -1,0 +1,42 @@
+# Module metadata, read by tools/fill.py (--list), tools/choose.py (ask:), tools/check.py and
+# appliances-home-connect/deploy.py (defaults). Contract: docs/phase4-contracts.md.
+name: Appliances (Home Connect)
+description: "Dishwasher, washing machine and dryer through Home Connect: smart start on solar or the cheapest quarter, ready by an hour or the learned arrival, start from a notification, door, done, error and maintenance notifications"
+status: built, not tested on HA
+# Layer: brand adapter + logic (one module: only one brand, and the logic is bound to Home Connect's program,
+# remote-start and door entities). The brand-free seam is the start-window macro in custom_templates/appliances.jinja.
+# Optional, read when installed: energy-plan (solar start), a tariff module (cheapest quarter), presence (arrival).
+depends_on: [notifications]
+provides: []
+requires:
+  integrations:
+    - "Home Connect (core integration, Home Assistant 2026.4 or newer: action home_connect.start_selected_program)"
+    - "Home Assistant Companion app (notification buttons)"
+  hardware:
+    - "Home Connect appliance (Bosch, Siemens, Neff, Gaggenau) with remote start"
+optional: true
+generate: []
+ask:
+  - id: appliances
+    question: "Which smart dishwasher or washing machine do you have?"
+    options: ["Home Connect (Bosch, Siemens, Neff, Gaggenau)", "other", "none"]
+    need: "Home Connect (Bosch, Siemens, Neff, Gaggenau)"
+# Fields of house.yaml this module reads (example: house.example.yaml).
+house_fields:
+  - "appliances[].key, kind, prefix, name (optional), smart_start (optional), duration_h (optional), auto_time (optional), delay_option (optional), entities (optional), maintenance (optional)"
+  - "home_connect.language (optional), home_connect.entities (optional)"
+  - "entities.battery_soc, solar_power_w, solar_forecast_remaining_today, solar_forecast_tomorrow (optional, with energy-plan)"
+  - "house.language"
+# Start values that deploy.py sets ONCE, when the helper is new. The ids are part of the contract. The program
+# duration per appliance (input_number.appliance_<key>_duration_h) comes from appliances[].duration_h (default 3).
+defaults:
+  input_number.appliances_battery_minimum: 60
+  input_number.appliances_solar_minimum_kwh: 10
+  input_datetime.appliances_solar_peak: "15:00"
+  input_select.appliance_*_ready_by: "auto"
+  input_boolean.appliance_*_smart_waiting: "off"
+# The other side of the optional switches, filled in by tools/check.py in its all-modules house: the English entity
+# names of Home Connect (an English-language Home Assistant) instead of the house language.
+check_variant:
+  home_connect:
+    language: en

@@ -1,0 +1,13 @@
+# Deliberate exceptions for tools/scan.py, one per line: file-glob<TAB>regex<TAB>reason.
+# A hit is allowed when it lies inside a match of the regex on the same line of a matching file.
+# Keep this list short: every line is a hole in the scan.
+house.example.yaml	\blat: 52\.37\b	invented example latitude (not a real location)
+house.example.yaml	\blon: 5\.22\b	invented example longitude (not a real location)
+LICENSE	Copyright \(c\) 2026 smwlms and contributors	public GitHub handle of the maintainer (copyright holder), deliberately public
+.github/CODEOWNERS	@smwlms	public GitHub handle of the maintainer (reviewer), deliberately public
+scan-allowlist.txt	smwlms	the two rules above name the public maintainer handle
+house.example.yaml	\blat: 52\.\d{3}, lon: 5\.\d{3}\b	invented example places (presence.places) around the invented house
+modules/presence/stay.py	51\.2[34]\d,4\.5[67]\d	made-up coordinates in the docstring (format example)
+modules/presence/www/presence-card.js	52\.370,5\.220	made-up coordinates in a comment (format example)
+tools/ha_api.py	100\.64\.0\.0/10	the Tailscale address range (network), not an address
+modules/*/fritzing/*.fzz!*	\b(?:x|y|x1|y1|x2|y2|width|height)=\"-?[0-9.]+\"	Fritzing drawing geometry inside the .fzz, not places

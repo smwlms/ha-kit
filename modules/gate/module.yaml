@@ -1,0 +1,37 @@
+# Module metadata, read by tools/fill.py (--list shows it as a table), tools/choose.py (ask:) and by gate/deploy.py (defaults).
+name: Gate
+description: Opens the gate automatically when a Tesla navigates home, closes it after leaving, quick buttons for the phone
+status: built
+# Not tesla-route: the gate logic reads the Teslemetry entities directly, not sensor.<car>_tesla_route.
+# The arrival card (module tesla-route) shows the gate row when this module is installed.
+depends_on: []
+requires:
+  integrations: [Teslemetry, Home Assistant Companion app (iPhone or Android)]
+  hardware: [gate controller with an impulse input + relay (e.g. Shelly 1), end-position contact or gate sensor (optional)]
+optional: false
+generate: []
+ask:
+  - id: tesla
+    question: Do you have a Tesla connected to Home Assistant through Teslemetry?
+  - id: gate
+    question: Do you have an electric gate or garage door that a relay (e.g. a Shelly) can pulse?
+# Fields of house.yaml this module reads (example: house.example.yaml in the kit root).
+house_fields:
+  - house.lat, house.lon, house.address_regex, house.home_destinations
+  - people[].key, name, person, phone, notify, admin (optional), location_permission (optional)
+  - cars[].prefix, name, driver, entities (optional)
+  - entities.gate_relay, entities.gate_sensor (optional), entities.gate_sensor_inverted
+  - teslemetry.*
+# Defaults that deploy.py sets ONCE, when the helper (or zone) does not exist yet. Afterwards the value is yours:
+# the helpers have no `initial`, so Home Assistant keeps what you set. Helpers of a disabled part (no gate sensor)
+# do not exist and are skipped.
+defaults:
+  input_boolean.gate_auto_open_enabled: "off"
+  input_boolean.gate_auto_open_dry_run: "on"
+  input_boolean.gate_auto_close_enabled: "off"
+  input_number.gate_away_minutes: 5
+  input_number.gate_far_distance: 1500
+  input_number.gate_nav_home_tolerance: 150
+  input_number.gate_open_alert_minutes: 10
+  input_number.gate_close_distance: 50
+  zone.gate_approach: 400

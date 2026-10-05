@@ -1,0 +1,11 @@
+# User-facing texts of energy-plan: one key per text, {en: ..., nl: ...}. In the module's files: <@ t('key') @>.
+# The command_line sensor (sensor.energy_plan_margin) and the statistics sensor (sensor.energy_plan_export_avg) keep
+# English names: Home Assistant derives their entity ids from the name.
+helper_surplus_kw: { en: "Energy plan: surplus from", nl: "Energieplan: overschot vanaf" }
+helper_surplus_hysteresis_kw: { en: "Energy plan: surplus hysteresis", nl: "Energieplan: hysterese overschot" }
+helper_battery_safety_kwh: { en: "Energy plan: battery safety margin", nl: "Energieplan: veiligheidsmarge batterij" }
+helper_battery_hysteresis_kwh: { en: "Energy plan: battery hysteresis", nl: "Energieplan: hysterese batterij" }
+sensor_export_kw: { en: "Energy plan export", nl: "Energieplan injectie" }
+sensor_house_power: { en: "Energy plan house power", nl: "Energieplan huisverbruik" }
+binary_surplus: { en: "Energy plan surplus", nl: "Energieplan overschot" }
+binary_battery_behind: { en: "Energy plan battery behind", nl: "Energieplan batterij loopt achter" }

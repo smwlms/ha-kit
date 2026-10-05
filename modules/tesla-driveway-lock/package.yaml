@@ -1,0 +1,35 @@
+<% from '_tesla_driveway_lock.jinja' import tdl, photo, ent, car_list, spots with context %>
+<% if not car_list %><@ fail('house.yaml has no cars (the module tesla-driveway-lock needs at least one)') @><% endif %>
+<% if photo and not ent.get('garage_camera') %><@ fail('house.yaml: tesla_driveway_lock.garage_photo is true but entities.garage_camera is empty') @><% endif %>
+<% if photo and not spots %><@ fail('house.yaml: tesla_driveway_lock.garage_photo is true but no car has a garage_spot (e.g. left, right)') @><% endif %>
+<% for sp in spots if not (sp is string and sp == sp | lower and sp.replace('_', '').isalnum() and sp not in ['t', 'car', 'description']) %><@ fail('house.yaml: cars[].garage_spot ' ~ sp ~ ' must be one word in lower case (e.g. left, right, middle; not t, car or description)') @><% endfor %>
+# Tesla on the driveway gets locked: helpers (ha-kit module tesla-driveway-lock, see tesla-driveway-lock/LOGIC.md
+# "Settings"). Uploaded by tesla-driveway-lock/deploy.py to /config/packages/tesla_driveway_lock.yaml (module base:
+# packages/). No `initial`: deploy.py sets the defaults from module.yaml (defaults:) once, when a helper is new; the
+# master switch starts OFF. Not here: zone.driveway (created by deploy.py --setup as a UI zone, so you can drag it)
+# and counter.tesla_commands_today (module gate).
+
+input_boolean:
+  tesla_driveway_lock_enabled:       # master switch for automation.tesla_driveway_lock (default off)
+    name: "<@ t('helper_enabled') @>"
+    icon: mdi:car-key
+
+input_number:
+  tesla_driveway_lock_minutes:       # minutes parked unlocked at home before the lock decision (default 15)
+    name: "<@ t('helper_minutes') @>"
+    icon: mdi:timer-lock-outline
+    min: 1
+    max: 120
+    step: 1
+    mode: box
+    unit_of_measurement: min
+<% if photo %>
+
+input_text:
+  # Last arrival photo verdict, JSON {"t": time, "car": prefix, "<spot>": "occupied|empty|unsure", ...}.
+  # Written by automation.tesla_garage_arrival_photo, read by automation.tesla_driveway_lock.
+  tesla_garage_photo:
+    name: "<@ t('helper_photo') @>"
+    icon: mdi:garage-variant
+    max: 255
+<% endif %>

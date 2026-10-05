@@ -1,0 +1,47 @@
+# Module metadata, read by tools/fill.py (--list), tools/choose.py (ask:) and tools/check.py.
+# Contract: docs/phase4-contracts.md ("energy"). Layer: core (UI only: the logic lives in energy-plan).
+name: Energy screens
+description: "Live energy screen (flows, battery, charger, hot water, price and peak), energy flows per day and the energy-analysis dashboard (period, power, tariff, consumers, trends, battery)"
+status: built, not tested on HA
+# No hard dependency: every block follows the roles of house.yaml, modules: and the capabilities. It reads the
+# entities of energy-plan, the tariff, ev-charger, ev-charging, hot-water(-heater), heat-pump and results contracts
+# when those are installed, and provides nothing other modules read.
+depends_on: []
+provides: []
+requires:
+  integrations:
+    - "HACS frontend: apexcharts-card (charts), power-flow-card-plus (flow diagram)"
+    - "P1 meter or energy meter (grid import and export, power and kWh)"
+    - "Recorder (long-term statistics; the analysis reads them, nothing is stored by the module)"
+  hardware: []
+optional: true
+generate: []
+ask:
+  - id: energy
+    question: "Show an energy screen and an analysis dashboard (needs grid import and export in Home Assistant)?"
+# Fields of house.yaml this module reads (every field is explained in house.example.yaml).
+house_fields:
+  - "entities.grid_import_w, grid_export_w, grid_import_kwh, grid_export_kwh (required)"
+  - "entities.grid_phases, solar_power_w, solar_energy_kwh, battery_soc, battery_power_w, battery_charge_kwh, battery_discharge_kwh, house_power_w, grid_month_peak_kw, grid_quarter_kw, co2_fossil_percent, solar_forecast_today/remaining_today/tomorrow, ventilation_power_w, heat_pump_energy_kwh, spot_price (all optional)"
+  - "energy.battery_power_sign, analysis_from, consumers, dashboards, paths, peak_target_kw, battery_phase, away_below_kwh, battery_module_kwh, battery_efficiency, battery_reserve_percent, battery_investment_eur (optional)"
+  - "tariff.compare (variable, fixed, export, fee_eur_per_year), tariff.fixed_eur_per_year, tariff.capacity.minimum_kw, tariff.area (optional, with a tariff module)"
+  - "ventilation.name, display_name, mac_suffix, comfoclime (ventilation-zehnder: derived ventilation power); cars[] + teslemetry (with ev-charging: car rows); hot_water.bath"
+# Start values that deploy.py sets ONCE, when the helper is new. The ids are part of the contract.
+defaults:
+  input_select.energy_flows_unit: "kwh"
+  input_select.energy_profiles_period: "30_days"
+# check.py: the other side of the optional parts (consumers, a battery phase, an extra module and the comparison
+# without a fee) is filled in in the all-modules house.
+check_variant:
+  energy:
+    analysis_from: null
+    peak_target_kw: 4
+    battery_phase: 2
+    battery_module_kwh: 4.1
+    battery_investment_eur: 180
+    away_below_kwh: 5
+    dashboards: { screen: ha-kit-energy, analysis: ha-kit-energy-analysis }
+    paths: { results: /lovelace/results, cars: /lovelace/cars }
+    consumers:
+      - { name: Spa, power_w: sensor.spa_power, icon: mdi:hot-tub, start_w: 2000 }
+      - { name: Dryer, energy_kwh: sensor.dryer_energy }

@@ -1,0 +1,49 @@
+# Module metadata, read by tools/fill.py (--list), tools/choose.py (ask:), tools/check.py and tariff-be/deploy.py
+# (defaults). Contract: docs/phase4-contracts.md (capability tariff).
+name: Tariff (Belgium)
+description: "Flemish dynamic tariff: all-in price per quarter hour (Nord Pool BE, Fluvius day/night grid fees, levies), price level, cheap window and the capacity tariff (month peak, 12-month average, headroom)"
+status: built, not tested on HA
+# Layer: region. Another country is another region module with the same entity ids (provides: [tariff]).
+depends_on: []
+provides: [tariff]
+requires:
+  integrations:
+    - "Nord Pool (area BE, currency EUR)"
+    - "digital meter with P1 port (e.g. SlimmeLezer, DSMR) for the capacity tariff"
+  hardware:
+    - "Belgian digital meter (Fluvius)"
+optional: true
+generate: []
+ask:
+  - id: tariff_region
+    question: "Where is your electricity contract (dynamic tariff, capacity tariff)?"
+    options: ["Flanders (Fluvius) with a dynamic contract", "other", "none"]
+    need: "Flanders (Fluvius) with a dynamic contract"
+# Fields of house.yaml this module reads (example: house.example.yaml).
+house_fields:
+  - "house.timezone (night register in tariff.js)"
+  - "entities.spot_price, grid_import_w, grid_import_kwh"
+  - "entities.grid_month_peak_kw, grid_average_peak_kw, grid_quarter_kw (optional)"
+  - "tariff.area, import, export, night, capacity (eur_per_kw_year, minimum_kw, connection_kw (optional)), grid, fixed_eur_per_year (optional), cheap_below (optional)"
+# Start values that deploy.py sets ONCE, when the helper is new (rendered from house.yaml). The ids are part of the
+# contract. After that the value is yours: follow the yearly tariff sheet in Settings > Helpers.
+defaults:
+  input_number.tariff_grid_fee_day: <@ tariff.grid.day @>
+  input_number.tariff_grid_fee_night: <@ tariff.grid.night @>
+  input_number.tariff_levies: <@ tariff.grid.levies @>
+  input_number.tariff_capacity_eur_per_kw_year: <@ tariff.capacity.eur_per_kw_year @>
+  input_number.tariff_fixed_eur_per_year: <@ tariff.get('fixed_eur_per_year') or 0 @>
+  input_number.power_price_cheap_below: <@ tariff.get('cheap_below') or 0.15 @>
+  input_number.capacity_start_peak_kw: 0
+  input_number.capacity_margin_kw: 0.3
+  input_boolean.capacity_peak_may_rise: "off"
+# The other side of the optional switches, filled in by tools/check.py in its all-modules house: no meter registers
+# (the kit meters the quarter itself), a night register without the weekend, an explicit connection.
+check_variant:
+  entities:
+    grid_month_peak_kw: ""
+    grid_average_peak_kw: ""
+    grid_quarter_kw: ""
+  tariff:
+    night: { start: 21, end: 6, weekend: false }
+    capacity: { eur_per_kw_year: 60.53, minimum_kw: 2.5, connection_kw: 17.3 }

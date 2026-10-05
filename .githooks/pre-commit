@@ -1,0 +1,9 @@
+#!/bin/sh
+# Block a commit when tools/scan.py finds secrets or personal data in the staged files.
+cd "$(git rev-parse --show-toplevel)" || exit 1
+python3 tools/scan.py --staged
+status=$?
+if [ "$status" -ne 0 ]; then
+  echo "pre-commit: scan failed (exit $status), commit stopped. Fix the hits or add a reasoned exception to scan-allowlist.txt." >&2
+fi
+exit "$status"

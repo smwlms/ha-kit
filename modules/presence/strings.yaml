@@ -1,0 +1,340 @@
+# User-facing texts of the module presence ("Our week"), one key per text: {en: ..., nl: ...}. Used in the module's
+# files as <@ t('key', name=...) @> (tools/fill.py picks house.language, default en; a missing language falls back to
+# en with a warning). A {placeholder} that is not filled in at fill time stays in the text and is replaced at run
+# time (Home Assistant templates, the card, the Python scripts).
+#
+# Calendar titles and the "key: value" lines of an event are READ BACK by the card, the automation arrival_learn and
+# backfill.py. They accept the texts of EVERY language in this file, so events written before a language switch keep
+# working. Changing an existing text below means old events with the old text are no longer recognised: add a
+# language instead of rewording one. Texts in the card are JavaScript string literals: no line breaks.
+
+# --- Calendar titles: "<title>: <names>" -------------------------------------------------------------------------------
+kind_home: { en: Home, nl: Thuis }
+kind_home_from_work: { en: Home from work, nl: Thuis van werk }
+kind_drop_off: { en: Drop-off, nl: Brengen }
+kind_pick_up: { en: Pick-up, nl: Halen }
+kind_work: { en: Work, nl: Werk }
+kind_charge: { en: Charging, nl: Laden }
+kind_stay: { en: Stay, nl: Verblijf }
+# Between two names in a title or a sentence ("Jan and Lien").
+word_and: { en: and, nl: en }
+
+# --- Event details: one "key: value" line each ----------------------------------------------------------------------------
+det_away: { en: away, nl: weg }
+det_left_work: { en: left work, nl: werk verlaten }
+det_car: { en: car, nl: auto }
+det_place: { en: place, nl: plek }
+det_source: { en: source, nl: bron }
+det_duration: { en: duration, nl: duur }
+det_arrival: { en: arrival, nl: aankomst }
+det_departure: { en: departure, nl: vertrek }
+det_work_trips: { en: work trip, nl: werkverplaatsing }
+det_appointments: { en: appointments, nl: afspraken }
+det_location: { en: location, nl: locatie }
+det_battery: { en: battery, nl: batterij }
+# Values. {h} {m} hours and minutes; {duration} a dur_hm; {since} "dd/mm HH:MM".
+dur_hm: { en: "{h} h {m} min", nl: "{h} u {m} min" }
+away_value: { en: "{duration} (since {since})", nl: "{duration} (sinds {since})" }
+place_at_family: { en: "at {zone}", nl: "bij {zone}" }
+place_phone: { en: "{place} (phone, {m} m, ±{accuracy} m)", nl: "{place} (gsm, {m} m, ±{accuracy} m)" }
+unknown: { en: unknown, nl: onbekend }
+# Who was in the car (detail "source").
+src_phone_with_car: { en: phone with the car, nl: gsm bij de auto }
+src_usual_driver: { en: usual driver, nl: vaste bestuurder }
+src_driver_elsewhere: { en: "the usual driver's phone was elsewhere", nl: gsm van de vaste bestuurder was elders }
+src_only_phone: { en: only phone that was not elsewhere, nl: enige gsm die niet elders was }
+src_all_elsewhere: { en: all phones elsewhere, nl: "alle gsm’s elders" }
+src_no_driver: { en: no usual driver and no phone with the car, nl: geen vaste bestuurder en geen gsm bij de auto }
+src_phone_no_tesla: { en: phone without Tesla, nl: gsm zonder Tesla }
+src_history: { en: history (afterwards), nl: historiek (achteraf) }
+src_history_phone: { en: "history (afterwards), phone", nl: "historiek (achteraf), gsm" }
+src_history_driver_car: { en: "history (afterwards), car of the usual driver", nl: "historiek (achteraf), auto van de vaste bestuurder" }
+src_history_car_at_work: { en: "history (afterwards), {car} in the work zone", nl: "historiek (achteraf), {car} in de werkzone" }
+src_history_source: { en: "history (afterwards), {source}", nl: "historiek (achteraf), {source}" }
+# Stays calendar ("Stay: <name>", one all-day event per person and day): description labels.
+stay_spots: { en: spots, nl: plekken }
+stay_travel: { en: on the road, nl: onderweg }
+stay_night: { en: night, nl: nacht }
+
+# --- Logbook ------------------------------------------------------------------------------------------------------------
+logbook_name: { en: Presence, nl: Aanwezigheid }
+log_line: { en: "{title} at {time}{details}", nl: "{title} om {time}{details}" }
+log_not_near_drop_off:
+  en: "{car} stood 2 min in the zone {zone}, but {m} m from the nearest drop-off point: not logged (traffic jam or parked elsewhere?)"
+  nl: "{car} stond 2 min in de zone {zone}, maar {m} m van het dichtste afzetpunt: niet gelogd (file of parkeren elders?)"
+log_already_picked_up:
+  en: "{car} {place}, but the children were already picked up today at {time}: not logged as a pick-up at family"
+  nl: "{car} {place}, maar de kinderen werden vandaag al gehaald om {time}: niet gelogd als halen bij familie"
+log_went_on_to_school:
+  en: "{car} stood {minutes} min {place} and then drove to the school: not logged as a pick-up at family (the run at school counts)"
+  nl: "{car} stond {minutes} min {place} en reed daarna naar school: niet gelogd als halen bij familie (de rit aan school telt)"
+log_at_school: { en: "at school ({place})", nl: "aan school ({place})" }
+log_car_not_logged: { en: "{car} {place}: not logged ({reason})", nl: "{car} {place}: niet gelogd ({reason})" }
+log_already_logged: { en: already logged, nl: al gelogd }
+log_phone_not_logged: { en: "phone of {name} 3 min {place}, not logged: {reason}", nl: "gsm van {name} 3 min {place}, niet gelogd: {reason}" }
+log_at_school_short: { en: at school, nl: aan school }
+reason_tesla_left: { en: "a Tesla left the zone at {time}: the phone was probably in it", nl: "een Tesla verliet de zone om {time}: vermoedelijk zat de gsm daarin" }
+reason_already_run: { en: "already a school run logged at {time}", nl: "al een schoolrit gelogd om {time}" }
+reason_already_picked_up: { en: "the children were already picked up today at {time}", nl: "de kinderen werden vandaag al gehaald om {time}" }
+log_back_at_work:
+  en: "{name} back at work after a work trip ({trip}); the working day has been running since {since}"
+  nl: "{name} terug op het werk na een werkverplaatsing ({trip}); de werkdag loopt sinds {since}"
+log_workday_not_logged:
+  en: "{name}: working day of {minutes} min not logged (expected 10 min to 16 h)"
+  nl: "{name}: werkdag van {minutes} min niet gelogd (verwacht 10 min tot 16 u)"
+log_not_supercharger:
+  en: "{car} charged {minutes} min away from home, {from} → {to} % ({rate} %/h): no Supercharger, not logged"
+  nl: "{car} laadde {minutes} min buiten thuis, {from} → {to} % ({rate} %/u): geen supercharger, niet gelogd"
+log_stays_saved: { en: "stays saved: {count} new day(s)", nl: "verblijfplaatsen opgeslagen: {count} nieuwe dag(en)" }
+log_stays_error: { en: "; error in the script: {error}", nl: "; fout in het script: {error}" }
+
+# --- Helpers and schedules (friendly names) -------------------------------------------------------------------------------
+helper_away_since: { en: "Presence {name} away since", nl: "Aanwezigheid {name} weg sinds" }
+helper_left_work: { en: "Presence {name} left work", nl: "Aanwezigheid {name} werk verlaten" }
+helper_arrived_at_work: { en: "Presence {name} arrived at work", nl: "Aanwezigheid {name} werk aangekomen" }
+helper_school_run_logged: { en: "Presence {name} school run logged", nl: "Aanwezigheid {name} schoolrit gelogd" }
+helper_tesla_left_school_zone: { en: Presence Tesla left school zone, nl: Aanwezigheid Tesla schoolzone verlaten }
+helper_charge_start: { en: "Presence charge start {car}", nl: "Aanwezigheid laden start {car}" }
+helper_charge_start_battery: { en: "Presence charge start battery {car}", nl: "Aanwezigheid laden start batterij {car}" }
+helper_work_trips: { en: "Presence {name} work trips", nl: "Aanwezigheid {name} werkverplaatsingen" }
+helper_destination: { en: "Presence destination {car}", nl: "Aanwezigheid bestemming {car}" }
+helper_arrival: { en: "Arrival {day}", nl: "Thuiskomst {day}" }
+schedule_drop_off: { en: School drop-off, nl: School brengen }
+schedule_pick_up: { en: School pick-up, nl: School halen }
+schedule_family: { en: Pick-up at family, nl: Halen bij familie }
+# Monday first; also used by the card (split on spaces).
+days_full_mon: { en: Monday Tuesday Wednesday Thursday Friday Saturday Sunday, nl: maandag dinsdag woensdag donderdag vrijdag zaterdag zondag }
+days_short_mon: { en: Mon Tue Wed Thu Fri Sat Sun, nl: ma di wo do vr za zo }
+
+# --- Script presence_log --------------------------------------------------------------------------------------------------
+script_alias: { en: Log presence, nl: Aanwezigheid loggen }
+script_description:
+  en: >-
+    Writes an arrival, school run, working day or charging session as an event in {calendar} and in the logbook.
+    Can also be used by hand to add a missed run. See presence/LOGIC.md.
+  nl: >-
+    Schrijft een thuiskomst, schoolrit, werkdag of laadbeurt als afspraak in {calendar} en in het logboek. Ook met de
+    hand te gebruiken om een gemiste rit toe te voegen. Zie presence/LOGIC.md.
+field_kind: { en: Kind, nl: Soort }
+field_people: { en: Who, nl: Wie }
+field_people_example: { en: "For example {example}", nl: "Bijvoorbeeld {example}" }
+field_start: { en: Time, nl: Tijdstip }
+field_end: { en: End, nl: Einde }
+field_end_description: { en: Empty = time + 1 min, nl: Leeg = tijdstip + 1 min }
+field_details: { en: Details, nl: Details }
+field_details_description:
+  en: "One \"key: value\" per line (place, car, source, away, duration …)"
+  nl: "Eén \"sleutel: waarde\" per regel (plek, auto, bron, weg, duur …)"
+
+# --- Automations: alias and description -----------------------------------------------------------------------------------
+track_alias: { en: "Presence: track departures and work", nl: "Aanwezigheid: vertrek en werk bijhouden" }
+track_description:
+  en: >-
+    Sets the timestamps the other presence automations read: leaving home, leaving work, and when a Tesla left the
+    school or family zone. Also remembers the last navigation destination per Tesla (for the name of a
+    Supercharger). See presence/LOGIC.md.
+  nl: >-
+    Zet de tijdstempels die de andere aanwezigheids-automatiseringen lezen: vertrek van thuis, vertrek van het werk,
+    en wanneer een Tesla de school- of familiezone verliet. Onthoudt ook de laatste navigatiebestemming per Tesla
+    (voor de naam van een supercharger). Zie presence/LOGIC.md.
+arrival_alias: { en: "Presence: log arrival", nl: "Aanwezigheid: thuiskomst loggen" }
+arrival_description:
+  en: >-
+    Logs every arrival at home (person entity) after at least 10 min away. "Home from work" when the person left
+    their own work zone during this absence.{cars} See presence/LOGIC.md.
+  nl: >-
+    Logt elke thuiskomst (person-entiteit) na minstens 10 min weg. "Thuis van werk" als de persoon tijdens dit
+    vertrek de eigen werkzone verliet.{cars} Zie presence/LOGIC.md.
+arrival_description_cars: { en: " The car that also came home within 5 min is in the details.", nl: " De auto die binnen 5 min ook thuiskwam, staat in de details." }
+run_car_alias: { en: "Presence: school run by Tesla", nl: "Aanwezigheid: schoolrit met de Tesla" }
+run_car_description_school:
+  en: "A Tesla stands at least 2 min in the zone {zone} during a window of schedule.school_drop_off or schedule.school_pick_up{drop_off}."
+  nl: "Een Tesla staat minstens 2 min in de zone {zone} tijdens een venster van schedule.school_drop_off of schedule.school_pick_up{drop_off}."
+run_car_description_drop_off: { en: ", within 100 m of a drop-off point", nl: ", binnen 100 m van een afzetpunt" }
+run_car_description_family:
+  en: >-
+    {start} 2 min in a family zone ({zones}) during schedule.family_pick_up: then it is a "Pick-up" at family, unless
+    the children were already picked up today after 11:00 (then it is a visit){school}.
+  nl: >-
+    {start} 2 min in een familiezone ({zones}) tijdens schedule.family_pick_up: dan is het "Halen" bij familie, tenzij
+    de kinderen vandaag na 11:00 al gehaald werden (dan is het een bezoek){school}.
+run_car_description_family_or: { en: Or, nl: Of }
+run_car_description_family_start: { en: A Tesla stands, nl: Een Tesla staat }
+run_car_description_family_school: { en: " or the same car is at school within 20 min (then that run counts)", nl: " of dezelfde auto binnen 20 min aan school staat (dan telt die rit)" }
+run_car_description_who:
+  en: >-
+    Who: phones with the car (same zone or <= 300 m), otherwise the usual driver unless that phone is elsewhere.
+    Driving past (40-70 s measured) drops out this way. See presence/LOGIC.md.
+  nl: >-
+    Wie: gsm's bij de auto (zelfde zone of <= 300 m), anders de vaste bestuurder tenzij die gsm elders is.
+    Doorrijden (40-70 s gemeten) valt zo weg. Zie presence/LOGIC.md.
+run_phone_alias: { en: "Presence: school run without Tesla", nl: "Aanwezigheid: schoolrit zonder Tesla" }
+run_phone_description:
+  en: >-
+    A person stands at least 3 min in the zone {zones} during the window (schedule.school_drop_off,
+    schedule.school_pick_up or schedule.family_pick_up){no_tesla}. Not logged{tesla_passed} when the person already
+    had a school run in the last 45 min, or (family) when the children were already picked up today. See
+    presence/LOGIC.md.
+  nl: >-
+    Een persoon staat minstens 3 min in de zone {zones} tijdens het venster (schedule.school_drop_off,
+    schedule.school_pick_up of schedule.family_pick_up){no_tesla}. Niet gelogd{tesla_passed} als de persoon al een
+    schoolrit had in de laatste 45 min, of (familie) als de kinderen vandaag al gehaald werden. Zie presence/LOGIC.md.
+run_phone_description_no_tesla: { en: " and no Tesla is there", nl: " en er staat geen Tesla" }
+run_phone_description_tesla_passed: { en: " when a Tesla just drove through the zone (the phone was probably in that car),", nl: " als een Tesla net door de zone reed (gsm zat vermoedelijk in die auto)," }
+word_or: { en: or, nl: of }
+workday_alias: { en: "Presence: log working day", nl: "Aanwezigheid: werkdag loggen" }
+workday_description:
+  en: >-
+    A working day runs from the first arrival in the work zone to the last departure before getting home. Leaving
+    the work zone in between and coming back without having been home is a work trip: that counts as work.
+    Appointments after work (standing still >= 10 min outside every zone, sensor.presence_workday) are work trips too:
+    the working day then ends at the departure from the last appointment. The event "{title}: <name>" goes into
+    {calendar} on getting home, or at 23:55 when you do not get home. See presence/LOGIC.md.
+  nl: >-
+    Een werkdag loopt van de eerste aankomst in de werkzone tot het laatste vertrek vóór je thuiskomt. Wie
+    tussendoor de werkzone verlaat en terugkomt zonder thuis te zijn geweest, maakt een werkverplaatsing: dat telt
+    als werk. Afspraken na het werk (stilstaan >= 10 min buiten elke zone, sensor.presence_workday) zijn ook
+    werkverplaatsingen: de werkdag eindigt dan bij het vertrek van de laatste afspraak. De afspraak "{title}: <naam>"
+    komt in {calendar} bij thuiskomst, of om 23:55 als je niet thuiskomt. Zie presence/LOGIC.md.
+supercharger_alias: { en: "Presence: log Supercharger sessions", nl: "Aanwezigheid: laden aan de supercharger loggen" }
+supercharger_description:
+  en: >-
+    When a Tesla starts charging away from home, this automation remembers the time and the battery level. When the
+    cable comes out, it logs "{title}: <name>" from start to end if the battery rose at least 20 %/h (fast
+    charging). Who: phone with the car, otherwise the usual driver, otherwise "{unknown}". See presence/LOGIC.md.
+  nl: >-
+    Begint een Tesla te laden buiten thuis, dan onthoudt deze automatisering het uur en het batterijniveau. Gaat de
+    laadkabel eruit, dan logt ze "{title}: <naam>" van begin tot einde als de batterij minstens 20 %/u steeg
+    (snelladen). Wie: gsm bij de auto, anders de vaste bestuurder, anders "{unknown}". Zie presence/LOGIC.md.
+stays_alias: { en: "Presence: save stays", nl: "Aanwezigheid: verblijfplaatsen opslaan" }
+stays_description:
+  en: >-
+    Every night at 00:10: sensor.presence_stays (command_line, presence/stay.py) works out the last 3 days from the
+    recorder, and every day/person not yet in {calendar} is added as an all-day event "{title}: <name>". A missed
+    night is caught up the next night this way. See presence/LOGIC.md.
+  nl: >-
+    Elke nacht om 00:10: sensor.presence_stays (command_line, presence/stay.py) rekent de laatste 3 dagen uit de
+    recorder uit, en elke dag/persoon die nog niet in {calendar} staat, komt erbij als afspraak "{title}: <naam>" over
+    de hele dag. Een gemiste nacht wordt zo de volgende nacht ingehaald. Zie presence/LOGIC.md.
+learn_alias: { en: Learn arrival time per weekday from Our week, nl: Thuiskomst per weekdag leren uit Onze week }
+learn_description:
+  en: >-
+    Every night: earliest real arrival per day from {calendar} (last 8 weeks). Counts "{home}…" after >= 1 h away and
+    "{pick_up}" + 10 min, between 11:00 and 21:00. Earliest of the last 4 same weekdays, rounded down to a quarter of
+    an hour, to input_datetime.arrival_<day> once there are >= 3 days. See presence/LOGIC.md.
+  nl: >-
+    Elke nacht: vroegste echte thuiskomst per dag uit {calendar} (laatste 8 weken). Telt "{home}…" na >= 1 u weg en
+    "{pick_up}" + 10 min, tussen 11 en 21 u. Vroegste van de laatste 4 dezelfde weekdagen, afgerond naar beneden op
+    een kwartier, naar input_datetime.arrival_<dag> zodra er >= 3 dagen zijn. Zie presence/LOGIC.md.
+
+# --- Dashboard tab and card "Our week" (JavaScript string literals) -------------------------------------------------------
+view_title: { en: Our week, nl: Onze week }
+children_default: { en: the children, nl: de kinderen }
+card_description:
+  en: "v{version}: arrivals, work time, school runs and Superchargers from the presence calendar"
+  nl: "v{version}: thuiskomsten, werktijd, schoolritten en superchargers uit de agenda Aanwezigheid"
+card_legend: { en: Legend, nl: Legende }
+card_legend_school: { en: school, nl: school }
+card_legend_travel: { en: on the road, nl: onderweg }
+card_legend_work: { en: "at work, from arrival to departure", nl: "op het werk, van aankomst tot vertrek" }
+card_legend_work_trip: { en: work trip (counts as work), nl: werkverplaatsing (telt als werk) }
+card_legend_home: { en: home, nl: thuis }
+card_legend_supercharger: { en: Supercharger, nl: supercharger }
+card_legend_help:
+  en: A row is a day, from morning to evening. Point at or tap a mark for the details.
+  nl: Een rij is een dag, van 's ochtends naar 's avonds. Wijs of tik een teken aan voor de details.
+card_calendar_link: { en: calendar ›, nl: agenda › }
+card_unknown_place: { en: unknown place, nl: onbekende plek }
+card_charges_title: { en: Supercharger sessions, nl: Laadbeurten aan de supercharger }
+card_the_car: { en: "the {car} ", nl: "de {car} " }
+card_at_place: { en: "at {place}", nl: "aan {place}" }
+card_at_supercharger: { en: at a Supercharger, nl: aan een supercharger }
+card_tip_charge:
+  en: "{who} charged {car}on {day} {where} from {from} to {to} ({duration}){battery}"
+  nl: "{who} laadde {car}{day} {where} van {from} tot {to} ({duration}){battery}"
+card_spread_title: { en: Where we spend our time, nl: Waar we tijd doorbrengen }
+card_loading: { en: Loading…, nl: Laden… }
+card_no_data: { en: No data yet., nl: Nog geen gegevens. }
+card_cat_sleep: { en: asleep, nl: slapen }
+card_cat_home: { en: home, nl: thuis }
+card_cat_work: { en: work, nl: werk }
+card_cat_elsewhere: { en: elsewhere, nl: elders }
+card_cat_travel: { en: on the road, nl: onderweg }
+card_this_week_lower: { en: this week, nl: deze week }
+card_week_of_lower: { en: "week of {date}", nl: "week van {date}" }
+card_this_week: { en: This week, nl: Deze week }
+card_last_week: { en: Last week, nl: Vorige week }
+card_week_of: { en: "Week of {date}", nl: "Week van {date}" }
+card_prev_week: { en: Previous week, nl: Vorige week }
+card_next_week: { en: Next week, nl: Volgende week }
+card_usual_week: { en: A usual week, nl: Een gewone week }
+card_avg_weeks: { en: "average, {weeks} weeks", nl: "gemiddelde, {weeks} weken" }
+card_now: { en: now, nl: nu }
+card_hour_tick: { en: "{h}h", nl: "{h}u" }
+card_hours: { en: "{h} h", nl: "{h} u" }
+card_dur_hm: { en: "{h} h {m}", nl: "{h} u {m}" }
+# Hover/tap texts on the timeline. {n} person, {day} weekday (+ date), {from} {to} times, {duration} length.
+card_avg_home: { en: "On average {n} gets home on {day} at {from}", nl: "Gemiddeld komt {n} op {day} thuis om {from}" }
+card_avg_work:
+  en: "On average {n} arrives at work on {day} at {from} and leaves at {to} ({duration})"
+  nl: "Gemiddeld komt {n} op {day} om {from} aan op het werk en vertrekt om {to} ({duration})"
+card_avg_there:
+  en: "On average {n} leaves on {day} at {from} and is at work at {to} ({duration} on the road)"
+  nl: "Gemiddeld vertrekt {n} op {day} om {from} en is om {to} op het werk ({duration} onderweg)"
+card_avg_back:
+  en: "On average {n} leaves work on {day} at {from} and is home at {to} ({duration} on the road)"
+  nl: "Gemiddeld vertrekt {n} op {day} om {from} van het werk en is om {to} thuis ({duration} onderweg)"
+card_avg_charge:
+  en: "On {day} {n} charges on average from {from} to {to} at a Supercharger ({duration}, {count}×){top}"
+  nl: "Op {day} laadt {n} gemiddeld van {from} tot {to} aan een supercharger ({duration}, {count}×){top}"
+card_mostly: { en: ", usually {place}", nl: ", meestal {place}" }
+card_tip_home: { en: "{n} got home on {day} at {from}", nl: "{n} kwam {day} thuis om {from}" }
+card_tip_work_now:
+  en: "{n} arrived at work on {day} at {from} and has been there for {duration}"
+  nl: "{n} kwam {day} om {from} aan op het werk en is er nu {duration}"
+card_tip_work:
+  en: "{n} arrived at work on {day} at {from} and left at {to} ({duration}){trips}"
+  nl: "{n} kwam {day} om {from} aan op het werk en vertrok om {to} ({duration}){trips}"
+card_with_trip: { en: ", with a work trip ({list})", nl: ", met een werkverplaatsing ({list})" }
+card_with_trips: { en: ", with {count} work trips ({list})", nl: ", met {count} werkverplaatsingen ({list})" }
+card_tip_move:
+  en: "{n} was on a work trip on {day} from {from} to {to} ({duration}){appointments}: counts as work"
+  nl: "{n} was {day} op werkverplaatsing van {from} tot {to} ({duration}){appointments}: telt als werk"
+card_one_appointment: { en: ", one appointment ({list})", nl: ", een afspraak ({list})" }
+card_appointments: { en: ", {count} appointments ({list})", nl: ", {count} afspraken ({list})" }
+card_tip_there:
+  en: "{n} left on {day} at {from} and was at work at {to} ({duration} on the road)"
+  nl: "{n} vertrok {day} om {from} en was om {to} op het werk ({duration} onderweg)"
+card_tip_back:
+  en: "{n} left {origin} on {day} at {from} and was home at {to} ({duration} on the road)"
+  nl: "{n} vertrok {day} om {from} {origin} en was om {to} thuis ({duration} onderweg)"
+card_from_work: { en: work, nl: van het werk }
+card_from_last_appointment: { en: the last appointment, nl: van de laatste afspraak }
+card_tip_gap: { en: "{n} was home in between on {day}, from {from} to {to} ({duration})", nl: "{n} was {day} tussendoor thuis, van {from} tot {to} ({duration})" }
+card_tip_family: { en: "{who} picked up {children} on {day} at {time} at {label}", nl: "{who} haalde {children} {day} om {time} op bij {label}" }
+card_tip_drop_off: { en: "{who} took {children} to school on {day} at {time}{street}", nl: "{who} bracht {children} {day} om {time} naar school{street}" }
+card_tip_pick_up: { en: "{who} picked up {children} at school on {day} at {time}{street}", nl: "{who} haalde {children} {day} om {time} op aan school{street}" }
+card_avg_drop_off:
+  en: "On {day} {who} usually takes {children} to school, on average at {time} ({count}×)"
+  nl: "Op {day} brengt meestal {who} {children} naar school, gemiddeld om {time} ({count}×)"
+card_avg_pick_up:
+  en: "On {day} {who} usually picks up {children} at school, on average at {time} ({count}×)"
+  nl: "Op {day} haalt meestal {who} {children} op aan school, gemiddeld om {time} ({count}×)"
+card_avg_family:
+  en: "On {day} {who} usually picks up {children} at {label}, on average at {time} ({count}×)"
+  nl: "Op {day} haalt meestal {who} {children} op bij {label}, gemiddeld om {time} ({count}×)"
+card_per_week_avg: { en: on average per week, nl: gemiddeld per week }
+card_per_week_this: { en: this week, nl: deze week }
+card_tip_work_hours: { en: "{n} was at work {duration} {period}", nl: "{n} was {period} {duration} op het werk" }
+card_tip_trips:
+  en: "{n}: {there} on the way to work and {back} back home, {period} (door to door, school stops included)"
+  nl: "{n} was {period} {there} onderweg naar het werk en {back} terug naar huis (van deur tot deur, school onderweg inbegrepen)"
+card_period_avg: { en: on average, nl: gemiddeld }
+card_period_week_avg: { en: this week on average, nl: deze week gemiddeld }
+card_trip_line: { en: "there {there} · back {back}", nl: "heen {there} · terug {back}" }
+card_where: { en: ", in {place}", nl: ", in {place}" }
+card_where_usually: { en: ", usually in {place}", nl: ", meestal in {place}" }
+card_tip_charge_week: { en: "This week at a Supercharger: {who}", nl: "Deze week aan een supercharger: {who}" }
+card_tip_charge_avg: { en: "On average per week at a Supercharger: {who}", nl: "Gemiddeld per week aan een supercharger: {who}" }
+card_charge_line: { en: "{duration} at the Supercharger", nl: "{duration} aan de supercharger" }
+card_per_week: { en: " per week", nl: " per week" }

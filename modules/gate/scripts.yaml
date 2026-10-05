@@ -1,0 +1,432 @@
+<% set relay = entities.gate_relay %>
+<% set relay_domain = relay.split('.')[0] %>
+<% set gate_sensor = entities.get('gate_sensor') %>
+<% if relay_domain not in ['switch', 'button', 'cover'] %><@ fail('entities.gate_relay must be a switch, button or cover (now: ' ~ relay ~ ')') @><% endif %>
+# Gate + Tesla quick actions: scripts (ha-kit module gate, see gate/LOGIC.md).
+# Written by gate/deploy.py through the config API (same as the script editor).
+# The user-facing scripts (gate_open_manual, gate_close_manual, tesla_unlock_charge_cable, leaving, leaving_<car>)
+# go on the phone's home screen. script.gate_pulse is the ADAPTER to the gate hardware (<@ relay_domain @>).
+# Notifications go to the person who started the script (HA user linked to a person), else to everyone.
+# Field `reason`: callers that still pass the old Dutch field `reden` keep working (read as a fallback).
+
+# --- Internal: one pulse on the gate (ADAPTER) ----------------------------------------------------------------
+gate_pulse:
+  alias: "<@ t('pulse_alias') @>"
+  icon: mdi:gate
+  description: >-
+<% if relay_domain == 'switch' %>
+    <@ t('pulse_description_switch', relay=relay) @>
+<% elif relay_domain == 'button' %>
+    <@ t('pulse_description_button', relay=relay) @>
+<% else %>
+    <@ t('pulse_description_cover', relay=relay) @>
+<% endif %>
+    <@ t('pulse_description_common') @>
+  mode: single
+  max_exceeded: silent
+  fields:
+    reason:
+      name: "<@ t('field_reason_name') @>"
+      description: "<@ t('field_reason_description') @>"
+      example: "<@ t('field_reason_example') @>"
+      selector:
+        text: {}
+    force:
+      name: "<@ t('field_force_name') @>"
+      description: "<@ t('field_force_description') @>"
+      default: false
+      selector:
+        boolean: {}
+  sequence:
+    - variables:
+        txt:
+          logbook: "<@ t('logbook_gate') @>"
+          unreachable: "<@ t('log_unreachable') @>"
+          ignored: "<@ t('log_pulse_ignored') @>"
+          given: "<@ t('log_pulse_given') @>"
+        why: "{{ reason | default(reden | default('?')) }}"
+        targets: "{% from 'gate.jinja' import recipients %}{{ recipients(context.user_id) | from_json }}"
+<% if relay_domain == 'switch' %>
+    # A wifi relay drops out now and then for ±30 s: wait for it to come back.
+    - if:
+        - condition: state
+          entity_id: <@ relay @>
+          state:
+            - unavailable
+            - unknown
+      then:
+        - wait_for_trigger:
+            - trigger: state
+              entity_id: <@ relay @>
+              not_to:
+                - unavailable
+                - unknown
+          timeout: "00:00:45"
+          continue_on_timeout: true
+<% else %>
+    # A button is 'unknown' until its first press: only 'unavailable' means offline here.
+    - if:
+        - condition: state
+          entity_id: <@ relay @>
+          state: unavailable
+      then:
+        - wait_for_trigger:
+            - trigger: state
+              entity_id: <@ relay @>
+              not_to: unavailable
+          timeout: "00:00:45"
+          continue_on_timeout: true
+<% endif %>
+    # Still offline after 45 s: no pulse, tell someone.
+<% if relay_domain == 'switch' %>
+    - if:
+        - condition: state
+          entity_id: <@ relay @>
+          state:
+            - unavailable
+            - unknown
+<% else %>
+    - if:
+        - condition: state
+          entity_id: <@ relay @>
+          state: unavailable
+<% endif %>
+      then:
+        - action: logbook.log
+          data:
+            name: "{{ txt.logbook }}"
+            entity_id: <@ relay @>
+            message: "{{ txt.unreachable | replace('{reason}', why) }}"
+        - repeat:
+            for_each: "{{ targets }}"
+            sequence:
+              - action: "{{ repeat.item }}"
+                continue_on_error: true
+                data:
+                  title: "<@ t('title_not_operated') @>"
+                  message: "<@ t('message_unreachable') @>"
+                  data:
+                    tag: gate-auto
+                    group: gate
+        - stop: Gate control unreachable
+          error: true
+<% if relay_domain == 'switch' %>
+    # An impulse relay with auto-off stays 'on' for the length of the pulse: do not pulse twice.
+    - if:
+        - condition: state
+          entity_id: <@ relay @>
+          state: "on"
+      then:
+        - stop: Pulse already running
+<% endif %>
+    # Two people pressing (or the automation and a person) within the gate's travel time: a second pulse would stop
+    # or reverse the gate. Ignore any pulse within 30 s of the previous one.
+    - if:
+        - condition: template
+          value_template: >
+            {{ not force | default(false) and
+               as_timestamp(now()) - (state_attr('input_datetime.gate_last_pulse', 'timestamp') | float(0)) < 30 }}
+      then:
+        - action: logbook.log
+          data:
+            name: "{{ txt.logbook }}"
+            entity_id: <@ relay @>
+            message: >-
+              {{ txt.ignored | replace('{reason}', why)
+                 | replace('{seconds}', (as_timestamp(now()) - state_attr('input_datetime.gate_last_pulse', 'timestamp') | float(0)) | round(0) | int | string) }}
+        - stop: Previous pulse less than 30 s ago
+<% if relay_domain == 'switch' %>
+    - action: switch.turn_on
+      target:
+        entity_id: <@ relay @>
+<% elif relay_domain == 'button' %>
+    - action: button.press
+      target:
+        entity_id: <@ relay @>
+<% else %>
+    - action: "{{ 'cover.open_cover' if is_state('<@ relay @>', 'closed') else 'cover.close_cover' }}"
+      target:
+        entity_id: <@ relay @>
+<% endif %>
+    - action: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.gate_last_pulse
+      data:
+        timestamp: "{{ as_timestamp(now()) }}"
+    - action: logbook.log
+      data:
+        name: "{{ txt.logbook }}"
+        entity_id: <@ relay @>
+        message: "{{ txt.given | replace('{reason}', why) }}"
+
+# --- Quick action: open the gate --------------------------------------------------------------------------------
+gate_open_manual:
+  alias: "<@ t('open_manual_alias') @>"
+  icon: mdi:gate-open
+  description: >-
+    <@ t('open_manual_description') @>
+<% if gate_sensor %>
+    <@ t('open_manual_description_sensor') @>
+<% else %>
+    <@ t('open_manual_description_no_sensor') @>
+<% endif %>
+  mode: single
+  max_exceeded: silent
+  sequence:
+<% if gate_sensor %>
+    - if:
+        - condition: state
+          entity_id: binary_sensor.gate_open
+          state: "on"
+      then:
+        - variables:
+            targets: "{% from 'gate.jinja' import recipients %}{{ recipients(context.user_id) | from_json }}"
+        - repeat:
+            for_each: "{{ targets }}"
+            sequence:
+              - action: "{{ repeat.item }}"
+                continue_on_error: true
+                data:
+                  title: "<@ t('title_not_closed') @>"
+                  message: "<@ t('message_open_or_moving') @>"
+                  data:
+                    tag: gate-status
+                    group: gate
+        - stop: Gate already open
+<% endif %>
+    - action: script.gate_pulse
+      data:
+        reason: "<@ t('reason_manual_open') @>"
+
+# --- Quick action: close the gate (also the button "Close gate" in the notifications and on the card) ----------
+gate_close_manual:
+  alias: "<@ t('close_manual_alias') @>"
+  icon: mdi:gate-arrow-left
+  description: >-
+<% if gate_sensor %>
+    <@ t('close_manual_description_sensor') @>
+<% else %>
+    <@ t('close_manual_description_no_sensor') @>
+<% endif %>
+  mode: single
+  max_exceeded: silent
+  fields:
+    reason:
+      name: "<@ t('field_reason_name') @>"
+      description: "<@ t('field_reason_description') @>"
+      example: "<@ t('field_reason_example_close') @>"
+      selector:
+        text: {}
+  sequence:
+    - variables:
+        default_reason: "<@ t('reason_close') @>"
+        why: "{{ reason | default(reden | default(default_reason)) }}"
+<% if gate_sensor %>
+    - if:
+        - condition: not
+          conditions:
+            - condition: state
+              entity_id: binary_sensor.gate_open
+              state: "on"
+      then:
+        - variables:
+            no_pulse: "<@ t('log_close_no_pulse') @>"
+        - action: logbook.log
+          data:
+            name: "<@ t('logbook_gate') @>"
+            entity_id: <@ relay @>
+            message: >-
+              {{ no_pulse | replace('{state}', states('binary_sensor.gate_open')) | replace('{reason}', why) }}
+        - stop: Gate is not open
+<% endif %>
+    - action: script.gate_pulse
+      data:
+        reason: "{{ why }}"
+
+# --- Quick action: unlock the charge cable ----------------------------------------------------------------------
+tesla_unlock_charge_cable:
+  alias: "<@ t('unlock_alias') @>"
+  icon: mdi:ev-plug-type2
+  description: >-
+    <@ t('unlock_description') @>
+  mode: single
+  max_exceeded: silent
+  fields:
+    car:
+      name: "<@ t('field_car_name') @>"
+      description: "<@ t('field_car_description') @>"
+      example: <@ cars[0].prefix @>
+      selector:
+        select:
+          options:
+<% for a in cars %>
+            - label: "<@ a.name @>"
+              value: <@ a.prefix @>
+<% endfor %>
+  sequence:
+    - variables:
+        txt:
+          all: "<@ t('button_all') @>"
+          log_unlocked: "<@ t('log_cable_unlocked') @>"
+          log_not_unlocked: "<@ t('log_cable_not_unlocked') @>"
+          title_unlocked: "<@ t('title_cable_unlocked') @>"
+          title_not_unlocked: "<@ t('title_cable_not_unlocked') @>"
+          message_unlocked: "<@ t('message_cable_unlocked') @>"
+          message_not_unlocked: "<@ t('message_cable_not_unlocked') @>"
+        car_list: "{% from 'gate.jinja' import cars %}{{ cars() | from_json }}"
+        targets: "{% from 'gate.jinja' import recipients %}{{ recipients(context.user_id) | from_json }}"
+        connected: >
+          {% if car is defined and car in car_list | map(attribute='p') | list %}
+            {% set a = car_list | selectattr('p', 'eq', car) | first %}
+            {{ [car] if is_state(a.charge_cable, 'on') else [] }}
+          {% else %}
+            {{ car_list | selectattr('charge_cable', 'is_state', 'on') | selectattr('located_at_home', 'is_state', 'on')
+               | map(attribute='p') | list }}
+          {% endif %}
+    - choose:
+        - alias: No Tesla plugged in at home
+          conditions:
+            - condition: template
+              value_template: "{{ connected | count == 0 }}"
+          sequence:
+            - repeat:
+                for_each: "{{ targets }}"
+                sequence:
+                  - action: "{{ repeat.item }}"
+                    continue_on_error: true
+                    data:
+                      title: "<@ t('title_no_cable') @>"
+                      message: "<@ t('message_no_cable') @>"
+                      data:
+                        tag: tesla-charge-cable
+            - stop: No Tesla plugged in
+        - alias: Several cars plugged in, ask which one
+          conditions:
+            - condition: template
+              value_template: "{{ connected | count > 1 }}"
+          sequence:
+            - variables:
+                question: "{{ context.id }}"
+                # One button per connected car (UNLOCK_<id>_<prefix>) plus "All". "All" breaks off the charging
+                # session of every car, so it is not the default.
+                buttons: >
+                  {% set ns = namespace(l=[]) %}
+                  {% for c in connected %}
+                    {% set ns.l = ns.l + [{'action': 'UNLOCK_' ~ question ~ '_' ~ c,
+                                           'title': car_list | selectattr('p', 'eq', c) | map(attribute='name') | first}] %}
+                  {% endfor %}
+                  {{ ns.l + [{'action': 'UNLOCK_' ~ question ~ '_ALL', 'title': txt.all}] }}
+            - repeat:
+                for_each: "{{ targets }}"
+                sequence:
+                  - action: "{{ repeat.item }}"
+                    continue_on_error: true
+                    data:
+                      title: "<@ t('title_which_cable') @>"
+                      message: "<@ t('message_which_cable') @>"
+                      data:
+                        tag: tesla-charge-cable
+                        actions: "{{ buttons }}"
+            - wait_for_trigger:
+<% for a in cars %>
+                - trigger: event
+                  event_type: mobile_app_notification_action
+                  event_data:
+                    action: "UNLOCK_{{ question }}_<@ a.prefix @>"
+<% endfor %>
+                - trigger: event
+                  event_type: mobile_app_notification_action
+                  event_data:
+                    action: "UNLOCK_{{ question }}_ALL"
+              timeout: "00:02:00"
+              continue_on_timeout: false
+            - variables:
+                choice: "{{ wait.trigger.event.data.action | replace('UNLOCK_' ~ question ~ '_', '') }}"
+                connected: "{{ [choice] if choice in connected else connected }}"
+    - repeat:
+        for_each: "{{ connected }}"
+        sequence:
+          - variables:
+              a: "{{ car_list | selectattr('p', 'eq', repeat.item) | first }}"
+          - if:
+              - condition: template
+                value_template: "{{ states(a.charging_state) in ['charging', 'starting'] }}"
+            then:
+              - action: switch.turn_off
+                target:
+                  entity_id: "{{ a.charge_switch }}"
+                continue_on_error: true
+              - action: counter.increment
+                target:
+                  entity_id: counter.tesla_commands_today
+              - delay: "00:00:05"
+          - action: lock.unlock
+            target:
+              entity_id: "{{ a.charge_cable_lock }}"
+            continue_on_error: true
+          - action: counter.increment
+            target:
+              entity_id: counter.tesla_commands_today
+          - wait_template: "{{ is_state(a.charge_cable_lock, 'unlocked') }}"
+            timeout: "00:00:30"
+          - action: logbook.log
+            data:
+              name: "{{ a.name }}"
+              entity_id: "{{ a.charge_cable_lock }}"
+              message: "{{ txt.log_unlocked if wait.completed else txt.log_not_unlocked }}"
+          - repeat:
+              for_each: "{{ targets }}"
+              sequence:
+                - action: "{{ repeat.item }}"
+                  continue_on_error: true
+                  data:
+                    title: >-
+                      {{ (txt.title_unlocked if wait.completed else txt.title_not_unlocked) | replace('{car}', a.name) }}
+                    message: >-
+                      {{ txt.message_unlocked if wait.completed else txt.message_not_unlocked }}
+                    data:
+                      tag: "tesla-charge-cable-{{ a.p }}"
+
+# --- Quick action: leaving = open gate + unlock the charge cable ----------------------------------------------
+leaving:
+  alias: "<@ t('leaving_alias') @>"
+  icon: mdi:car-arrow-right
+  description: >-
+    <@ t('leaving_description') @>
+  mode: single
+  max_exceeded: silent
+  fields:
+    car:
+      name: "<@ t('field_car_name') @>"
+      description: "<@ t('field_car_description') @>"
+      example: <@ cars[0].prefix @>
+      selector:
+        select:
+          options:
+<% for a in cars %>
+            - label: "<@ a.name @>"
+              value: <@ a.prefix @>
+<% endfor %>
+  sequence:
+    - parallel:
+        - action: script.gate_open_manual
+          continue_on_error: true
+        # An empty car means "automatic" in tesla_unlock_charge_cable.
+        - action: script.tesla_unlock_charge_cable
+          data:
+            car: "{{ car | default('') }}"
+          continue_on_error: true
+<% for a in cars %>
+
+# --- Quick action per car: leaving with <@ a.name @> (one button per car on the phone) ---
+leaving_<@ a.prefix @>:
+  alias: "<@ t('leaving_car_alias', car=a.name) @>"
+  icon: mdi:car-side
+  description: "<@ t('leaving_car_description', car=a.name) @>"
+  mode: single
+  max_exceeded: silent
+  sequence:
+    - action: script.leaving
+      data:
+        car: <@ a.prefix @>
+<% endfor %>

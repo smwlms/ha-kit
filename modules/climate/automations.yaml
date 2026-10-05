@@ -1,0 +1,424 @@
+<% from '_climate.jinja' import feat, vent, vv, indoor, vent_outdoor, loud_start, loud_end, comfoclime, comfoclime_writes, boost_below, boost_hours with context %>
+<% set any_auto = feat.floor or feat.ventilation_cooling or feat.season_profile or feat.comfoclime_boost %>
+<% set heating_season = ("is_state('" ~ vent.ventilation_season_heating ~ "', 'on')") if vent.get('ventilation_season_heating') else (("is_state('input_select.climate_floor_mode', 'heating')") if feat.floor else 'false') %>
+# Climate: automations (ha-kit module climate, see climate/LOGIC.md). Written by climate/deploy.py through the config
+# API (same as the automation editor). Fixed values (helper options, script fields) are English; texts go through t().
+# Single writer: climate_floor_mode_apply is the only caller of script.heat_pump_set_floor_band in the kit.
+# In this house: floor <@ feat.floor @>, ventilation cooling <@ feat.ventilation_cooling @>, season profile <@ feat.season_profile @>, ComfoClime boost <@ feat.comfoclime_boost @>.
+<% if not any_auto %>
+[]
+<% endif %>
+<% if feat.floor %>
+- id: climate_floor_mode_choose
+  alias: <@ t('auto_floor_choose_alias') | tojson @>
+  description: <@ t('auto_floor_choose_description') | tojson @>
+  mode: single
+  triggers:
+    - trigger: time
+      at: "06:00:00"
+  conditions:
+    - condition: state
+      entity_id: input_boolean.climate_floor_mode_auto
+      state: "on"
+    - condition: state
+      entity_id: input_select.climate_floor_mode
+      state: [heating, neutral, cooling]
+  actions:
+    - variables:
+        # Forecast day maxima: today, +1, +2, +3 (sensor.climate_weather_days).
+        day_max: "{{ (state_attr('sensor.climate_weather_days', 'day_max') or []) | map('float', none) | reject('none') | list }}"
+        cool_from: "{{ states('input_number.climate_floor_cooling_from_outdoor_max') | float(24) }}"
+        heat_below: "{{ states('input_number.climate_floor_heating_below_outdoor_max') | float(17) }}"
+        # Veto of the indoor forecast; ignored while it is unavailable.
+        advice: >-
+          {% set a = state_attr('sensor.climate_indoor_peak', 'floor_advice') %}
+          {{ a if has_value('sensor.climate_indoor_peak') and a in ['cooling', 'heating', 'neutral'] else 'unknown' }}
+        cooling_allowed: <@ 'true' if feat.floor_cooling else 'false' @>
+        warm_run: "{{ (day_max | count >= 3 and day_max[0:3] | min >= cool_from) or (day_max | count >= 4 and day_max[1:4] | min >= cool_from) }}"
+        cool_run: "{{ (day_max | count >= 3 and day_max[0:3] | max < heat_below) or (day_max | count >= 4 and day_max[1:4] | max < heat_below) }}"
+        wanted: >-
+          {% if warm_run and cooling_allowed and advice != 'heating' %}cooling
+          {%- elif cool_run and advice != 'cooling' %}heating
+          {%- else %}neutral{% endif %}
+        current: "{{ states('input_select.climate_floor_mode') }}"
+        days_in_mode: "{{ ((now().timestamp() - (state_attr('input_datetime.climate_floor_mode_since', 'timestamp') | float(0))) / 86400) | round(1) }}"
+        # Heating <-> cooling always passes through neutral.
+        new: "{{ 'neutral' if wanted != 'neutral' and current != 'neutral' and wanted != current else wanted }}"
+        names:
+          heating: <@ t('mode_heating') | tojson @>
+          neutral: <@ t('mode_neutral') | tojson @>
+          cooling: <@ t('mode_cooling') | tojson @>
+    - alias: Need at least 3 forecast days
+      condition: template
+      value_template: "{{ day_max | count >= 3 }}"
+    - alias: Nothing to change
+      condition: template
+      value_template: "{{ new != current }}"
+    - choose:
+        - alias: At least 3 days in the current mode
+          conditions:
+            - condition: template
+              value_template: "{{ days_in_mode < 3 }}"
+          sequence:
+            - action: logbook.log
+              data:
+                name: <@ t('log_name_floor') | tojson @>
+                entity_id: input_boolean.climate_floor_mode_auto
+                message: <@ t('log_floor_stays', mode='{{ names[current] }}', days='{{ days_in_mode }}') | tojson @>
+      default:
+        - action: input_select.select_option
+          target:
+            entity_id: input_select.climate_floor_mode
+          data:
+            option: "{{ new }}"
+        - action: logbook.log
+          data:
+            name: <@ t('log_name_floor') | tojson @>
+            entity_id: input_boolean.climate_floor_mode_auto
+            message: >-
+              {% if new == 'cooling' %}<@ t('log_floor_to_cooling', max='{{ day_max[0:4] | max }}') @>
+              {%- elif new == 'heating' %}<@ t('log_floor_to_heating', min='{{ day_max[0:4] | min }}', max='{{ day_max[0:4] | max }}') @>
+              {%- elif wanted != 'neutral' %}<@ t('log_floor_via_neutral', mode='{{ names[wanted] }}') @>
+              {%- else %}<@ t('log_floor_to_neutral') @>{% endif %}
+
+- id: climate_floor_mode_apply
+  alias: <@ t('auto_floor_apply_alias') | tojson @>
+  description: <@ t('auto_floor_apply_description') | tojson @>
+  mode: queued
+  max: 10
+  triggers:
+    - trigger: state
+      entity_id: input_select.climate_floor_mode
+      not_from: [unavailable, unknown]
+      not_to: [unavailable, unknown]
+      id: mode
+    # A band of the active mode was tuned: write it after 20 s without further changes.
+    - trigger: state
+      entity_id:
+<% for mode in ['heating', 'neutral', 'cooling'] %>
+        - input_number.climate_floor_<@ mode @>_low
+        - input_number.climate_floor_<@ mode @>_high
+<% endfor %>
+      not_from: [unavailable, unknown]
+      not_to: [unavailable, unknown]
+      for: "00:00:20"
+      id: band
+  conditions:
+    - condition: template
+      value_template: >-
+        {{ trigger.id == 'mode' or trigger.entity_id.startswith('input_number.climate_floor_' ~ states('input_select.climate_floor_mode') ~ '_') }}
+  actions:
+    - variables:
+        mode: "{{ states('input_select.climate_floor_mode') }}"
+        low: "{{ states('input_number.climate_floor_' ~ mode ~ '_low') | float(19.5) }}"
+        high: "{{ states('input_number.climate_floor_' ~ mode ~ '_high') | float(26) }}"
+        by_hand: "{{ trigger.id == 'mode' and trigger.to_state.context.user_id is not none }}"
+        names:
+          heating: <@ t('mode_heating') | tojson @>
+          neutral: <@ t('mode_neutral') | tojson @>
+          cooling: <@ t('mode_cooling') | tojson @>
+    - action: script.heat_pump_set_floor_band
+      continue_on_error: true
+      data:
+        low: "{{ low }}"
+        high: "{{ high }}"
+        reason: <@ t('reason_floor_mode', mode='{{ names[mode] }}') | tojson @>
+    - if:
+        - condition: template
+          value_template: "{{ trigger.id == 'mode' }}"
+      then:
+        - action: input_datetime.set_datetime
+          target:
+            entity_id: input_datetime.climate_floor_mode_since
+          data:
+            timestamp: "{{ now().timestamp() }}"
+    - action: logbook.log
+      data:
+        name: <@ t('log_name_floor') | tojson @>
+        entity_id: input_boolean.climate_floor_mode_auto
+        message: >-
+          {{ names[mode] }}{{ <@ t('log_by_hand') | tojson @> if by_hand else '' }} · {{ low }}–{{ high }} °C{{ <@ t('log_band_tuned') | tojson @> if trigger.id == 'band' else '' }}
+<% endif %>
+<% if feat.ventilation_cooling %>
+
+- id: climate_ventilation_cooling
+  alias: <@ t('auto_ventilation_cooling_alias') | tojson @>
+  description: <@ t('auto_ventilation_cooling_description', start=loud_start, end=loud_end) | tojson @>
+  mode: single
+  max_exceeded: silent
+  triggers:
+    - trigger: time_pattern
+      minutes: /5
+    - trigger: state
+      entity_id: <@ indoor @>
+    - trigger: state
+      entity_id:
+        - input_number.climate_ventilation_cooling_from
+        - input_boolean.climate_ventilation_cooling
+    - trigger: time
+      at: ["<@ loud_start @>:00", "<@ loud_end @>:00"]
+  conditions:
+    - condition: numeric_state
+      entity_id: <@ indoor @>
+      above: 5
+    - condition: numeric_state
+      entity_id: <@ vent_outdoor @>
+      above: -30
+<% if vent.get('ventilation_away') %>
+    - condition: state
+      entity_id: <@ vent.ventilation_away @>
+      state: "off"
+<% endif %>
+  actions:
+    - variables:
+        indoor: "{{ states('<@ indoor @>') | float }}"
+        outdoor: "{{ states('<@ vent_outdoor @>') | float }}"
+        cool_from: "{{ states('input_number.climate_ventilation_cooling_from') | float(21.5) }}"
+        current: "{{ states('input_select.climate_ventilation_state') }}"
+        difference: "{{ (indoor - outdoor) | round(1) }}"
+        # High is loud: only in the loud hours <@ loud_start @>-<@ loud_end @> (house.yaml climate.loud_hours).
+        high_allowed: >-
+          {% set n = now().strftime('%H:%M') %}{% set s = '<@ loud_start @>' %}{% set e = '<@ loud_end @>' %}
+          {{ (n >= s or n < e) if s > e else (s <= n < e) }}
+        cooling_now: "{{ current in ['cooling_medium', 'cooling_high'] }}"
+        heating_season: "{{ <@ heating_season @> }}"
+        new_state: >-
+          {%- if is_state('input_boolean.climate_ventilation_cooling', 'off') or heating_season -%}auto
+          {%- elif (indoor >= cool_from or (cooling_now and indoor > cool_from - 0.5)) and (difference >= 2 or (cooling_now and difference >= 1)) -%}
+          {{ 'cooling_high' if indoor >= cool_from + 1 and difference >= 4 and high_allowed else 'cooling_medium' }}
+          {%- elif indoor >= cool_from - 1 and outdoor >= indoor - 0.5 -%}bypass_closed
+          {%- elif indoor < cool_from - 1.5 -%}bypass_closed
+          {%- else -%}auto{%- endif -%}
+        # The bypass buttons hold for 1 h: renew the command after 50 min while not in auto.
+        renew: >-
+          {{ new_state != 'auto' and (now() - (states('input_datetime.climate_bypass_renewed') | as_datetime(now() - timedelta(hours=2)) | as_local)).total_seconds() > 3000 }}
+        names:
+          auto: <@ t('vstate_auto') | tojson @>
+          bypass_closed: <@ t('vstate_bypass_closed') | tojson @>
+          cooling_medium: <@ t('vstate_cooling_medium') | tojson @>
+          cooling_high: <@ t('vstate_cooling_high') | tojson @>
+    - if:
+        - condition: template
+          value_template: "{{ new_state == current and not renew }}"
+      then:
+        - stop: nothing to change
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ new_state in ['cooling_medium', 'cooling_high'] }}"
+          sequence:
+            - action: select.select_option
+              target:
+                entity_id: <@ vent.ventilation_speed @>
+              data:
+                option: >-
+                  {{ <@ vv.high | tojson @> if new_state == 'cooling_high' else <@ vv.medium | tojson @> }}
+            - action: button.press
+              target:
+                entity_id: <@ vent.ventilation_bypass_on @>
+        - conditions:
+            - condition: template
+              value_template: "{{ new_state == 'bypass_closed' }}"
+          sequence:
+<% if vent.get('ventilation_auto') %>
+            - action: switch.turn_on
+              target:
+                entity_id: <@ vent.ventilation_auto @>
+<% else %>
+            - action: select.select_option
+              target:
+                entity_id: <@ vent.ventilation_speed @>
+              data:
+                option: <@ vv.low | tojson @>
+<% endif %>
+            - action: button.press
+              target:
+                entity_id: <@ vent.ventilation_bypass_off @>
+      default:
+<% if vent.get('ventilation_auto') %>
+        - action: switch.turn_on
+          target:
+            entity_id: <@ vent.ventilation_auto @>
+<% else %>
+        - action: select.select_option
+          target:
+            entity_id: <@ vent.ventilation_speed @>
+          data:
+            option: <@ vv.low | tojson @>
+<% endif %>
+        - action: button.press
+          target:
+            entity_id: <@ vent.ventilation_bypass_auto @>
+    - action: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.climate_bypass_renewed
+      data:
+        timestamp: "{{ now().timestamp() }}"
+    - if:
+        - condition: template
+          value_template: "{{ new_state != current }}"
+      then:
+        - action: input_select.select_option
+          target:
+            entity_id: input_select.climate_ventilation_state
+          data:
+            option: "{{ new_state }}"
+        - action: logbook.log
+          data:
+            name: <@ t('log_name_ventilation') | tojson @>
+            entity_id: input_boolean.climate_ventilation_cooling
+            message: >-
+              <@ t('log_ventilation', state='{{ names[new_state] }}', indoor='{{ indoor }}', outdoor='{{ outdoor }}') @>{{ <@ t('log_high_later', start=loud_start, end=loud_end) | tojson @> if new_state == 'cooling_medium' and not high_allowed and difference >= 4 and indoor >= cool_from + 1 else '' }}
+<% endif %>
+<% if feat.season_profile %>
+
+- id: climate_ventilation_season_profile
+  alias: <@ t('auto_season_profile_alias') | tojson @>
+  description: <@ t('auto_season_profile_description') | tojson @>
+  mode: queued
+  triggers:
+    - trigger: state
+      entity_id: <@ vent.ventilation_season_heating @>
+      to: "on"
+      id: heating
+    - trigger: state
+      entity_id: <@ vent.ventilation_season_cooling @>
+      to: "on"
+      id: cooling
+  conditions:
+    - condition: template
+      value_template: "{{ trigger.from_state is not none and trigger.from_state.state not in ['unavailable', 'unknown'] }}"
+  actions:
+    - variables:
+        profile: >-
+          {{ <@ vv.profile_heating | tojson @> if trigger.id == 'heating' else <@ vv.profile_cooling | tojson @> }}
+    - action: select.select_option
+      target:
+        entity_id: <@ vent.ventilation_profile @>
+      data:
+        option: "{{ profile }}"
+    - action: logbook.log
+      data:
+        name: <@ t('log_name_ventilation') | tojson @>
+        entity_id: <@ vent.ventilation_profile @>
+        message: >-
+          {{ <@ t('log_profile_heating', profile=vv.profile_heating) | tojson @> if trigger.id == 'heating' else <@ t('log_profile_cooling', profile=vv.profile_cooling) | tojson @> }}
+<% endif %>
+<% if feat.comfoclime_boost %>
+
+- id: climate_comfoclime_boost
+  alias: <@ t('auto_boost_alias') | tojson @>
+  description: <@ t('auto_boost_description', below=boost_below, hours=boost_hours) | tojson @>
+  mode: queued
+  max: 5
+  triggers:
+    - trigger: numeric_state
+      entity_id: <@ indoor @>
+      below: <@ boost_below @>
+      id: start
+    # The way back is a check, not a delay: a boost that runs over a restart still ends (input_text keeps the until).
+    - trigger: time_pattern
+      minutes: /5
+      id: check
+    - trigger: homeassistant
+      event: start
+      id: check
+  actions:
+    - variables:
+        saved: "{{ states('input_text.climate_comfoclime_previous') }}"
+        parts: "{{ saved.split('|') if saved not in ['', 'unknown', 'unavailable'] else [] }}"
+        presets: "{{ state_attr('<@ comfoclime @>', 'preset_modes') or [] }}"
+    - choose:
+        - alias: Start a boost
+          conditions:
+            - condition: template
+              value_template: >-
+                {{ trigger.id == 'start' and trigger.from_state is not none
+                   and trigger.from_state.state not in ['unavailable', 'unknown'] and parts | count == 0
+                   and states('<@ comfoclime @>') in ['cool', 'off', 'fan_only'] }}
+          sequence:
+<% if comfoclime_writes %>
+            - if:
+                - condition: state
+                  entity_id: <@ comfoclime_writes @>
+                  state: "off"
+              then:
+                - action: logbook.log
+                  data:
+                    name: <@ t('log_name_comfoclime') | tojson @>
+                    entity_id: input_text.climate_comfoclime_previous
+                    message: <@ t('log_boost_no_writes') | tojson @>
+                - stop: writes over the bus are off
+<% endif %>
+            - action: input_text.set_value
+              target:
+                entity_id: input_text.climate_comfoclime_previous
+              data:
+                value: >-
+                  {{ states('<@ comfoclime @>') }}|{{ state_attr('<@ comfoclime @>', 'preset_mode') or 'none' }}|{{ (now() + timedelta(hours=<@ boost_hours @>)).isoformat() }}
+            - action: climate.set_hvac_mode
+              target:
+                entity_id: <@ comfoclime @>
+              data:
+                hvac_mode: heat
+            - if:
+                - condition: template
+                  value_template: "{{ 'boost' in presets }}"
+              then:
+                - action: climate.set_preset_mode
+                  continue_on_error: true
+                  target:
+                    entity_id: <@ comfoclime @>
+                  data:
+                    preset_mode: boost
+            - action: logbook.log
+              data:
+                name: <@ t('log_name_comfoclime') | tojson @>
+                entity_id: input_text.climate_comfoclime_previous
+                message: <@ t('log_boost_start', hours=boost_hours, indoor="{{ states('" ~ indoor ~ "') }}") | tojson @>
+<% if feat.notifications %>
+            - action: script.send_notification
+              continue_on_error: true
+              data:
+                title: <@ t('notify_boost_title') | tojson @>
+                message: <@ t('notify_boost_message', below=boost_below, hours=boost_hours) | tojson @>
+<% endif %>
+        - alias: End a boost whose time is over
+          conditions:
+            - condition: template
+              value_template: >-
+                {{ trigger.id == 'check' and parts | count == 3 and (parts[2] | as_datetime) is not none
+                   and now() >= parts[2] | as_datetime }}
+          sequence:
+            - if:
+                - alias: "Still heating as the boost left it (otherwise someone changed it by hand: leave it)"
+                  condition: template
+                  value_template: "{{ is_state('<@ comfoclime @>', 'heat') }}"
+              then:
+                - action: climate.set_hvac_mode
+                  continue_on_error: true
+                  target:
+                    entity_id: <@ comfoclime @>
+                  data:
+                    hvac_mode: "{{ parts[0] }}"
+                - if:
+                    - condition: template
+                      value_template: "{{ parts[1] in presets }}"
+                  then:
+                    - action: climate.set_preset_mode
+                      continue_on_error: true
+                      target:
+                        entity_id: <@ comfoclime @>
+                      data:
+                        preset_mode: "{{ parts[1] }}"
+            - action: input_text.set_value
+              target:
+                entity_id: input_text.climate_comfoclime_previous
+              data:
+                value: ""
+            - action: logbook.log
+              data:
+                name: <@ t('log_name_comfoclime') | tojson @>
+                entity_id: input_text.climate_comfoclime_previous
+                message: <@ t('log_boost_end', mode='{{ parts[0] }}') | tojson @>
+<% endif %>

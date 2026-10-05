@@ -1,0 +1,36 @@
+<% if not entities.get('gate_sensor') %><@ fail('parcel-service needs entities.gate_sensor (binary_sensor.gate_open of the module gate)') @><% endif %>
+# Package 'parcel_service' -> /config/packages/parcel_service.yaml (loaded by homeassistant: packages: !include_dir_named packages/).
+# No 'initial' on purpose: the user tunes these on the dashboard and the value must survive a restart.
+# parcel-service/deploy.py sets the defaults from house.yaml once, when a helper is new.
+input_number:
+  parcel_service_ajar:
+    # Seconds of gate travel before the STOP pulse; 0 = not ajar, fully open. Default from house.yaml: <@ parcel_service.ajar_s @> s.
+    name: <@ t('helper_ajar') | tojson @>
+    icon: mdi:garage-open-variant
+    min: 0
+    max: 15
+    step: 0.5
+    unit_of_measurement: s
+    mode: box
+  parcel_service_open:
+    # Seconds the gate stays open / ajar. Default from house.yaml: <@ parcel_service.open_s @> s.
+    name: <@ t('helper_open') | tojson @>
+    icon: mdi:timer-outline
+    min: 10
+    max: 120
+    step: 5
+    unit_of_measurement: s
+    mode: box
+input_text:
+  parcel_service_ring:
+    # Ring id (timestamp of the doorbell event) of the last ajar: one ajar per ring.
+    name: <@ t('helper_ring') | tojson @>
+    icon: mdi:doorbell
+    max: 64
+input_datetime:
+  parcel_expected:
+    # Expected parcel day (date only). 2000-01-01 = off; a past day counts as off by itself.
+    name: <@ t('helper_expected') | tojson @>
+    icon: mdi:package-variant-closed-check
+    has_date: true
+    has_time: false

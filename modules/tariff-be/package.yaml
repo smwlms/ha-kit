@@ -1,0 +1,93 @@
+<% from '_tariff.jinja' import own_quarter, import_total, quarter_meter, connection_kw with context %>
+# Tariff (Belgium): helpers (ha-kit module tariff-be, see tariff-be/LOGIC.md "Settings").
+# Uploaded by tariff-be/deploy.py to /config/packages/tariff.yaml (module base: packages: !include_dir_named packages/).
+# No `initial` anywhere: these change every year (tariff sheet) or are yours to tune. tariff-be/deploy.py sets the
+# start value from module.yaml (defaults:, rendered from house.yaml tariff:) once, when a helper is created.
+# Ids are part of the capability contract `tariff` (docs/phase4-contracts.md).
+
+input_number:
+  tariff_grid_fee_day:               # grid fee in the day register, c€/kWh incl. VAT (Fluvius tariff sheet)
+    name: "<@ t('helper_grid_fee_day') @>"
+    icon: mdi:transmission-tower
+    min: 0
+    max: 30
+    step: 0.001
+    mode: box
+    unit_of_measurement: c€/kWh
+  tariff_grid_fee_night:             # grid fee in the night register, c€/kWh incl. VAT
+    name: "<@ t('helper_grid_fee_night') @>"
+    icon: mdi:transmission-tower
+    min: 0
+    max: 30
+    step: 0.001
+    mode: box
+    unit_of_measurement: c€/kWh
+  tariff_levies:                     # excise, energy fund, green power and CHP certificates, c€/kWh incl. VAT
+    name: "<@ t('helper_levies') @>"
+    icon: mdi:receipt-text-outline
+    min: 0
+    max: 30
+    step: 0.001
+    mode: box
+    unit_of_measurement: c€/kWh
+  tariff_capacity_eur_per_kw_year:   # capacity tariff, EUR per kW of the 12-month average peak per year
+    name: "<@ t('helper_capacity_eur') @>"
+    icon: mdi:chart-bell-curve
+    min: 0
+    max: 200
+    step: 0.01
+    mode: box
+    unit_of_measurement: EUR/kW
+  tariff_fixed_eur_per_year:         # supplier fee + data management per year (read by results)
+    name: "<@ t('helper_fixed_eur') @>"
+    icon: mdi:cash-lock
+    min: 0
+    max: 1000
+    step: 0.01
+    mode: box
+    unit_of_measurement: EUR
+  power_price_cheap_below:           # binary_sensor.power_price_cheap: import price at or below this, EUR/kWh all-in
+    name: "<@ t('helper_cheap_below') @>"
+    icon: mdi:cash-check
+    min: -0.5
+    max: 1
+    step: 0.005
+    mode: box
+    unit_of_measurement: EUR/kWh
+  capacity_start_peak_kw:            # fills the months of the 12-month average that were not measured yet (0 = none)
+    name: "<@ t('helper_start_peak') @>"
+    icon: mdi:transmission-tower
+    min: 0
+    max: 30
+    step: 0.1
+    mode: box
+    unit_of_measurement: kW
+  capacity_margin_kw:                # headroom stays this far under the month peak
+    name: "<@ t('helper_margin') @>"
+    icon: mdi:arrow-collapse-down
+    min: 0
+    max: 3
+    step: 0.1
+    mode: box
+    unit_of_measurement: kW
+
+input_boolean:
+  capacity_peak_may_rise:            # negative import price: headroom up to the connection (<@ connection_kw @> kW)
+    name: "<@ t('helper_peak_may_rise') @>"
+    icon: mdi:arrow-expand-up
+<% if own_quarter %>
+
+# Energy taken from the grid in the running quarter hour (resets every :00, :15, :30, :45). Read by
+# sensor.capacity_quarter_expected_kw and sensor.capacity_headroom_kw<@ ' and, with its attribute last_period, by sensor.capacity_month_peak_kw' if not entities.get('grid_month_peak_kw') else '' @>.
+# Source: <@ import_total @>. utility_meter has no reload: restart Home Assistant once after the first deploy.
+utility_meter:
+  tariff_grid_import_quarter:
+    unique_id: tariff_grid_import_quarter
+    source: <@ import_total @>
+    cycle: quarter-hourly
+
+homeassistant:
+  customize:
+    <@ quarter_meter @>:
+      friendly_name: "<@ t('sensor_grid_import_quarter') @>"
+<% endif %>

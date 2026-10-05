@@ -1,0 +1,8 @@
+<# The view of the climate screen, rendered from house.yaml, modules: and the capabilities (_climate_card.jinja).
+   JSON is valid YAML: the whole view is one tojson so no value needs YAML quoting. #>
+<% from '_climate_card.jinja' import view with context %>
+# View "climate" with custom:climate-screen-card (ha-kit module climate). Written by climate/deploy.py --view into a
+# dashboard (default: the Overview), or paste it yourself: Edit dashboard > three dots > Raw configuration editor,
+# add it under views:. Filled in from house.yaml: every entity id, value and text is written out here; the card itself
+# has none built in. Fill in again after changing house.yaml or modules:, then run deploy.py --view again.
+<@ view | tojson(indent=2) @>

@@ -1,0 +1,21 @@
+{# Climate macros (ha-kit module climate, see climate/LOGIC.md). Uploaded by climate/deploy.py to
+   /config/custom_templates/climate.jinja. Use: {% from 'climate.jinja' import cloud_cover %} #}
+
+{# Mean forecast cloud coverage (%) today between hour from_hour and to_hour (local, to_hour excluded), from
+   sensor.climate_weather_days. Only the hours still to come count; none left (or no cloud data) = 100: no sun to
+   expect any more. #}
+{% macro cloud_cover(from_hour, to_hour) -%}
+{%- set t = state_attr('sensor.climate_weather_days', 'hours') or [] -%}
+{%- set c = state_attr('sensor.climate_weather_days', 'hour_cloud') or [] -%}
+{%- set ns = namespace(s=0, n=0) -%}
+{%- for i in range([t | count, c | count] | min) -%}
+{%- set d = as_datetime(t[i]) -%}
+{%- if d is not none -%}
+{%- set d = as_local(d) -%}
+{%- if d.date() == now().date() and from_hour <= d.hour < to_hour and d >= now() - timedelta(hours=1) and c[i] is number -%}
+{%- set ns.s = ns.s + c[i] -%}{%- set ns.n = ns.n + 1 -%}
+{%- endif -%}
+{%- endif -%}
+{%- endfor -%}
+{{ (ns.s / ns.n) | round(0) if ns.n else 100 }}
+{%- endmacro %}

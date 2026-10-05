@@ -1,0 +1,45 @@
+# Module metadata, read by tools/fill.py (--list), tools/choose.py (ask:), tools/check.py and energy-plan/deploy.py.
+# Contract: docs/phase4-contracts.md (energy-plan). The entity and helper ids below are part of it.
+name: Energy plan
+description: "Shared energy signals and the solar day plan: export average, surplus, house power, when the sun leaves the panels, solar left today after house and battery, battery behind"
+status: built, not tested on HA
+# Layer: core. Optional: a module that provides ev-charger (sensor.ev_charger_power is left out of the house load).
+depends_on: []
+provides: []
+requires:
+  integrations:
+    - "P1 meter or energy meter (grid import and export)"
+    - "solar power sensor"
+    - "Forecast.Solar or another solar forecast (optional)"
+    - "Recorder on SQLite, the default (for the day plan script)"
+  hardware:
+    - "solar panels"
+optional: true
+generate: []
+ask:
+  - id: solar
+    question: "Do you have solar panels whose power is in Home Assistant?"
+# Fields of house.yaml this module reads (example: house.example.yaml).
+house_fields:
+  - "house.lat, lon, timezone"
+  - "entities.grid_import_w, grid_export_w, solar_power_w"
+  - "entities.house_power_w (optional)"
+  - "entities.battery_soc, battery_power_w (optional; together a battery)"
+  - "entities.solar_forecast_today, solar_forecast_remaining_today, solar_forecast_updated (optional)"
+  - "energy.battery_power_sign, battery_usable_kwh (with a battery)"
+  - "energy_plan.sun_end_w, charge_efficiency, history_days (optional)"
+# Start values that deploy.py sets ONCE, when the helper is new. The ids are part of the contract. The battery
+# helpers exist only with entities.battery_soc; deploy.py skips them otherwise.
+defaults:
+  input_number.energy_plan_surplus_kw: 1.5
+  input_number.energy_plan_surplus_hysteresis_kw: 0.3
+  input_number.energy_plan_battery_safety_kwh: 0.5
+  input_number.energy_plan_battery_hysteresis_kwh: 0.5
+# The other side of the optional roles for tools/check.py: no battery, no solar forecast, the house power role set.
+check_variant:
+  entities:
+    battery_soc: null
+    battery_power_w: null
+    house_power_w: sensor.house_consumption
+    solar_forecast_today: null
+    solar_forecast_remaining_today: null

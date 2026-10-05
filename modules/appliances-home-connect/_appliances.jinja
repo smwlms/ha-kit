@@ -1,0 +1,120 @@
+<#- Shared by every file of the module: the appliances of house.yaml with their Home Connect entity ids.
+    Import: <% from '_appliances.jinja' import apps, cfg, has_energy, has_tariff, has_presence, has_battery,
+    solar_power, fc_remaining, fc_tomorrow, battery_soc with context %>
+
+    Home Connect names its entities after the device name (the prefix) and the entity name in the language Home
+    Assistant had when the integration was added: sensor.<prefix>_operation_state in English, sensor.<prefix>_status
+    in Dutch. Table below; home_connect.entities overrides a pattern for every appliance, appliances[].entities one
+    entity of one appliance. -#>
+<% if appliances is not defined or not appliances %><@ fail('house.yaml has no appliances: (one item per Home Connect appliance, see house.example.yaml)') @><% endif %>
+<% set hc = home_connect if home_connect is defined and home_connect else {} %>
+<% set ent_lang = hc.get('language') or house.get('language') or 'en' %>
+<% set patterns_by_lang = {
+  'en': {
+    'status': 'sensor.{p}_operation_state',
+    'door': 'sensor.{p}_door',
+    'selected_program': 'select.{p}_selected_program',
+    'active_program': 'select.{p}_active_program',
+    'power': 'switch.{p}_power',
+    'remote_start': 'binary_sensor.{p}_remote_start',
+    'stop': 'button.{p}_stop_program',
+    'finish_time': 'sensor.{p}_program_finish_time',
+    'progress': 'sensor.{p}_program_progress',
+    'program_aborted': 'sensor.{p}_program_aborted',
+  },
+  'nl': {
+    'status': 'sensor.{p}_status',
+    'door': 'sensor.{p}_deur',
+    'selected_program': 'select.{p}_geselecteerd_programma',
+    'active_program': 'select.{p}_actieve_programma',
+    'power': 'switch.{p}_inschakelen',
+    'remote_start': 'binary_sensor.{p}_start_op_afstand',
+    'stop': 'button.{p}_stop_programma',
+    'finish_time': 'sensor.{p}_programma_eindtijd',
+    'progress': 'sensor.{p}_programma_voortgang',
+    'program_aborted': 'sensor.{p}_programma_afgebroken',
+  },
+} %>
+<#- Maintenance event sensors per kind (state "present" = the appliance asks for it). Disabled by default in the
+    integration: enable them in Settings > Devices. Some have no Dutch name yet and keep the English one. -#>
+<% set maintenance_by_lang = {
+  'en': {
+    'dishwasher': ['salt_nearly_empty', 'salt_lack', 'rinse_aid_nearly_empty', 'rinse_aid_lack', 'machine_care_reminder'],
+    'washer': ['poor_i_dos_1_fill_level', 'poor_i_dos_2_fill_level'],
+    'dryer': [],
+  },
+  'nl': {
+    'dishwasher': ['zout_bijna_op', 'salt_lack', 'glansspoelmiddel_bijna_op', 'rinse_aid_lack', 'machine_care_reminder'],
+    'washer': ['poor_i_dos_1_fill_level', 'poor_i_dos_2_fill_level'],
+    'dryer': [],
+  },
+} %>
+<% if ent_lang not in patterns_by_lang %><@ fail('house.yaml: home_connect.language (or house.language) must be en or nl for the Home Connect entity names; for another language set home_connect.entities') @><% endif %>
+<% set patterns = {} %>
+<% set _ = patterns.update(patterns_by_lang[ent_lang]) %>
+<% set _ = patterns.update(hc.get('entities') or {}) %>
+<% set kinds = ['dishwasher', 'washer', 'dryer'] %>
+<% set apps = [] %>
+<% set cfg = {} %>
+<% set seen = [] %>
+<% for a in appliances %>
+<% if not a.get('key') or not (a.key | string | regex_search('^[a-z][a-z0-9_]*$')) %><@ fail('house.yaml: appliances[].key is required, lower case letters, digits and _ (got ' ~ (a.get('key') | string) ~ ')') @><% endif %>
+<% if a.key in seen %><@ fail('house.yaml: appliances[].key ' ~ a.key ~ ' is used twice') @><% endif %>
+<% set _ = seen.append(a.key) %>
+<% if a.get('kind') not in kinds %><@ fail('house.yaml: appliances[' ~ a.key ~ '].kind must be dishwasher, washer or dryer') @><% endif %>
+<% if not a.get('prefix') %><@ fail('house.yaml: appliances[' ~ a.key ~ '].prefix is required (start of its entity ids in HA)') @><% endif %>
+<% if (a.get('smart_start') or 'ask') not in ['auto', 'ask'] %><@ fail('house.yaml: appliances[' ~ a.key ~ '].smart_start must be auto or ask') @><% endif %>
+<% if (a.get('delay_option') or 'start') not in ['start', 'finish'] %><@ fail('house.yaml: appliances[' ~ a.key ~ '].delay_option must be start or finish') @><% endif %>
+<% set auto_time = (a.get('auto_time') or '17:00') | string %>
+<% if not (auto_time | regex_search('^([01]?[0-9]|2[0-3]):[0-5][0-9]$')) %><@ fail('house.yaml: appliances[' ~ a.key ~ '].auto_time must be HH:MM') @><% endif %>
+<% set e = {} %>
+<% for role, pattern in patterns.items() %>
+<% set _ = e.update({role: pattern | replace('{p}', a.prefix | string)}) %>
+<% endfor %>
+<% set _ = e.update(a.get('entities') or {}) %>
+<% set maint = [] %>
+<% if a.get('maintenance') is not none %>
+<% set _ = maint.extend(a.maintenance) %>
+<% else %>
+<% for s in maintenance_by_lang[ent_lang][a.kind] %>
+<% set _ = maint.append('sensor.' ~ a.prefix ~ '_' ~ s) %>
+<% endfor %>
+<% endif %>
+<% set item = {
+  'key': a.key,
+  'upper': a.key | upper,
+  'kind': a.kind,
+  'name': a.get('name') or t('kind_' ~ a.kind),
+  'contents': t('contents_' ~ a.kind),
+  'icon': {'dishwasher': 'mdi:dishwasher', 'washer': 'mdi:washing-machine', 'dryer': 'mdi:tumble-dryer'}[a.kind],
+  'smart_start': a.get('smart_start') or 'ask',
+  'duration_h': (a.get('duration_h') or 3) | float,
+  'auto_time': auto_time,
+  'delay_option': a.get('delay_option') or ('start' if a.kind == 'dishwasher' else 'finish'),
+  'e': e,
+  'maintenance': maint,
+  'waiting': 'input_boolean.appliance_' ~ a.key ~ '_smart_waiting',
+  'smart_start_at': 'input_datetime.appliance_' ~ a.key ~ '_smart_start',
+  'ready_by': 'input_select.appliance_' ~ a.key ~ '_ready_by',
+  'duration': 'input_number.appliance_' ~ a.key ~ '_duration_h',
+} %>
+<% set _ = apps.append(item) %>
+<#- What the scripts look up at run time by appliance key (rendered as JSON into their variables). -#>
+<% set _ = cfg.update({a.key: {
+  'name': item.name, 'contents': item.contents, 'kind': item.kind, 'auto_time': item.auto_time,
+  'delay_option': item.delay_option, 'upper': item.upper,
+  'status': e.status, 'door': e.door, 'selected_program': e.selected_program, 'power': e.power,
+  'remote_start': e.remote_start, 'stop': e.stop,
+  'waiting': item.waiting, 'smart_start_at': item.smart_start_at, 'ready_by': item.ready_by, 'duration': item.duration,
+}}) %>
+<% endfor %>
+<#- Optional modules and roles. -#>
+<% set has_energy = 'energy-plan' in modules %>
+<% set has_tariff = 'tariff' in capabilities %>
+<% set has_presence = 'presence' in modules %>
+<% set ents = entities if entities is defined and entities else {} %>
+<% set battery_soc = ents.get('battery_soc') or '' %>
+<% set solar_power = ents.get('solar_power_w') or '' %>
+<% set has_battery = has_energy and battery_soc != '' and solar_power != '' %>
+<% set fc_remaining = ents.get('solar_forecast_remaining_today') or '' %>
+<% set fc_tomorrow = ents.get('solar_forecast_tomorrow') or '' %>

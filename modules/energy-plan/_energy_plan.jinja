@@ -1,0 +1,39 @@
+<#- Shared preamble of module energy-plan: the roles it reads from house.yaml, checked once.
+    Import with: <% from '_energy_plan.jinja' import ... with context %>
+    Every name below is set at the top level so it can be imported. -#>
+<% set ent = entities if entities is defined and entities else {} %>
+<% set en = energy if energy is defined and energy else {} %>
+<% set ep = energy_plan if energy_plan is defined and energy_plan else {} %>
+<% set h = house if house is defined and house else {} %>
+<% set grid_import = ent.get('grid_import_w') or '' %>
+<% set grid_export = ent.get('grid_export_w') or '' %>
+<% set solar = ent.get('solar_power_w') or '' %>
+<% set house_role = ent.get('house_power_w') or '' %>
+<% set battery = ent.get('battery_soc') or '' %>
+<% set battery_power = ent.get('battery_power_w') or '' %>
+<% set battery_sign = en.get('battery_power_sign') or '' %>
+<% set usable_kwh = en.get('battery_usable_kwh') %>
+<% set fc_remaining = ent.get('solar_forecast_remaining_today') or '' %>
+<% set fc_today = ent.get('solar_forecast_today') or '' %>
+<% set fc_updated = ent.get('solar_forecast_updated') or '' %>
+<% set forecast = fc_remaining != '' and fc_today != '' %>
+<% set charger = 'sensor.ev_charger_power' if 'ev-charger' in capabilities else '' %>
+<% set sun_end_w = ep.get('sun_end_w') or 150 %>
+<% set charge_efficiency = ep.get('charge_efficiency') or 0.95 %>
+<% set history_days = ep.get('history_days') or 10 %>
+<% set lat = h.get('lat') %>
+<% set lon = h.get('lon') %>
+<% set tz = h.get('timezone') or '' %>
+<% if not grid_import %><@ fail('house.yaml: entities.grid_import_w is empty (energy-plan needs the power taken from the grid)') @><% endif %>
+<% if not grid_export %><@ fail('house.yaml: entities.grid_export_w is empty (energy-plan needs the power sent to the grid)') @><% endif %>
+<% if not solar %><@ fail('house.yaml: entities.solar_power_w is empty (energy-plan needs solar power: there is no plan without panels)') @><% endif %>
+<% if lat is none or lon is none or not tz %><@ fail('house.yaml: house.lat, house.lon and house.timezone are required for energy-plan (sunset of the day plan)') @><% endif %>
+<% if (fc_remaining != '') != (fc_today != '') %><@ fail('house.yaml: fill in both entities.solar_forecast_today and solar_forecast_remaining_today for energy-plan, or neither') @><% endif %>
+<% if battery_power and battery_sign not in ['charge_positive', 'discharge_positive'] %><@ fail('house.yaml: energy.battery_power_sign must be charge_positive or discharge_positive (entities.battery_power_w is set)') @><% endif %>
+<% if battery and not (usable_kwh is number and usable_kwh > 0) %><@ fail('house.yaml: energy.battery_usable_kwh is required for energy-plan with a battery (entities.battery_soc is set)') @><% endif %>
+<% if battery and not battery_power and not house_role %><@ fail('house.yaml: with entities.battery_soc, energy-plan needs entities.battery_power_w (or entities.house_power_w) to know the house consumption') @><% endif %>
+<% if not (sun_end_w is number and sun_end_w > 0) %><@ fail('house.yaml: energy_plan.sun_end_w must be a positive number of W') @><% endif %>
+<% if not (charge_efficiency is number and 0.5 <= charge_efficiency <= 1) %><@ fail('house.yaml: energy_plan.charge_efficiency must be between 0.5 and 1') @><% endif %>
+<% if not (history_days is number and 1 <= history_days <= 60) %><@ fail('house.yaml: energy_plan.history_days must be between 1 and 60') @><% endif %>
+<#- +1 when a positive battery power means discharging, -1 when it means charging. -#>
+<% set discharge_factor = 1 if battery_sign == 'discharge_positive' else -1 %>

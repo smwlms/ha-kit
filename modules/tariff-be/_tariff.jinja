@@ -1,0 +1,39 @@
+<#- Shared derivations of the module tariff-be from house.yaml (imported with context by its files; never copied).
+    Every required field is checked here, so a missing one stops filling in with the house.yaml key it needs. -#>
+<% if not tariff is defined or not tariff %><@ fail('house.yaml has no section tariff: (required for the module tariff-be)') @><% endif %>
+<% for key in ['area', 'import', 'export', 'night', 'capacity', 'grid'] %>
+<% if not tariff.get(key) %><@ fail('house.yaml: tariff.' ~ key ~ ' is missing (required for the module tariff-be)') @><% endif %>
+<% endfor %>
+<% for key in ['factor', 'markup', 'vat'] %>
+<% if tariff['import'].get(key) is not number %><@ fail('house.yaml: tariff.import.' ~ key ~ ' must be a number') @><% endif %>
+<% endfor %>
+<% for key in ['factor', 'deduction'] %>
+<% if tariff['export'].get(key) is not number %><@ fail('house.yaml: tariff.export.' ~ key ~ ' must be a number') @><% endif %>
+<% endfor %>
+<% for key in ['start', 'end'] %>
+<% if tariff.night.get(key) is not integer or tariff.night.get(key) < 0 or tariff.night.get(key) > 23 %><@ fail('house.yaml: tariff.night.' ~ key ~ ' must be a whole hour 0-23') @><% endif %>
+<% endfor %>
+<% for key in ['day', 'night', 'levies'] %>
+<% if tariff.grid.get(key) is not number %><@ fail('house.yaml: tariff.grid.' ~ key ~ ' must be a number (c€/kWh)') @><% endif %>
+<% endfor %>
+<% for key in ['eur_per_kw_year', 'minimum_kw'] %>
+<% if tariff.capacity.get(key) is not number %><@ fail('house.yaml: tariff.capacity.' ~ key ~ ' must be a number') @><% endif %>
+<% endfor %>
+<% if not entities.get('spot_price') %><@ fail('house.yaml: entities.spot_price is empty (any entity of the Nord Pool integration; required for tariff-be)') @><% endif %>
+<% if not entities.get('grid_import_w') %><@ fail('house.yaml: entities.grid_import_w is empty (required for tariff-be)') @><% endif %>
+<% if not entities.get('grid_import_kwh') %><@ fail('house.yaml: entities.grid_import_kwh is empty (required for tariff-be)') @><% endif %>
+<% set area = tariff.area | string %>
+<% set spot = entities.spot_price %>
+<% set import_w = entities.grid_import_w %>
+<% set import_kwh = ([entities.grid_import_kwh] if entities.grid_import_kwh is string else entities.grid_import_kwh) | list %>
+<% set reg_month = entities.get('grid_month_peak_kw') or '' %>
+<% set reg_average = entities.get('grid_average_peak_kw') or '' %>
+<% set reg_quarter = entities.get('grid_quarter_kw') or '' %>
+<#- The kit meters the quarter itself (utility_meter, 15 min cycle) when the meter lacks the quarter or month register. -#>
+<% set own_quarter = not reg_quarter or not reg_month %>
+<% set import_total = import_kwh[0] if import_kwh | length == 1 else 'sensor.tariff_grid_import_total' %>
+<% set quarter_meter = 'sensor.tariff_grid_import_quarter' %>
+<% set minimum_kw = tariff.capacity.minimum_kw %>
+<% set connection_kw = tariff.capacity.get('connection_kw') or 9.2 %>
+<% set cheap_below = tariff.get('cheap_below') or 0.15 %>
+<% set fixed_eur = tariff.get('fixed_eur_per_year') or 0 %>

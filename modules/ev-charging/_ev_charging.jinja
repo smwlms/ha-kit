@@ -1,0 +1,104 @@
+<#
+  Shared by every file of ev-charging (import with context). Every name is set at the top level so it can be
+  imported. The required roles are checked here, so every file stops with the same message.
+
+    ev_cars            one dict per car of house.yaml cars: (any number): prefix, name, battery, cable, state, home,
+                       current, limit, power, online (entity ids, '' when the role is absent), battery_kwh (number,
+                       default 75 for the energy a car still needs), consumption (kWh/100 km, default 18),
+                       plan (bool: charge_plan true and battery_kwh set), calendar (plan_calendar or '')
+    plan_cars          the cars with plan true
+    amps_cars          the cars with a charge_current role (car charge current control)
+    limit_cars         the plan cars with a charge_limit role (the plan raises the limit to the target)
+    has_tariff         a module that provides tariff is installed (cheap assist, prices, month-peak guard)
+    has_gate           gate is installed (it owns counter.tesla_commands_today)
+    own_counter        this module defines counter.tesla_commands_today (no gate, and the kit sends car commands)
+    has_notifications  notifications is installed (script.send_notification)
+    voltage, phases, max_power_kw, house_reserve_kw, efficiency, max_amps, waze_region   ev_charging.*
+    grid_import, grid_export, solar, battery_soc, battery_power   entity ids of the roles ('' when absent)
+    battery            a home battery (battery_soc and battery_power_w)
+    battery_discharge_w, battery_charge_w   Home Assistant Jinja EXPRESSIONS (no braces) in W, "0" without battery
+    import_kw, export_kw                    Home Assistant Jinja EXPRESSIONS in kW of the grid roles (W or kW)
+    forecast_today, forecast_tomorrow       solar forecast roles ('' when absent)
+    battery_first_kwh  energy.battery_usable_kwh with a battery, else 0 (the plan fills the battery first)
+    solar_value        EUR/kWh a kWh of own solar is worth later (tariff.compare.export / 100, default 0)
+#>
+<% set _ent = entities if entities is defined and entities else {} %>
+<% set _evc = ev_charging if ev_charging is defined and ev_charging else {} %>
+<% set _energy = energy if energy is defined and energy else {} %>
+<% set _tm = teslemetry if teslemetry is defined and teslemetry else {} %>
+<% set _tariff = tariff if tariff is defined and tariff else {} %>
+<% set _cars = cars if cars is defined and cars else [] %>
+<% set has_tariff = 'tariff' in capabilities %>
+<% set has_gate = 'gate' in modules %>
+<% set has_notifications = 'notifications' in modules %>
+<% set voltage = (_evc.get('voltage') or 230) %>
+<% set phases = (_evc.get('phases') or 3) %>
+<% set max_power_kw = (_evc.get('max_power_kw') or 11) %>
+<% set house_reserve_kw = _evc.get('house_reserve_kw') if _evc.get('house_reserve_kw') is not none else 1.0 %>
+<% set efficiency = (_evc.get('efficiency') or 0.9) %>
+<% set waze_region = (_evc.get('waze_region') or 'eu') | string %>
+<% if not (voltage is number and 100 <= voltage <= 260) %><@ fail('house.yaml: ev_charging.voltage must be a number of V between 100 and 260 (now: ' ~ voltage ~ ')') @><% endif %>
+<% if phases not in [1, 3] %><@ fail('house.yaml: ev_charging.phases must be 1 or 3 (now: ' ~ phases ~ ')') @><% endif %>
+<% if not (max_power_kw is number and 1 <= max_power_kw <= 50) %><@ fail('house.yaml: ev_charging.max_power_kw must be between 1 and 50 kW') @><% endif %>
+<% if not (house_reserve_kw is number and 0 <= house_reserve_kw <= 10) %><@ fail('house.yaml: ev_charging.house_reserve_kw must be between 0 and 10 kW') @><% endif %>
+<% if not (efficiency is number and 0.5 <= efficiency <= 1) %><@ fail('house.yaml: ev_charging.efficiency must be between 0.5 and 1') @><% endif %>
+<% if waze_region not in ['eu', 'us', 'na', 'il', 'au'] %><@ fail('house.yaml: ev_charging.waze_region must be one of eu, us, na, il, au') @><% endif %>
+<% set max_amps = [((max_power_kw * 1000) / (voltage * phases)) | round(0) | int, 32] | min %>
+<#- Grid and battery roles (energy-plan has checked grid_import_w, grid_export_w and solar_power_w already). -#>
+<% set grid_import = _ent.get('grid_import_w') or '' %>
+<% set grid_export = _ent.get('grid_export_w') or '' %>
+<% set solar = _ent.get('solar_power_w') or '' %>
+<% if not grid_import or not grid_export %><@ fail('house.yaml: entities.grid_import_w and grid_export_w are required for ev-charging (available power for the car)') @><% endif %>
+<% set battery_soc = _ent.get('battery_soc') or '' %>
+<% set battery_power = _ent.get('battery_power_w') or '' %>
+<% set battery_sign = _energy.get('battery_power_sign') or '' %>
+<% set battery = (battery_soc != '') and (battery_power != '') %>
+<% if battery_power and battery_sign not in ['charge_positive', 'discharge_positive'] %><@ fail('house.yaml: energy.battery_power_sign must be charge_positive or discharge_positive (entities.battery_power_w is set; ev-charging reads the battery)') @><% endif %>
+<% set _w = "(states('{e}') | float(0)) * (1000 if state_attr('{e}', 'unit_of_measurement') == 'kW' else 1)" %>
+<% if battery %>
+<% set _bw = _w.replace('{e}', battery_power) %>
+<% set battery_discharge_w = "([" ~ ('' if battery_sign == 'discharge_positive' else '0 - ') ~ _bw ~ ", 0] | max)" %>
+<% set battery_charge_w = "([" ~ ('0 - ' if battery_sign == 'discharge_positive' else '') ~ _bw ~ ", 0] | max)" %>
+<% else %>
+<% set battery_discharge_w = "0" %>
+<% set battery_charge_w = "0" %>
+<% endif %>
+<% set import_kw = "([" ~ _w.replace('{e}', grid_import) ~ ", 0] | max / 1000)" %>
+<% set export_kw = "([" ~ _w.replace('{e}', grid_export) ~ ", 0] | max / 1000)" %>
+<% set forecast_today = _ent.get('solar_forecast_today') or '' %>
+<% set forecast_tomorrow = _ent.get('solar_forecast_tomorrow') or '' %>
+<% set battery_first_kwh = (_energy.get('battery_usable_kwh') or 0) if battery else 0 %>
+<% set _compare = _tariff.get('compare') if _tariff.get('compare') is mapping else {} %>
+<% set solar_value = ((_compare.get('export') or 0) / 100) | round(4) %>
+<#- The cars. Role -> entity id through car_entity() only when the role exists (cars[].entities or teslemetry). -#>
+<% set _ns = namespace(cars=[]) %>
+<% for c in _cars %>
+<% set _ov = c.get('entities') or {} %>
+<% set _p = (c.get('prefix') or '') | string %>
+<% if not (_p | regex_search('^[a-z0-9_]+$')) %><@ fail('house.yaml: cars[].prefix must be lower case letters, digits and underscores (ev-charging uses it in helper ids); now: ' ~ _p) @><% endif %>
+<% set _r = {} %>
+<% for _role in ['battery', 'charge_cable', 'charging_state', 'located_at_home', 'charge_current', 'charge_limit', 'charger_power', 'status'] %>
+<% set _ = _r.update({_role: (car_entity(c, _role) if (_ov.get(_role) or _tm.get(_role)) else '')}) %>
+<% endfor %>
+<% for _role in ['battery', 'charge_cable', 'charging_state'] %>
+<% if not _r[_role] %><@ fail('house.yaml: teslemetry.' ~ _role ~ ' (or cars[].entities.' ~ _role ~ ' for ' ~ _p ~ ') is required for ev-charging') @><% endif %>
+<% endfor %>
+<% set _kwh = c.get('battery_kwh') %>
+<% if _kwh is not none and not (_kwh is number and 10 <= _kwh <= 250) %><@ fail('house.yaml: cars[].battery_kwh of ' ~ _p ~ ' must be between 10 and 250 kWh') @><% endif %>
+<% if c.get('charge_plan') and _kwh is none %><@ fail('house.yaml: cars[].battery_kwh is required for ' ~ _p ~ ' (charge_plan: true needs the usable battery)') @><% endif %>
+<% set _cons = c.get('consumption_kwh_100km') or 18 %>
+<% if not (_cons is number and 5 <= _cons <= 60) %><@ fail('house.yaml: cars[].consumption_kwh_100km of ' ~ _p ~ ' must be between 5 and 60') @><% endif %>
+<% set _cal = (c.get('plan_calendar') or '') | string %>
+<% if _cal and not _cal.startswith('calendar.') %><@ fail('house.yaml: cars[].plan_calendar of ' ~ _p ~ ' must be a calendar entity (calendar.<name>)') @><% endif %>
+<% set _ns.cars = _ns.cars + [{
+  'prefix': _p, 'name': (c.get('name') or _p) | string,
+  'battery': _r.battery, 'cable': _r.charge_cable, 'state': _r.charging_state, 'home': _r.located_at_home,
+  'current': _r.charge_current, 'limit': _r.charge_limit, 'power': _r.charger_power, 'online': _r.status,
+  'battery_kwh': (_kwh if _kwh is not none else 75), 'consumption': _cons,
+  'plan': (true if (c.get('charge_plan') and _kwh is not none) else false), 'calendar': _cal}] %>
+<% endfor %>
+<% set ev_cars = _ns.cars %>
+<% set plan_cars = ev_cars | selectattr('plan') | list %>
+<% set amps_cars = ev_cars | selectattr('current') | list %>
+<% set limit_cars = plan_cars | selectattr('limit') | list %>
+<% set own_counter = (not has_gate) and ((amps_cars | count) > 0 or (limit_cars | count) > 0) %>

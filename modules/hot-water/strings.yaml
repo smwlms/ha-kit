@@ -1,0 +1,77 @@
+# User-facing texts of hot-water: one key per text, {en: ..., nl: ...}. In the module's files: <@ t('key') @>.
+# No double quotes in the texts (they end up inside double-quoted YAML strings). {t}, {target}, ... are filled in by
+# Home Assistant when the automation writes the logbook line.
+
+# --- helpers ---
+helper_on_surplus: { en: "Hot water: buffer on (surplus and cheap hours)", nl: "Warm water: buffer aan (overschot en goedkope uren)" }
+helper_surplus_active: { en: "Hot water: heating on surplus now", nl: "Warm water: warmt nu op overschot" }
+helper_price_aware: { en: "Hot water: weigh the price", nl: "Warm water: prijs meewegen" }
+helper_shower_tomorrow: { en: "Hot water: shower tomorrow morning", nl: "Warm water: douche morgenvroeg" }
+helper_minimum: { en: "Hot water: minimum at sunrise", nl: "Warm water: minimum bij zonsopgang" }
+helper_shower: { en: "Hot water: for a morning shower", nl: "Warm water: voor een ochtenddouche" }
+helper_bath: { en: "Hot water: for the bath", nl: "Warm water: voor het bad" }
+helper_surplus_max: { en: "Hot water: maximum on surplus", nl: "Warm water: maximum bij overschot" }
+helper_surplus_from_kw: { en: "Hot water: surplus from", nl: "Warm water: overschot vanaf" }
+helper_battery_minimum: { en: "Hot water: battery at least", nl: "Warm water: batterij minstens" }
+helper_heat_value: { en: "Hot water: heat value", nl: "Warm water: warmtewaarde" }
+helper_cheap_max_grid_kw: { en: "Hot water: grid at most during cheap power", nl: "Warm water: net hoogstens bij goedkope stroom" }
+helper_cheap_stop_min: { en: "Hot water: stop after grid too high", nl: "Warm water: stop na te veel net" }
+helper_bath_check: { en: "Hot water: bath check", nl: "Warm water: badcontrole" }
+
+# --- sensors ---
+sensor_energy_needed: { en: "Hot water: energy to the maximum", nl: "Warm water: energie tot het maximum" }
+sensor_room: { en: "Hot water: room in the solar plan", nl: "Warm water: ruimte in het zonneplan" }
+sensor_expected_export: { en: "Hot water: export expected anyway", nl: "Warm water: verwachte injectie" }
+sensor_heating_pays: { en: "Hot water: heating on surplus pays", nl: "Warm water: opwarmen op overschot loont" }
+sensor_cheapest_morning: { en: "Hot water: cheapest hour before sunrise", nl: "Warm water: goedkoopste uur voor zonsopgang" }
+sensor_cheapest_bath: { en: "Hot water: cheapest hour before the bath", nl: "Warm water: goedkoopste uur voor het bad" }
+sensor_session: { en: "Hot water: session", nl: "Warm water: sessie" }
+
+# --- automation ---
+automation_alias: { en: "Hot water: buffer", nl: "Warm water: buffer" }
+automation_description:
+  en: >-
+    The only caller of script.hot_water_heat and script.hot_water_normal (ha-kit hot-water, see hot-water/LOGIC.md).
+    Heats the tank to the maximum on solar surplus or cheap power, in the cheapest hour before sunrise and before the
+    bath, with safety nets; reports results and day goals. Switch it off with Hot water: buffer on.
+  nl: >-
+    De enige die script.hot_water_heat en script.hot_water_normal aanroept (ha-kit hot-water, zie hot-water/LOGIC.md).
+    Warmt het vat tot het maximum op zonne-overschot of goedkope stroom, in het goedkoopste uur voor zonsopgang en
+    voor het bad, met vangnetten; meldt resultaten en dagdoelen. Uitzetten met Warm water: buffer aan.
+logbook_name: { en: Hot water, nl: Warm water }
+
+# Short reasons, passed to the hot-water-heater scripts (their logbook line) and used in {why}.
+why_surplus: { en: solar surplus, nl: zonne-overschot }
+why_cheap_power: { en: cheap power, nl: goedkope stroom }
+why_morning_cheap: { en: cheapest hour before sunrise, nl: goedkoopste uur voor zonsopgang }
+why_morning_safety: { en: safety net before sunrise, nl: vangnet voor zonsopgang }
+why_bath_cheap: { en: cheapest hour before the bath, nl: goedkoopste uur voor het bad }
+why_bath_safety: { en: bath check, nl: badcontrole }
+why_off: { en: buffer switched off, nl: buffer uitgezet }
+why_evening: { en: sunset, nl: zonsondergang }
+why_full: { en: tank at its maximum, nl: vat op zijn maximum }
+why_battery: { en: the battery discharges, nl: de batterij ontlaadt }
+why_grid: { en: power from the grid, nl: stroom van het net }
+why_cheap_end: { en: cheap power over, nl: goedkope stroom voorbij }
+why_plan: { en: the solar plan gets tight and the battery comes first, nl: het zonneplan wordt krap en de batterij gaat voor }
+why_price: { en: exporting pays more, nl: injecteren levert meer op }
+why_peak: { en: it would raise the month peak, nl: het zou de maandpiek verhogen }
+why_done: { en: goal reached, nl: doel gehaald }
+why_timeout: { en: goal not reached within 3 h, nl: doel niet gehaald binnen 3 u }
+
+# Logbook lines.
+log_start_surplus: { en: "starts on solar surplus: {t} °C, to {target} °C (export {kw} kW)", nl: "start op zonne-overschot: {t} °C, naar {target} °C (injectie {kw} kW)" }
+log_start_cheap_power: { en: "starts on cheap power ({price} EUR/kWh): {t} °C, to {target} °C", nl: "start op goedkope stroom ({price} EUR/kWh): {t} °C, naar {target} °C" }
+log_stop: { en: "stops, {why}: {t0} to {t} °C, about {kwh} kWh", nl: "stopt, {why}: {t0} naar {t} °C, ongeveer {kwh} kWh" }
+log_boost: { en: "{why}: {t} to {target} °C", nl: "{why}: {t} naar {target} °C" }
+log_skip: { en: "{why_what} skipped: {why}", nl: "{why_what} overgeslagen: {why}" }
+log_skip_solar: { en: "cheapest hour before the bath skipped: the sun will heat the tank ({room} kWh room)", nl: "goedkoopste uur voor het bad overgeslagen: de zon warmt het vat op ({room} kWh ruimte)" }
+log_boost_end: { en: "boost ends, {why}: {t} °C, back to {target} °C", nl: "boost stopt, {why}: {t} °C, terug naar {target} °C" }
+log_goal_morning: { en: "{t} °C at sunrise, goal {goal} °C: {status}", nl: "{t} °C bij zonsopgang, doel {goal} °C: {status}" }
+log_goal_bath: { en: "{t} °C at the bath check, goal {goal} °C: {status}", nl: "{t} °C bij de badcontrole, doel {goal} °C: {status}" }
+status_met: { en: met, nl: gehaald }
+status_missed: { en: missed, nl: gemist }
+# Detail of the day goals (event ha_kit_day_goal, shown by results).
+detail_morning: { en: "{t} °C at sunrise, goal {goal} °C", nl: "{t} °C bij zonsopgang, doel {goal} °C" }
+detail_shower: { en: " (shower)", nl: " (douche)" }
+detail_bath: { en: "{t} °C at {time}, goal {goal} °C", nl: "{t} °C om {time}, doel {goal} °C" }

@@ -1,0 +1,17 @@
+# Heat pump (Vaillant): automations (ha-kit module heat-pump-vaillant, see heat-pump-vaillant/LOGIC.md).
+# Written by heat-pump-vaillant/deploy.py through the config API (same as the automation editor).
+# The adapter has no decision logic: what to write and when belongs to the core modules (climate calls
+# script.heat_pump_set_floor_band, hot-water calls script.hot_water_heat / hot_water_normal).
+
+- id: heat_pump_vaillant_writes_reset
+  alias: "<@ t('automation_writes_reset_alias') @>"
+  description: "<@ t('automation_writes_reset_description') @>"
+  triggers:
+    - trigger: time
+      at: "00:00:00"
+  conditions: []
+  actions:
+    - action: counter.reset
+      target:
+        entity_id: counter.heat_pump_vaillant_writes_today
+  mode: single

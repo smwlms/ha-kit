@@ -1,0 +1,30 @@
+name: check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      # Actions pinned to a full commit SHA (a tag can be moved); the comment is the release it points to.
+      # Update: gh api repos/<owner>/<repo>/git/ref/tags/<tag> (dereference an annotated tag once more).
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+      # Fill in the example, the minimal and the all-modules house; YAML, Home Assistant templates, Python,
+      # deploy.py --dry-run, choose.py, esphome config (uvx esphome==<pins.esphome_tested>) and the privacy scan.
+      # Python dependencies: exact versions with hashes from tools/requirements.txt.
+      # No secrets needed: the scan runs its fixed patterns (the personal denylist stays on the maintainer's machine).
+      - name: tools/check.py --esphome
+        run: uv run --with-requirements tools/requirements.txt python tools/check.py --esphome

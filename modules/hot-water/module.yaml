@@ -1,0 +1,53 @@
+# Module metadata, read by tools/fill.py (--list), tools/choose.py (ask:), tools/check.py and hot-water/deploy.py.
+# Contract: docs/phase4-contracts.md (hot-water). The entity, helper and event ids below are part of it.
+name: Hot water buffer
+description: "The hot-water tank as a heat battery: heats on solar surplus, in the cheapest hour before sunrise or before the bath, with a shower button and price weighing, without raising the month peak"
+status: built, not tested on HA
+# Layer: core. Brand-free: it only calls script.hot_water_heat / script.hot_water_normal and reads
+# sensor.hot_water_temperature / sensor.hot_water_cop (capability hot-water-heater, e.g. heat-pump-vaillant).
+# Optional: tariff (price weighing, cheapest hours, cheap power, month peak), ev-charging (car first in the plan).
+depends_on: [hot-water-heater, energy-plan]
+provides: []
+requires:
+  integrations:
+    - "a heat pump or boiler adapter module (provides hot-water-heater), e.g. heat-pump-vaillant"
+  hardware:
+    - "hot-water tank heated by a heat pump or an element"
+optional: true
+generate: []
+ask:
+  - id: hot_water_buffer
+    question: "Heat the hot-water tank on solar surplus and in cheap hours (needs a supported heat pump or boiler)?"
+# Fields of house.yaml this module reads (every field is explained in house.example.yaml).
+house_fields:
+  - "hot_water.tank_litres, cop, bath (all optional)"
+  - "hot_water.heater_kw, bath_from, max_sessions_per_day (optional)"
+  - "heat_pump.power_estimate_w.hot_water (optional: default of heater_kw)"
+  - "entities.grid_import_w (required), battery_soc, battery_power_w + energy.battery_power_sign (optional)"
+# Start values that deploy.py sets ONCE, when the helper is new. The ids are part of the contract. Helpers of an
+# optional block (price: tariff; bath: hot_water.bath; battery: entities.battery_soc) only exist with that block;
+# deploy.py skips the others.
+defaults:
+  input_boolean.hot_water_on_surplus: "on"
+  input_boolean.hot_water_price_aware: "on"
+  input_boolean.hot_water_shower_tomorrow: "off"
+  input_number.hot_water_minimum: 35
+  input_number.hot_water_shower: 40
+  input_number.hot_water_bath: 45
+  input_number.hot_water_surplus_max: 60
+  input_number.hot_water_surplus_from_kw: 0.8
+  input_number.hot_water_battery_minimum: 95
+  input_number.hot_water_heat_value: 0.9
+  input_number.hot_water_cheap_max_grid_kw: 1.0
+  input_number.hot_water_cheap_stop_min: 5
+  input_datetime.hot_water_bath_check: "16:30:00"
+# The other side of the optional switches for tools/check.py (all-modules house): no bath check, an own heater power,
+# a smaller tank with an element (COP 1). The example house has the bath, the defaults and a COP of 2.8. "Without a
+# battery" is already filled in there by energy-plan's check_variant (entities.battery_soc empty).
+check_variant:
+  hot_water:
+    bath: false
+    tank_litres: 200
+    cop: 1
+    heater_kw: 3
+    max_sessions_per_day: 4

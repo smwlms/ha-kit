@@ -1,0 +1,6 @@
+# Kit sources contain <@ @> / <% %> fill-in markers that a formatter breaks (e.g. | and _ in markdown tables).
+modules/**
+tools/partials/**
+house.example.yaml
+tests/**
+CONTRIBUTING.md

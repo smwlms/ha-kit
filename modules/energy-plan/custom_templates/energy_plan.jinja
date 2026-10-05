@@ -1,0 +1,14 @@
+{#- Energy plan: shared macro (ha-kit module energy-plan, see energy-plan/LOGIC.md). Uploaded by
+    energy-plan/deploy.py to /config/custom_templates/energy_plan.jinja. Do not edit it in Home Assistant.
+
+    watts(entity_id)   power of a sensor in W, read with its unit_of_measurement (W or kW); empty when the state is
+                       not a number. Other modules may use it for the power roles of house.yaml:
+                       {% from 'energy_plan.jinja' import watts %}{{ watts('sensor.x') | float(0) }} -#}
+
+{% macro watts(entity_id) -%}
+{%- set s = states(entity_id) -%}
+{%- if is_number(s) -%}
+{%- set u = (state_attr(entity_id, 'unit_of_measurement') or 'W') | string | lower -%}
+{{ (s | float * (1000 if u == 'kw' else 1)) | round(1) }}
+{%- endif -%}
+{%- endmacro %}

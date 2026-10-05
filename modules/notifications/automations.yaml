@@ -1,0 +1,219 @@
+<% from '_notifications.jinja' import m, kinds, ent, price_import, price_export, grid_export, filter_days with context %>
+<% set sensors = [price_import] + ([price_export] if price_export else []) %>
+# Notifications: automations (ha-kit module notifications, see notifications/LOGIC.md).
+# Written by notifications/deploy.py through the config API (same as the automation editor).
+# Every message goes through script.send_notification (recipients from house.yaml, notifications.recipients).
+<% if 'power_price' in kinds %>
+
+# --- 1. Free or negative power -----------------------------------------------------------------------------------
+- id: notification_free_or_negative_power
+  alias: <@ t('price_alias') | tojson @>
+  description: >-
+    <@ t('price_description_ahead_export' if price_export else 'price_description_ahead') @> <@ t('price_description_now') @><% if price_export %> <@ t('price_description_export_now') @><% endif %> <@ t('price_description_sensors', sensors=sensors | join(' ' ~ t('word_and') ~ ' ')) @>
+  mode: queued
+  triggers:
+    # The list of coming slots changes when tomorrow's prices arrive (and every slot); checked once per day below.
+    - trigger: state
+      entity_id: <@ price_import @>
+      attribute: starts
+      id: ahead
+    - trigger: numeric_state
+      entity_id: <@ price_import @>
+      below: 0.0001
+      id: free_now
+<% if price_export %>
+    - trigger: numeric_state
+      entity_id: <@ price_export @>
+      below: 0
+      id: export_now
+<% endif %>
+  conditions:
+    # A sensor coming back from unavailable is no "now free".
+    - condition: template
+      value_template: >-
+        {{ trigger.id == 'ahead'
+           or (trigger.from_state is not none and trigger.from_state.state not in ['unavailable', 'unknown']) }}
+  actions:
+    - variables:
+        free_windows: "{% from 'notifications.jinja' import price_windows %}{{ price_windows('<@ price_import @>', 0) }}"
+<% if price_export %>
+        export_windows: "{% from 'notifications.jinja' import price_windows %}{{ price_windows('<@ price_export @>', -0.00001) }}"
+<% else %>
+        export_windows: ""
+<% endif %>
+        # Tomorrow is known when the last coming slot lies after today.
+        tomorrow_known: >-
+          {% set s = state_attr('<@ price_import @>', 'starts') or [] %}
+          {% set last = as_datetime(s | last) if s | count > 0 else none %}
+          {{ last is not none and as_local(last).date() > now().date() }}
+        already_reported: "{{ states('input_datetime.notification_price_ahead') == now().date() | string }}"
+    - choose:
+        - alias: Tomorrow's prices known, once per day
+          conditions:
+            - condition: trigger
+              id: ahead
+            - condition: template
+              value_template: "{{ tomorrow_known and not already_reported }}"
+          sequence:
+            - action: input_datetime.set_datetime
+              target:
+                entity_id: input_datetime.notification_price_ahead
+              data:
+                date: "{{ now().date() | string }}"
+            - if:
+                - condition: template
+                  value_template: "{{ free_windows != '' or export_windows != '' }}"
+              then:
+                - action: script.send_notification
+                  data:
+                    title: >-
+                      {{ <@ t('title_free_coming') | tojson @> if free_windows else <@ t('title_negative_export_coming') | tojson @> }}
+                    message: >-
+                      {{ (([<@ t('message_import_free_windows') | tojson @> | replace('{windows}', free_windows)] if free_windows else [])
+                          + ([<@ t('message_export_costs_windows') | tojson @> | replace('{windows}', export_windows)] if export_windows else [])
+                          + [<@ t('message_store_rather') | tojson @>]) | join(' ') }}
+                    extra:
+                      tag: power-price-ahead
+                      group: power-price
+            - action: logbook.log
+              data:
+                name: <@ t('logbook_name') | tojson @>
+                entity_id: <@ price_import @>
+                message: >-
+                  {{ <@ t('log_prices_known') | tojson @>
+                     | replace('{free}', free_windows or <@ t('word_none') | tojson @>)
+                     | replace('{export}', export_windows or <@ t('word_none') | tojson @>) }}
+                  {{- '' if free_windows or export_windows else ' ' ~ <@ t('log_no_notification') | tojson @> }}
+        - alias: Import free now
+          conditions:
+            - condition: trigger
+              id: free_now
+          sequence:
+            - action: script.send_notification
+              data:
+                title: <@ t('title_free_now') | tojson @>
+                message: >-
+                  {{ <@ t('message_import_now') | tojson @> | replace('{price}', states('<@ price_import @>')) }}{{
+                  ' ' ~ <@ t('message_window') | tojson @> | replace('{windows}', free_windows) if free_windows }}
+                extra:
+                  tag: power-price-now
+                  group: power-price
+                  push:
+                    interruption-level: time-sensitive
+            - action: logbook.log
+              data:
+                name: <@ t('logbook_name') | tojson @>
+                entity_id: <@ price_import @>
+                message: <@ t('log_import_free', price="{{ states('" ~ price_import ~ "') }}") | tojson @>
+<% if price_export %>
+        - alias: Exporting costs money now
+          conditions:
+            - condition: trigger
+              id: export_now
+          sequence:
+<% if 'ev-charging' in modules and 'tariff' in capabilities %>
+            # ev-charging announces the cheap window itself (automation ev_charging_notify, daytime, only while its
+            # cheap power is on): then no second notification from here, only the logbook line.
+            - if:
+                - condition: template
+                  value_template: >-
+                    {{ not (is_state('input_boolean.ev_charging_cheap_enabled', 'on') and is_state('sun.sun', 'above_horizon')) }}
+              then:
+                - action: script.send_notification
+                  data:
+                    title: <@ t('title_export_costs') | tojson @>
+                    message: >-
+                      {{ <@ t('message_export_now') | tojson @> | replace('{price}', states('<@ price_export @>')) }}{{
+                      ' ' ~ <@ t('message_until') | tojson @> | replace('{time}', export_windows.split(', ')[0].split('–')[-1]) if export_windows }}
+                    extra:
+                      tag: power-price-now
+                      group: power-price
+<% else %>
+            - action: script.send_notification
+              data:
+                title: <@ t('title_export_costs') | tojson @>
+                message: >-
+                  {{ <@ t('message_export_now') | tojson @> | replace('{price}', states('<@ price_export @>')) }}{{
+                  ' ' ~ <@ t('message_until') | tojson @> | replace('{time}', export_windows.split(', ')[0].split('–')[-1]) if export_windows }}
+                extra:
+                  tag: power-price-now
+                  group: power-price
+<% endif %>
+            - action: logbook.log
+              data:
+                name: <@ t('logbook_name') | tojson @>
+                entity_id: <@ price_export @>
+                message: <@ t('log_export_negative', price="{{ states('" ~ price_export ~ "') }}") | tojson @>
+<% endif %>
+<% endif %>
+<% if 'surplus' in kinds %>
+
+# --- 2. Solar surplus --------------------------------------------------------------------------------------------
+- id: notification_solar_surplus
+  alias: <@ t('surplus_alias') | tojson @>
+  description: >-
+    <@ t('surplus_description', sensor=grid_export) @>
+  mode: single
+  max_exceeded: silent
+  triggers:
+    - trigger: numeric_state
+      entity_id: <@ grid_export @>
+      # The role is in W; a sensor in kW works too (by its unit_of_measurement).
+      value_template: >-
+        {{ state.state | float(0) / (1000 if (state.attributes.unit_of_measurement | default('W')) == 'W' else 1) }}
+      above: input_number.notification_surplus_kw
+      for:
+        minutes: "{{ states('input_number.notification_surplus_minutes') | int(10) }}"
+  conditions:
+    - condition: time
+      after: "08:00:00"
+      before: "18:00:00"
+    - condition: sun
+      before: sunset
+      before_offset: "-02:00:00"
+    - alias: Pause since the previous notification
+      condition: template
+      value_template: >-
+        {% set previous = this.attributes.last_triggered | default(none) %}
+        {{ previous is none
+           or now() - previous > timedelta(hours=states('input_number.notification_surplus_pause_h') | float(3)) }}
+  actions:
+    - variables:
+        kw: "{% from 'notifications.jinja' import kw %}{{ kw('<@ grid_export @>') }}"
+    - action: script.send_notification
+      data:
+        title: <@ t('title_surplus') | tojson @>
+        message: <@ t('message_surplus', kw='{{ kw }}') | tojson @>
+        extra:
+          tag: surplus
+          group: surplus
+    - action: logbook.log
+      data:
+        name: <@ t('logbook_name') | tojson @>
+        entity_id: <@ grid_export @>
+        message: <@ t('log_surplus', kw='{{ kw }}') | tojson @>
+<% endif %>
+<% if 'filter' in kinds %>
+
+# --- 3. Ventilation filter ---------------------------------------------------------------------------------------
+- id: notification_ventilation_filter
+  alias: <@ t('filter_alias') | tojson @>
+  description: >-
+    <@ t('filter_description', sensor=filter_days) @>
+  mode: single
+  triggers:
+    - trigger: numeric_state
+      entity_id: <@ filter_days @>
+      below: 15
+  conditions:
+    - condition: template
+      value_template: >-
+        {{ trigger.from_state is not none and trigger.from_state.state not in ['unavailable', 'unknown'] }}
+  actions:
+    - action: script.send_notification
+      data:
+        title: <@ t('title_filter') | tojson @>
+        message: <@ t('message_filter', days="{{ states('" ~ filter_days ~ "') | int(0) }}") | tojson @>
+        extra:
+          tag: ventilation-filter
+<% endif %>

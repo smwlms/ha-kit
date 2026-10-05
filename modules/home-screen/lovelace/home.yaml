@@ -1,0 +1,8 @@
+<# The view of the home screen, rendered from house.yaml, modules: and the capabilities (_home_screen.jinja).
+   JSON is valid YAML: the whole view is one tojson so no value needs YAML quoting. #>
+<% from '_home_screen.jinja' import view with context %>
+# View "home" with custom:home-screen-card (ha-kit module home-screen). Written by home-screen/deploy.py into a
+# dashboard (default: the Overview), or paste it yourself: Edit dashboard > three dots > Raw configuration editor,
+# add it under views:. Filled in from house.yaml: every entity id, list, path and text is written out here; the card
+# itself has none built in. Fill in again after changing house.yaml or modules:, then run deploy.py again.
+<@ view | tojson(indent=2) @>

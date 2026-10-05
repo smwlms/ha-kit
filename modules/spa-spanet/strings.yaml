@@ -1,0 +1,44 @@
+# User-facing texts of the module spa-spanet, one key per text: {en: ..., nl: ...}. Used in the module's files as
+# <@ t('key') @> (tools/fill.py picks house.language, default en; a missing language falls back to en with a warning).
+# Most are ESPHome entity names: Home Assistant derives the entity ids from them (friendly name + entity name), so
+# changing a text changes the entity id. The nl texts are the names of the first version of the module: keep them,
+# so installations filled in with language nl keep their entity ids. Texts end up in YAML and C++ string literals:
+# no double quotes or backslashes.
+# --- own probes and lid
+probe_water_temperature: { en: Water temperature (probe), nl: Watertemperatuur (sonde) }
+probe_air_temperature: { en: Air temperature at the spa, nl: Luchttemperatuur bij de jacuzzi }
+lid: { en: Lid, nl: Deksel }
+# --- read from the spa
+water_temperature: { en: Water temperature, nl: Watertemperatuur }
+heater_temperature: { en: Heater temperature, nl: Temperatuur verwarmer }
+case_temperature: { en: Control box temperature, nl: Temperatuur sturingskast }
+mains_voltage: { en: Mains voltage, nl: Netspanning }
+mains_current: { en: Total current, nl: Stroom totaal }
+heater_current: { en: Heater current, nl: Stroom verwarming }
+heater_power: { en: Heater power, nl: Vermogen verwarming }
+current_limit: { en: Current limit (C.LMT), nl: Stroomlimiet (C.LMT) }
+power_raw: { en: Power (raw), nl: Vermogen (ruw) }
+energy_total_raw: { en: Energy total (raw), nl: Energie totaal (ruw) }
+energy_today_raw: { en: Energy today (raw), nl: Energie vandaag (ruw) }
+wifi_signal: { en: WiFi signal, nl: Wifi-signaal }
+heating: { en: Heating, nl: Verwarmt }
+sleep_timer_active: { en: Sleep timer active, nl: Slaaptimer actief }
+auto_filtration: { en: Automatic filtration, nl: Filtratie automatisch }
+water_present: { en: Water present, nl: Water aanwezig }
+connected: { en: Connected to spa, nl: Verbonden met spa }
+power_save_window: { en: Power save window, nl: Power Save-venster }
+sleep_timer_1: { en: Sleep timer 1, nl: Slaaptimer 1 }
+sleep_timer_2: { en: Sleep timer 2, nl: Slaaptimer 2 }
+# State of the sleep timer text sensors: "<day> 127, 22:00 - 09:00" (127 = the raw day code of the spa).
+sleep_timer_day: { en: day, nl: dag }
+# --- controls
+target_temperature: { en: Target temperature, nl: Doeltemperatuur }
+filtration_hours: { en: Filtration hours per day, nl: Filtratie uren per dag }
+operating_mode: { en: Operating mode, nl: Werkmodus }
+# Options of the select "Power Save" (W63:0, 1, 2).
+power_save_off: { en: "Off", nl: Uit }
+power_save_low: { en: Low, nl: Laag }
+power_save_high: { en: High, nl: Hoog }
+filtration_cycle: { en: Filtration cycle (every x hours), nl: Filtratiecyclus (elke x uur) }
+sanitise_cycle: { en: Sanitise cycle (CLEAN), nl: Reinigingscyclus (CLEAN) }
+restart: { en: Restart, nl: Herstart }

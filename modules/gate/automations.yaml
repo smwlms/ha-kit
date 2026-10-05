@@ -1,0 +1,615 @@
+<% set relay = entities.gate_relay %>
+<% set gate_sensor = entities.get('gate_sensor') %>
+<% set phones = people | selectattr('phone', 'defined') | selectattr('phone') | list %>
+# Gate: automations (ha-kit module gate, see gate/LOGIC.md).
+# Written by gate/deploy.py through the config API (same as the automation editor).
+# Cars and people come from custom_templates/gate.jinja (cars(), people()), filled in from house.yaml.
+# Gate: <@ relay @> gives the pulse (script.gate_pulse is the adapter)<@ ', binary_sensor.gate_open is the end position (on = open)' if gate_sensor else '; no end-position sensor' @>.
+# User-facing texts come from gate/strings.yaml (house.language) and sit in the variable `txt` of each automation;
+# placeholders like {car} are filled in at run time with replace().
+
+# --- 1. Automatic opening on approach ----------------------------------------------------------------------
+- id: gate_auto_open
+  alias: "<@ t('auto_open_alias') @>"
+  description: >-
+    <@ t('auto_open_description') @>
+  mode: single
+  max_exceeded: silent
+  triggers:
+    # The Teslas report every ~10 s while driving: the main trigger.
+    - trigger: zone
+      entity_id:
+<% for a in cars %>
+        - <@ car_entity(a, 'location') @>
+<% endfor %>
+      zone: zone.gate_approach
+      event: enter
+      id: car
+<% if phones %>
+    # Extra chance: a phone reports only every 20 s to 5 min, but always on entering a zone.
+    - trigger: zone
+      entity_id:
+<% for x in phones %>
+        - device_tracker.<@ x.phone @>
+<% endfor %>
+      zone: zone.gate_approach
+      event: enter
+      id: phone
+<% endif %>
+  conditions:
+    - condition: state
+      entity_id: input_boolean.gate_auto_open_enabled
+      state: "on"
+  actions:
+    - alias: Let the template sensors update (they react to the same location update as this trigger)
+      delay: "00:00:03"
+    - variables:
+        txt:
+          logbook: "<@ t('auto_open_alias') @>"
+          opens: "<@ t('log_opens') @>"
+          test_mode: "<@ t('log_test_mode') @>"
+          asks: "<@ t('log_asks') @>"
+          not_opening: "<@ t('log_not_opening') @>"
+          line: "<@ t('log_line') @>"
+          no_car: "<@ t('log_no_car') @>"
+          no_sensor: "<@ t('log_no_sensor') @>"
+          car_line: "<@ t('log_car') @>"
+          unknown: "<@ t('unknown') @>"
+          joiner: "<@ t('and') @>"
+          reason: "<@ t('reason_auto_open') @>"
+          would_open: "<@ t('title_would_open') @>"
+          opened: "<@ t('title_opened') @>"
+          coming_home_who: "<@ t('message_coming_home_who') @>"
+          coming_home: "<@ t('message_coming_home') @>"
+          test_no_pulse: "<@ t('test_no_pulse') @>"
+          close_gate: "<@ t('button_close_gate') @>"
+          ask_title: "<@ t('title_ask_open') @>"
+          ask_destination: "<@ t('message_ask_destination') @>"
+          ask_no_navigation: "<@ t('message_ask_no_navigation') @>"
+        cooldown_min: 5
+        car_list: "{% from 'gate.jinja' import cars %}{{ cars() | from_json }}"
+        targets: "{% from 'gate.jinja' import recipients %}{{ recipients() | from_json }}"
+        source: "{{ trigger.id | default('manual') }} {{ trigger.entity_id | default('') }}"
+        # Cars in the approach zone, the triggering car first.
+        in_zone: >
+          {% set t = car_list | selectattr('loc', 'eq', trigger.entity_id | default('')) | map(attribute='p') | list %}
+          {% set r = state_attr('zone.gate_approach', 'radius') | float(400) %}
+          {% set ns = namespace(l=[]) %}
+          {% for c in t + (car_list | map(attribute='p') | list) %}
+            {% set m = state_attr('binary_sensor.gate_' ~ c ~ '_away_long_enough', 'gate_distance_m') %}
+            {% if c not in ns.l and m is number and m <= r %}{% set ns.l = ns.l + [c] %}{% endif %}
+          {% endfor %}
+          {{ ns.l }}
+        # A and C for the same car.
+        ready_car: >
+          {% set ns = namespace(c='') %}
+          {% for c in in_zone if ns.c == ''
+               and is_state('binary_sensor.gate_' ~ c ~ '_away_long_enough', 'on')
+               and is_state('binary_sensor.gate_' ~ c ~ '_navigating_home', 'on') %}
+            {% set ns.c = c %}
+          {% endfor %}
+          {{ ns.c }}
+        c_ok: "{{ ready_car != '' }}"
+        # A car in the zone that was away long enough (to ask when C is false), the triggering car first.
+        away_car: >
+          {% set ns = namespace(c='') %}
+          {% for c in in_zone if ns.c == '' and is_state('binary_sensor.gate_' ~ c ~ '_away_long_enough', 'on') %}
+            {% set ns.c = c %}
+          {% endfor %}
+          {{ ns.c }}
+        # Who is in it: phones moving with the car, else the usual driver (gate.jinja, riders).
+        riders_text: >
+          {% from 'gate.jinja' import riders %}
+          {% set c = ready_car or away_car %}
+          {{ (riders(c) | from_json | join(' ' ~ txt.joiner ~ ' ')) if c else '' }}
+        car_name: >
+          {% set c = ready_car or away_car or (in_zone | first | default('')) %}
+          {{ car_list | selectattr('p', 'eq', c) | map(attribute='name') | first | default('') }}
+        destination: >
+          {% set b = state_attr('binary_sensor.gate_' ~ away_car ~ '_navigating_home', 'destination') if away_car else none %}
+          {{ b if b not in [none, '', 'None', 'unknown', 'unavailable'] else '' }}
+<% if gate_sensor %>
+        # binary_sensor.gate_open: on = not fully closed. Unreachable still opens; only 'on' blocks.
+        gate_state: "{{ states('binary_sensor.gate_open') }}"
+<% else %>
+        # No end-position sensor: the gate is assumed closed. A pulse on an open gate closes it (see LOGIC.md).
+        gate_state: "{{ txt.no_sensor }}"
+<% endif %>
+        gate_ok: "{{ gate_state != 'on' and not is_state('<@ relay @>', 'on') }}"
+        cooldown_ok: >
+          {{ as_timestamp(now()) - (state_attr('input_datetime.gate_last_auto_open', 'timestamp') | float(0))
+             >= cooldown_min * 60 }}
+        test: "{{ is_state('input_boolean.gate_auto_open_dry_run', 'on') }}"
+        opens: "{{ c_ok and gate_ok and cooldown_ok }}"
+        # Ask instead of opening: a car that was away long enough approaches without navigating home.
+        asks: "{{ not opens and cooldown_ok and gate_ok and not c_ok and away_car != '' }}"
+        details: >
+          {% from 'gate.jinja' import riders %}
+          {% set ns = namespace(t=[]) %}
+          {% for c in car_list %}
+            {% set a = 'binary_sensor.gate_' ~ c.p ~ '_away_long_enough' %}
+            {% set nav = 'binary_sensor.gate_' ~ c.p ~ '_navigating_home' %}
+            {% set ns.t = ns.t + [txt.car_line
+                 | replace('{car}', c.name)
+                 | replace('{m}', state_attr(a, 'gate_distance_m') | string)
+                 | replace('{a}', '✔' if is_state(a, 'on') else '✘')
+                 | replace('{away}', state_attr(a, 'away_minutes') | string)
+                 | replace('{need}', state_attr(a, 'needed_minutes') | string)
+                 | replace('{c}', '✔' if is_state(nav, 'on') else '✘')
+                 | replace('{dest}', state_attr(nav, 'destination') | string)
+                 | replace('{riders}', riders(c.p) | from_json | join(' ' ~ txt.joiner ~ ' ') or txt.unknown)] %}
+          {% endfor %}
+          {{ ns.t | join('; ') }}
+    - alias: Logbook, which conditions were true
+      action: logbook.log
+      data:
+        name: "{{ txt.logbook }}"
+        entity_id: input_boolean.gate_auto_open_enabled
+        message: >-
+          {{ (txt.opens | replace('{car}', car_name) ~ (' ' ~ txt.test_mode if test else '')) if opens
+             else (txt.asks if asks else txt.not_opening) }}
+          {{ txt.line | replace('{source}', source) | replace('{in_zone}', in_zone | join(', ') or txt.no_car)
+             | replace('{gate}', gate_state | string) | replace('{gate_ok}', '✔' if gate_ok else '✘')
+             | replace('{cooldown_ok}', '✔' if cooldown_ok else '✘') | replace('{details}', details) }}
+    - choose:
+        - alias: The car navigates home, open (or in test mode only notify)
+          conditions:
+            - condition: template
+              value_template: "{{ opens }}"
+          sequence:
+            - action: input_datetime.set_datetime
+              target:
+                entity_id: input_datetime.gate_last_auto_open
+              data:
+                timestamp: "{{ as_timestamp(now()) }}"
+            - if:
+                - condition: template
+                  value_template: "{{ not test }}"
+              then:
+                - action: script.gate_pulse
+                  data:
+                    reason: "{{ txt.reason | replace('{car}', car_name) }}"
+            - variables:
+                notification:
+                  title: "{{ ('🧪 ' ~ txt.would_open) if test else txt.opened }}"
+                  message: >-
+                    {{ ((txt.coming_home_who | replace('{who}', riders_text)) if riders_text else txt.coming_home)
+                       | replace('{car}', car_name) }}{{ (' ' ~ txt.test_no_pulse) if test else '' }}
+                  data:
+                    tag: gate-auto
+                    group: gate
+                    actions: >-
+                      {{ [] if test else [{'action': 'GATE_CLOSE', 'title': txt.close_gate, 'destructive': true}] }}
+            # One notify action per phone; continue_on_error so one offline phone does not block the others.
+            - repeat:
+                for_each: "{{ targets }}"
+                sequence:
+                  - action: "{{ repeat.item }}"
+                    continue_on_error: true
+                    data:
+                      title: "{{ notification.title }}"
+                      message: "{{ notification.message }}"
+                      data: "{{ notification.data }}"
+        - alias: Do not open but ask, the car does not navigate home
+          conditions:
+            - condition: template
+              value_template: "{{ asks }}"
+          sequence:
+            - action: input_datetime.set_datetime
+              target:
+                entity_id: input_datetime.gate_last_auto_open
+              data:
+                timestamp: "{{ as_timestamp(now()) }}"
+            - variables:
+                notification:
+                  title: "{{ txt.ask_title }}"
+                  message: >-
+                    {{ ((txt.ask_destination | replace('{dest}', destination)) if destination else txt.ask_no_navigation)
+                       | replace('{car}', car_name) }}{{ (' (' ~ riders_text ~ ')') if riders_text else '' }}
+                  data:
+                    tag: gate-auto
+                    group: gate
+                    actions:
+                      - action: GATE_OPEN
+                        title: "<@ t('button_open_gate') @>"
+            - repeat:
+                for_each: "{{ targets }}"
+                sequence:
+                  - action: "{{ repeat.item }}"
+                    continue_on_error: true
+                    data:
+                      title: "{{ notification.title }}"
+                      message: "{{ notification.message }}"
+                      data: "{{ notification.data }}"
+
+# --- 2. Buttons in the notifications ------------------------------------------------------------------------
+- id: gate_notification_action
+  alias: "<@ t('notification_action_alias') @>"
+  description: >-
+    <@ t('notification_action_description') @>
+<% if gate_sensor %>
+    <@ t('notification_action_description_sensor') @>
+<% else %>
+    <@ t('notification_action_description_no_sensor') @>
+<% endif %>
+    <@ t('notification_action_description_parallel') @>
+  mode: parallel
+  max: 4
+  triggers:
+    - trigger: event
+      event_type: mobile_app_notification_action
+      event_data:
+        action: GATE_CLOSE
+      id: close
+    - trigger: event
+      event_type: mobile_app_notification_action
+      event_data:
+        action: GATE_OPEN
+      id: open
+  actions:
+    - variables:
+        txt:
+          closed: "<@ t('gate_closed') @>"
+          not_closed_yet: "<@ t('gate_not_closed_yet') @>"
+          closed_at: "<@ t('message_closed_at') @>"
+          not_closed_after_minute: "<@ t('message_not_closed_after_minute') @>"
+          pulse_given: "<@ t('message_pulse_given_no_sensor') @>"
+        # Which phone pressed: iOS sends sourceDeviceID/sourceDeviceName; matched on the person's key, name or phone
+        # (device_tracker object id). Unknown: everyone with a phone.
+        targets: >
+          {% from 'gate.jinja' import people %}
+          {% set ps = people() | from_json | selectattr('notify') | list %}
+          {% set d = ((trigger.event.data.sourceDeviceID | default('')) ~ ' '
+                      ~ (trigger.event.data.sourceDeviceName | default(''))) | lower %}
+          {% set ns = namespace(l=[]) %}
+          {% for p in ps %}
+            {% set keys = [p.key | lower, p.name | lower] + ([p.phone.split('.')[-1]] if p.phone else []) %}
+            {% if keys | select('in', d) | list | count > 0 %}{% set ns.l = ns.l + [p.notify] %}{% endif %}
+          {% endfor %}
+          {{ ns.l if ns.l else ps | map(attribute='notify') | list }}
+    - choose:
+        - conditions:
+            - condition: trigger
+              id: close
+          sequence:
+<% if gate_sensor %>
+            - if:
+                - condition: state
+                  entity_id: binary_sensor.gate_open
+                  state: "off"
+              then:
+                - repeat:
+                    for_each: "{{ targets }}"
+                    sequence:
+                      - action: "{{ repeat.item }}"
+                        continue_on_error: true
+                        data:
+                          title: "<@ t('title_already_closed') @>"
+                          message: "<@ t('no_pulse_given') @>"
+                          data:
+                            tag: gate-status
+                            group: gate
+                - stop: Gate already closed
+            - action: script.gate_close_manual
+              data:
+                reason: "<@ t('reason_close_notification') @>"
+            - wait_for_trigger:
+                - trigger: state
+                  entity_id: binary_sensor.gate_open
+                  to: "off"
+              timeout: "00:01:00"
+              continue_on_timeout: true
+            - repeat:
+                for_each: "{{ targets }}"
+                sequence:
+                  - action: "{{ repeat.item }}"
+                    continue_on_error: true
+                    data:
+                      title: "{{ txt.closed if wait.trigger else txt.not_closed_yet }}"
+                      message: >-
+                        {{ txt.closed_at | replace('{time}', now().strftime('%H:%M')) if wait.trigger
+                           else txt.not_closed_after_minute }}
+                      data:
+                        tag: gate-status
+                        group: gate
+<% else %>
+            - action: script.gate_close_manual
+              data:
+                reason: "<@ t('reason_close_notification') @>"
+            - repeat:
+                for_each: "{{ targets }}"
+                sequence:
+                  - action: "{{ repeat.item }}"
+                    continue_on_error: true
+                    data:
+                      title: "<@ t('title_pulse_given') @>"
+                      message: "{{ txt.pulse_given | replace('{time}', now().strftime('%H:%M')) }}"
+                      data:
+                        tag: gate-status
+                        group: gate
+<% endif %>
+        - conditions:
+            - condition: trigger
+              id: open
+          sequence:
+            - action: script.gate_open_manual
+<% if gate_sensor %>
+
+# --- 3. Gate open too long ---------------------------------------------------------------------------------------
+- id: gate_open_too_long
+  alias: "<@ t('open_too_long_alias') @>"
+  description: >-
+    <@ t('open_too_long_description') @>
+<% if 'parcel-service' in modules %>
+    <@ t('open_too_long_description_parcel') @>
+<% endif %>
+  mode: restart
+  triggers:
+    - trigger: state
+      entity_id: binary_sensor.gate_open
+      to: "on"
+      for:
+        minutes: "{{ states('input_number.gate_open_alert_minutes') | int(10) }}"
+      id: open
+    - trigger: state
+      entity_id: binary_sensor.gate_open
+      to: "off"
+      id: closed
+<% if 'parcel-service' in modules %>
+  conditions:
+    - alias: "Parcel service: no alert while the parcel script holds the gate open (it reports a failed close itself)"
+      condition: template
+      value_template: "{{ trigger.id != 'open' or is_state('script.parcel_garage', 'off') }}"
+<% endif %>
+  actions:
+    - variables:
+        txt:
+          title: "<@ t('title_open_minutes') @>"
+          message: "<@ t('message_open_since') @>"
+        targets: "{% from 'gate.jinja' import recipients %}{{ recipients() | from_json }}"
+    - choose:
+        - conditions:
+            - condition: trigger
+              id: closed
+          sequence:
+            - repeat:
+                for_each: "{{ targets }}"
+                sequence:
+                  - action: "{{ repeat.item }}"
+                    continue_on_error: true
+                    data:
+                      message: clear_notification
+                      data:
+                        tag: gate-open-too-long
+      default:
+        - repeat:
+            sequence:
+              - variables:
+                  minutes: >
+                    {{ ((now() - states.binary_sensor.gate_open.last_changed).total_seconds() / 60) | round(0) | int }}
+                  notification:
+                    title: "{{ txt.title | replace('{minutes}', minutes | string) }}"
+                    message: >-
+                      {{ txt.message | replace('{time}', as_local(states.binary_sensor.gate_open.last_changed).strftime('%H:%M')) }}
+                    data:
+                      tag: gate-open-too-long
+                      group: gate
+                      actions:
+                        - action: GATE_CLOSE
+                          title: "<@ t('button_close_gate') @>"
+              - repeat:
+                  for_each: "{{ targets }}"
+                  sequence:
+                    - action: "{{ repeat.item }}"
+                      continue_on_error: true
+                      data:
+                        title: "{{ notification.title }}"
+                        message: "{{ notification.message }}"
+                        data: "{{ notification.data }}"
+              - wait_for_trigger:
+                  - trigger: state
+                    entity_id: binary_sensor.gate_open
+                    to: "off"
+                timeout:
+                  minutes: "{{ states('input_number.gate_open_alert_minutes') | int(10) }}"
+                continue_on_timeout: true
+            until:
+              - condition: template
+                value_template: "{{ not is_state('binary_sensor.gate_open', 'on') or repeat.index >= 6 }}"
+
+# --- 4. Close the gate behind a departing car -------------------------------------------------------------------
+- id: gate_close_after_departure
+  alias: "<@ t('close_after_departure_alias') @>"
+  description: >-
+    <@ t('close_after_departure_description') @>
+  mode: parallel
+  max: 4
+  triggers:
+    # Fires only when the car crosses the distance outward (false -> true), not while it is parked near the house.
+<% for a in cars %>
+    - trigger: template
+      value_template: >
+        {{ has_value('<@ car_entity(a, 'location') @>') and
+           distance('<@ car_entity(a, 'location') @>', 'zone.home') * 1000 > states('input_number.gate_close_distance') | float(50) }}
+      id: <@ a.prefix @>
+<% endfor %>
+  conditions:
+    - condition: state
+      entity_id: input_boolean.gate_auto_close_enabled
+      state: "on"
+    - condition: state
+      entity_id: binary_sensor.gate_open
+      state: "on"
+  actions:
+    - variables:
+        txt:
+          logbook: "<@ t('close_after_departure_alias') @>"
+          would_close_log: "<@ t('log_would_close') @>"
+          reason: "<@ t('reason_after_departure') @>"
+          would_close: "<@ t('title_would_close') @>"
+          closed: "<@ t('gate_closed') @>"
+          not_closed_yet: "<@ t('gate_not_closed_yet') @>"
+          left_test: "<@ t('message_left_test') @>"
+          left_closed: "<@ t('message_left_closed') @>"
+          left_not_closed: "<@ t('message_left_not_closed') @>"
+          open_gate: "<@ t('button_open_gate') @>"
+          close_gate: "<@ t('button_close_gate') @>"
+        car_list: "{% from 'gate.jinja' import cars %}{{ cars() | from_json }}"
+        people_list: "{% from 'gate.jinja' import people %}{{ people() | from_json }}"
+        car: "{{ trigger.id }}"
+        car_name: "{{ car_list | selectattr('p', 'eq', car) | map(attribute='name') | first | default('Tesla') }}"
+        usual_driver: "{{ car_list | selectattr('p', 'eq', car) | map(attribute='driver') | first | default('') }}"
+        distance_m: "{{ states('input_number.gate_close_distance') | float(50) }}"
+        test: "{{ is_state('input_boolean.gate_auto_open_dry_run', 'on') }}"
+    - alias: Is another car leaving too? Then wait until that one is out as well (or parked)
+      wait_template: >
+        {% set ns = namespace(n=0) %}
+        {% for c in car_list if c.p != car %}
+          {% set near = has_value(c.loc) and distance(c.loc, 'zone.home') * 1000 <= distance_m %}
+          {# The last speed sticks after parking (e.g. 0.999 km/h in P), so speed only counts outside P and while awake. #}
+          {% set shift = states(c.shift) | lower %}
+          {% set driving = not is_state(c.status, 'off')
+                           and (shift in ['d', 'r'] or (shift != 'p' and states(c.speed) | float(0) > 2)) %}
+          {% if near and driving %}{% set ns.n = ns.n + 1 %}{% endif %}
+        {% endfor %}
+        {{ ns.n == 0 }}
+      timeout: "00:03:00"
+      continue_on_timeout: false
+    - condition: state
+      entity_id: binary_sensor.gate_open
+      state: "on"
+    - if:
+        - condition: template
+          value_template: "{{ test }}"
+      then:
+        - action: logbook.log
+          data:
+            name: "{{ txt.logbook }}"
+            entity_id: input_boolean.gate_auto_close_enabled
+            message: "{{ txt.would_close_log | replace('{car}', car_name) | replace('{m}', distance_m | int | string) }}"
+      else:
+        - action: script.gate_close_manual
+          data:
+            reason: "{{ txt.reason | replace('{car}', car_name) }}"
+    # At the top level (not inside the else branch) so `wait` is visible below. Test mode: gate stays open, 1 s.
+    - wait_for_trigger:
+        - trigger: state
+          entity_id: binary_sensor.gate_open
+          to: "off"
+      timeout: "{{ 1 if test else 60 }}"
+      continue_on_timeout: true
+    - variables:
+        closed: "{{ not test and wait.trigger is not none }}"
+    - alias: Phones report leaving with some delay, wait at most 3 min
+      wait_template: >
+        {% set ns = namespace(n=0) %}
+        {% for p in people_list %}
+          {% set s = states[p.person] %}
+          {% if s is not none and s.state != 'home' and (now() - s.last_changed).total_seconds() < 600 %}
+            {% set ns.n = ns.n + 1 %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.n > 0 }}
+      timeout: "00:03:00"
+      continue_on_timeout: true
+    - variables:
+        # People whose person left home in the last 10 min, else the usual driver of the car.
+        targets: >
+          {% set ns = namespace(l=[]) %}
+          {% for p in people_list if p.notify %}
+            {% set s = states[p.person] %}
+            {% if s is not none and s.state != 'home' and (now() - s.last_changed).total_seconds() < 600 %}
+              {% set ns.l = ns.l + [p.notify] %}
+            {% endif %}
+          {% endfor %}
+          {% set usual = people_list | selectattr('key', 'eq', usual_driver) | selectattr('notify') | map(attribute='notify') | list %}
+          {{ ns.l or usual or (people_list | selectattr('notify') | map(attribute='notify') | list) }}
+    - repeat:
+        for_each: "{{ targets }}"
+        sequence:
+          - action: "{{ repeat.item }}"
+            continue_on_error: true
+            data:
+              title: >-
+                {{ ('🧪 ' ~ txt.would_close) if test else (txt.closed if closed else txt.not_closed_yet) }}
+              message: >-
+                {{ (txt.left_test if test else (txt.left_closed if closed else txt.left_not_closed))
+                   | replace('{car}', car_name) }}
+              data:
+                tag: gate-departure
+                group: gate
+                actions: >-
+                  {{ [] if test else ([{'action': 'GATE_OPEN', 'title': txt.open_gate}] if closed
+                     else [{'action': 'GATE_CLOSE', 'title': txt.close_gate}]) }}
+<% endif %>
+<% if phones %>
+
+# --- 5. Watch the phones' location permission ----------------------------------------------------------------
+# iOS asks now and then whether to keep "Always"; with "While using" the phone sends no positions on the road, so
+# the zone trigger, the arrival card and "who is in the car" go blind without any error.
+- id: phone_location_permission_watch
+  alias: "<@ t('location_watch_alias') @>"
+  description: >-
+    <@ t('location_watch_description') @>
+  mode: queued
+  triggers:
+    - trigger: state
+      entity_id:
+<% for x in phones %>
+        - <@ x.get('location_permission') or 'sensor.' ~ x.phone ~ '_location_permission' @>
+<% endfor %>
+      not_from:
+        - unknown
+        - unavailable
+      not_to:
+        - unknown
+        - unavailable
+  conditions:
+    - alias: Only when 'Always' is lost or restored
+      condition: template
+      value_template: >
+        {{ (trigger.from_state.state == 'Authorized Always') != (trigger.to_state.state == 'Authorized Always') }}
+  actions:
+    - variables:
+        txt:
+          a_phone: "<@ t('a_phone') @>"
+          title_ok: "<@ t('title_location_ok') @>"
+          title_lost: "<@ t('title_location_lost') @>"
+          message_ok: "<@ t('message_location_ok') @>"
+          message_lost: "<@ t('message_location_lost') @>"
+        people_list: "{% from 'gate.jinja' import people %}{{ people() | from_json }}"
+        owner: "{{ people_list | selectattr('location_permission', 'eq', trigger.entity_id) | first | default({}) }}"
+        name: "{{ owner.name | default(txt.a_phone) }}"
+        ok: "{{ trigger.to_state.state == 'Authorized Always' }}"
+        targets: >
+          {% set b = people_list | selectattr('admin') | selectattr('notify') | map(attribute='notify') | list %}
+          {{ (b if ok or not owner.notify | default(none) else b + [owner.notify]) | unique | list }}
+    - repeat:
+        for_each: "{{ targets }}"
+        sequence:
+          - action: "{{ repeat.item }}"
+            continue_on_error: true
+            data:
+              title: >-
+                {{ (txt.title_ok if ok else txt.title_lost) | replace('{name}', name) }}
+              message: >-
+                {{ (txt.message_ok if ok else txt.message_lost | replace('{state}', trigger.to_state.state))
+                   | replace('{name}', name) }}
+              data:
+                tag: location-{{ owner.key | default('phone') }}
+                group: gate
+<% endif %>
+
+# --- 6. Reset the Tesla command counter at midnight -------------------------------------------------------------
+- id: tesla_commands_counter_reset
+  alias: "<@ t('counter_reset_alias') @>"
+  description: >-
+    <@ t('counter_reset_description') @>
+  mode: single
+  triggers:
+    - trigger: time
+      at: "00:00:00"
+  actions:
+    - action: counter.reset
+      target:
+        entity_id: counter.tesla_commands_today

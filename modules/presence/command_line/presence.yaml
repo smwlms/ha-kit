@@ -1,0 +1,26 @@
+<# command_line entries of Our week -> /config/command_line/presence.yaml (merged by the base module's
+   command_line: !include_dir_merge_list command_line/). Both scripts read the recorder database (SQLite) read-only.
+   The sensor names stay English in every language: command_line sensors cannot set their entity id, Home Assistant
+   derives it from the name (sensor.presence_stays, sensor.presence_workday). #>
+# Module presence: command_line (list). Reload: command_line.reload (Developer tools > YAML).
+# Where everyone stayed per day, from the recorder (presence/stay.py, see presence/LOGIC.md).
+# The automation presence_stays refreshes it at 00:10 and writes the days to the stays calendar;
+# the long interval only catches a missed night.
+- sensor:
+    name: "Presence stays"
+    unique_id: presence_stays
+    command: "python3 /config/presence/stay.py 3"
+    scan_interval: 43200
+    command_timeout: 60
+    value_template: "{{ value_json.state }}"
+    json_attributes: [days, error]
+# Appointments after work (presence/workday.py). Refreshed by the automation presence_workday when it closes a
+# working day; the long interval means it practically never refreshes by itself.
+- sensor:
+    name: "Presence workday"
+    unique_id: presence_workday
+    command: "python3 /config/presence/workday.py"
+    scan_interval: 86400
+    command_timeout: 60
+    value_template: "{{ value_json.state }}"
+    json_attributes: [people, error]

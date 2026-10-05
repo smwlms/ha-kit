@@ -1,0 +1,156 @@
+{#- EV charging: charge plan macros (ha-kit module ev-charging, see ev-charging/LOGIC.md "Charge plan"). Uploaded by
+    ev-charging/deploy.py to /config/custom_templates/ev_charging.jinja. Do not edit it in Home Assistant.
+    Every macro returns JSON; callers use `| from_json`. Inputs are passed explicitly (an import has no caller
+    context). -#}
+
+{#- calendar_target: the target from the appointments of a calendar.
+    appointments: list of {'start': iso, 'km': one-way km or none, 'minutes': one-way travel minutes or none,
+    'title': str}. Only the appointments on the local date of the first one count (the car can charge at home
+    afterwards). Every appointment counts there and back from home.
+    target % = reserve + km x consumption/100 x (1 + margin/100) / battery_kwh x 100, rounded up, at most 100
+    (needed_percent is the number before the cap). departure = start of the first appointment - travel time - 15 min
+    (travel time unknown: 50 km/h). -#}
+{% macro calendar_target(appointments, consumption, margin, reserve, battery_kwh) -%}
+{%- set l = appointments | sort(attribute='start') | list -%}
+{%- if l | count == 0 -%}
+{{ {'target': 0, 'needed_percent': 0, 'departure': none, 'km': 0, 'kwh': 0, 'count': 0, 'without_distance': [], 'day': none} | to_json }}
+{%- else -%}
+{%- set day = as_local(as_datetime(l[0].start)).date() -%}
+{%- set ns = namespace(km=0, n=0, without=[], first=none) -%}
+{%- for a in l if as_local(as_datetime(a.start)).date() == day -%}
+  {%- if a.km is not none -%}
+    {%- set ns.km = ns.km + 2 * (a.km | float(0)) -%}
+    {%- set ns.n = ns.n + 1 -%}
+    {%- if ns.first is none -%}
+      {%- set travel = (a.minutes | float(0)) if a.minutes is not none else (a.km | float(0)) / 50 * 60 -%}
+      {%- set ns.first = as_datetime(a.start) - timedelta(minutes=travel + 15) -%}
+    {%- endif -%}
+  {%- else -%}
+    {%- set ns.without = ns.without + [a.title] -%}
+  {%- endif -%}
+{%- endfor -%}
+{%- set kwh = ns.km * consumption / 100 * (1 + margin / 100) -%}
+{%- set target = ((reserve + kwh / battery_kwh * 100) | round(0, 'ceil') | int) if ns.n > 0 else 0 -%}
+{{ {'target': [target, 100] | min, 'needed_percent': target, 'departure': ns.first.isoformat() if ns.first else none,
+    'km': ns.km | round(0) | int, 'kwh': kwh | round(1), 'count': ns.n, 'without_distance': ns.without,
+    'day': day | string} | to_json }}
+{%- endif -%}
+{%- endmacro %}
+
+{#- plan: when to charge from the grid.
+    now, departure: iso datetimes. current, target: % of the car battery. battery_kwh: usable kWh.
+    prices, starts: attributes of sensor.power_price_import (EUR/kWh per slot, ISO starts; slots of 15 or 60 min).
+      Empty lists (no tariff module): every quarter has an unknown price, so the earliest quarters win.
+    grid_kw: grid power allowed under the month peak (limit_kw of sensor.capacity_headroom_kw; without a capacity
+      tariff the charger maximum + house_kw). house_kw: kept free for the house (ev_charging.house_reserve_kw).
+    solar_today: kWh surplus left today after the house and the home battery (sensor.energy_plan_margin, >= 0).
+    sun_end: iso time the sun leaves the panels today. sunrise: iso next sunrise. sun_day_kwh: forecast kWh of that
+      sun day. confidence: % of the expected solar surplus the plan relies on. battery_first_kwh: home battery to
+      refill first on the next sun day. house_day_kw: house load during daylight.
+    avoid_until: iso time; quarters before it cost +1 EUR/kWh in the ranking (the home battery is behind: its sun
+      comes first). Daylight quarters whose surplus is already counted for the car get the same penalty (no double
+      counting). Penalised quarters are only chosen when the target is otherwise not reachable.
+    efficiency: charge efficiency. max_kw, voltage, phases: the charger connection. min_amps: lowest car current.
+    amps_control: the kit can set the car current (then fast runs at the power the peak allows; without it fast
+      only when the full charger power fits under the peak). -#}
+{% macro plan(now, current, target, departure, battery_kwh, prices, starts, grid_kw, house_kw, solar_today, sun_end, sunrise, sun_day_kwh, confidence, battery_first_kwh, house_day_kw=0.5, avoid_until=none, efficiency=0.9, max_kw=11, voltage=230, phases=3, min_amps=5, amps_control=true) -%}
+{%- set now = as_datetime(now) -%}
+{%- set departure = as_datetime(departure) -%}
+{%- set day_names = '<@ t('day_names_short') @>'.split(',') -%}
+{%- set needed_battery = [0, (target - current) / 100 * battery_kwh] | max -%}
+{%- set needed = needed_battery / efficiency -%}
+{#- expected solar surplus for the car before departure -#}
+{%- set z = namespace(kwh=0, avoid=[]) -%}
+{%- set up = as_datetime(sunrise) if sunrise else none -%}
+{%- set se = as_datetime(sun_end) if sun_end else none -%}
+{%- if se and up and now < se and up > se -%}
+  {%- set frac = 1 if departure >= se else ((departure - now).total_seconds() / (se - now).total_seconds()) -%}
+  {%- set z.kwh = z.kwh + [0, solar_today] | max * [0, frac] | max -%}
+  {%- if solar_today > 0 -%}{%- set z.avoid = z.avoid + [[as_timestamp(now), as_timestamp(se)]] -%}{%- endif -%}
+{%- endif -%}
+{%- if se and up and departure > up -%}
+  {%- set se2 = se + timedelta(days=(as_local(up).date() - as_local(se).date()).days) -%}
+  {%- if se2 > up -%}
+    {%- set x = [1, (departure - up).total_seconds() / (se2 - up).total_seconds()] | min -%}
+    {%- set f = (1 - cos(pi * x)) / 2 -%}
+    {%- set hours = (([departure, se2] | min) - up).total_seconds() / 3600 -%}
+    {%- set over = sun_day_kwh * f - house_day_kw * hours - battery_first_kwh -%}
+    {%- set z.kwh = z.kwh + [0, over] | max -%}
+    {%- if over > 0 -%}{%- set z.avoid = z.avoid + [[as_timestamp(up), as_timestamp(se2)]] -%}{%- endif -%}
+  {%- endif -%}
+{%- endif -%}
+{%- set sun = [needed, z.kwh * confidence / 100] | min -%}
+{%- set grid_needed = [0, needed - sun] | max -%}
+{#- charge power within the month peak -#}
+{%- set room = grid_kw - house_kw -%}
+{%- set max_amps = (max_kw * 1000 / (voltage * phases)) | round(0) | int -%}
+{%- set p_fast_min = min_amps * voltage * phases / 1000 -%}
+{%- set p_min = 6 * voltage / 1000 -%}
+{%- set fast = (room >= p_fast_min) if amps_control else (room >= max_kw) -%}
+{%- set mode = 'fast' if fast else 'solar_min' -%}
+{%- set p = ([max_kw, room] | min if amps_control else max_kw) if fast else p_min -%}
+{%- set amps = [max_amps, (p * 1000 / (voltage * phases)) | round(0, 'floor') | int] | min if fast else 6 -%}
+{#- quarters before departure, priced by the slot that contains them -#}
+{%- set ts_list = starts | map('as_timestamp') | map('int') | list -%}
+{%- set slot = (ts_list[1] - ts_list[0]) if ts_list | count > 1 else 900 -%}
+{%- set pm = dict(zip(ts_list, prices)) -%}
+{%- set avoid = z.avoid + ([[as_timestamp(now), as_timestamp(avoid_until)]] if avoid_until else []) -%}
+{%- set q0 = now.replace(minute=(now.minute // 15) * 15, second=0, microsecond=0) -%}
+{%- set n = [0, [((departure - q0).total_seconds() // 900) | int, 192] | min] | max -%}
+{%- set q = namespace(l=[]) -%}
+{%- for i in range(n) -%}
+  {%- set t = q0 + timedelta(minutes=15 * i) -%}
+  {%- set ts = as_timestamp(t) | int -%}
+  {%- set fr = ((900 - (now - q0).total_seconds()) / 900) if i == 0 else 1 -%}
+  {%- set pr = pm.get(ts - ((ts - ts_list[0]) % slot)) if ts_list else none -%}
+  {%- set m = namespace(hit=false) -%}
+  {%- for w in avoid if w[0] - 900 < ts < w[1] -%}{%- set m.hit = true -%}{%- endfor -%}
+  {%- set q.l = q.l + [{'i': i, 'price': (pr if pr is not none else 9.99) + (1 if m.hit else 0), 'real': pr, 'known': pr is not none, 'kwh': p * 0.25 * fr}] -%}
+{%- endfor -%}
+{%- set total = q.l | map(attribute='kwh') | sum -%}
+{%- set s = namespace(kwh=0, sel=[], cost=0, unknown=0) -%}
+{%- if grid_needed > 0.05 -%}
+  {%- for x in q.l | sort(attribute='price') -%}
+    {%- if s.kwh < grid_needed -%}
+      {%- set s.sel = s.sel + [x.i] -%}
+      {%- set s.kwh = s.kwh + x.kwh -%}
+      {%- if x.known -%}{%- set s.cost = s.cost + x.kwh * x.real -%}{%- else -%}{%- set s.unknown = s.unknown + 1 -%}{%- endif -%}
+    {%- endif -%}
+  {%- endfor -%}
+{%- endif -%}
+{%- set sel = s.sel | sort -%}
+{#- group the chosen quarters into blocks HH:MM-HH:MM (with the day when it is not today) -#}
+{%- set b = namespace(l=[], start=none, prev=none) -%}
+{%- for i in sel + [none] -%}
+  {%- if b.start is not none and (i is none or i != b.prev + 1) -%}
+    {%- set t1 = as_local(q0 + timedelta(minutes=15 * b.start)) -%}
+    {%- set t2 = as_local(q0 + timedelta(minutes=15 * (b.prev + 1))) -%}
+    {%- set b.l = b.l + [((day_names[t1.weekday()] ~ ' ') if t1.date() != as_local(now).date() else '') ~ t1.strftime('%H:%M') ~ '-' ~ t2.strftime('%H:%M')] -%}
+    {%- set b.start = none -%}
+  {%- endif -%}
+  {%- if i is not none -%}
+    {%- if b.start is none -%}{%- set b.start = i -%}{%- endif -%}
+    {%- set b.prev = i -%}
+  {%- endif -%}
+{%- endfor -%}
+{{ {
+  'needed_kwh': needed_battery | round(1),
+  'needed_at_charger_kwh': needed | round(1),
+  'solar_kwh': sun | round(1),
+  'solar_expected_kwh': z.kwh | round(1),
+  'grid_kwh': grid_needed | round(1),
+  'planned_kwh': s.kwh | round(1),
+  'feasible': (total + sun) >= needed - 0.05,
+  'shortfall_kwh': [0, needed - total - sun] | max | round(1),
+  'mode': mode,
+  'power_kw': p | round(2),
+  'amps': amps,
+  'peak_tight': not fast,
+  'charge_now': mode if 0 in sel else 'no',
+  'blocks': b.l,
+  'quarters': sel | count,
+  'first_start': as_local(q0 + timedelta(minutes=15 * sel[0])).isoformat() if sel else none,
+  'cost_eur': s.cost | round(2),
+  'price_unknown': s.unknown
+} | to_json }}
+{%- endmacro %}

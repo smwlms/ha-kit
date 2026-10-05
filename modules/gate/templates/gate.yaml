@@ -1,0 +1,163 @@
+<% set gate_sensor = entities.get('gate_sensor') %>
+# Gate: template sensors (ha-kit module gate, see gate/LOGIC.md).
+# Filled in from house.yaml by tools/fill.py; uploaded by gate/deploy.py to /config/templates/gate.yaml.
+# Conditions for the automatic opening, evaluated in one place so the automation, the dashboard and
+# Developer tools all see the same values. Per-car logic lives in custom_templates/gate.jinja (conditions,
+# all_conditions). The rule is per car; no phone has to be in the car:
+#   A = binary_sensor.gate_<car>_away_long_enough  the car was further than input_number.gate_far_distance from
+#                                                  home for at least input_number.gate_away_minutes
+#   C = binary_sensor.gate_<car>_navigating_home   that car navigates to home (name and coordinates)
+# automation.gate_auto_open reads these sensors; it does not recompute them.
+
+# --- Condition A per car: since when is the car far enough from home (cleared when it is home) --------------
+<% for a in cars %>
+- trigger:
+    - trigger: state
+      entity_id: <@ car_entity(a, 'location') @>
+  sensor:
+    - name: "<@ t('sensor_far_since', car=a.name) @>"
+      unique_id: gate_<@ a.prefix @>_far_since
+      default_entity_id: sensor.gate_<@ a.prefix @>_far_since
+      device_class: timestamp
+      icon: mdi:map-marker-distance
+      state: >
+        {% set car = states['<@ car_entity(a, 'location') @>'] %}
+        {% set far_m = states('input_number.gate_far_distance') | float(1500) %}
+        {% if car is none or car.state == 'home' %}
+          {{ none }}
+        {% elif this.state not in ['unknown', 'unavailable', none, ''] %}
+          {{ this.state }}
+        {% elif car.attributes.latitude is number and distance(car.entity_id, 'zone.home') * 1000 > far_m %}
+          {{ car.last_updated.isoformat() }}
+        {% else %}
+          {{ none }}
+        {% endif %}
+
+<% endfor %>
+# --- Conditions A and C per car ------------------------------------------------------------------------------
+- trigger:
+    - trigger: state
+      entity_id:
+<% for a in cars %>
+        - <@ car_entity(a, 'location') @>
+        - <@ car_entity(a, 'route') @>
+        - <@ car_entity(a, 'distance_to_arrival') @>
+        - <@ car_entity(a, 'destination') @>
+        - <@ car_entity(a, 'status') @>
+        - sensor.gate_<@ a.prefix @>_far_since
+<% endfor %>
+        - input_number.gate_far_distance
+        - input_number.gate_away_minutes
+        - input_number.gate_nav_home_tolerance
+        - input_boolean.gate_auto_open_enabled
+    # The age of a position grows while nothing changes: re-evaluate regularly.
+    - trigger: time_pattern
+      seconds: "/30"
+    - trigger: homeassistant
+      event: start
+    - trigger: event
+      event_type: event_template_reloaded
+  action:
+    - variables:
+        # One entry per car, in the order of cars() in gate.jinja (the index below).
+        cars: "{% from 'gate.jinja' import all_conditions %}{{ all_conditions() | from_json }}"
+  binary_sensor:
+<% for a in cars %>
+    - name: "<@ t('sensor_away_long_enough', car=a.name) @>"
+      unique_id: gate_<@ a.prefix @>_away_long_enough
+      default_entity_id: binary_sensor.gate_<@ a.prefix @>_away_long_enough
+      icon: mdi:timer-sand-complete
+      state: "{{ cars[<@ loop.index0 @>].away_ok }}"
+      attributes:
+        away_minutes: "{{ cars[<@ loop.index0 @>].away_min }}"
+        needed_minutes: "{{ cars[<@ loop.index0 @>].need_min }}"
+        gate_distance_m: "{{ cars[<@ loop.index0 @>].gate_distance_m }}"
+        position_age_s: "{{ cars[<@ loop.index0 @>].car_age_s }}"
+
+    - name: "<@ t('sensor_navigating_home', car=a.name) @>"
+      unique_id: gate_<@ a.prefix @>_navigating_home
+      default_entity_id: binary_sensor.gate_<@ a.prefix @>_navigating_home
+      icon: mdi:navigation-variant
+      state: "{{ cars[<@ loop.index0 @>].navigating_home }}"
+      attributes:
+        nav_active: "{{ cars[<@ loop.index0 @>].nav_active }}"
+        destination: "{{ cars[<@ loop.index0 @>].destination_name }}"
+        destination_is_home: "{{ cars[<@ loop.index0 @>].destination_name_home }}"
+        distance_to_arrival_km: "{{ cars[<@ loop.index0 @>].distance_to_arrival_km }}"
+        destination_to_home_m: "{{ cars[<@ loop.index0 @>].destination_to_home_m }}"
+        tolerance_m: "{{ cars[<@ loop.index0 @>].tolerance_m }}"
+
+<% endfor %>
+    # A and C for the same car, with the master switch on. Informational (dashboard, testing);
+    # the automation still checks the gate, the approach zone and the cooldown itself.
+    - name: "<@ t('sensor_auto_open_ready') @>"
+      unique_id: gate_auto_open_ready
+      default_entity_id: binary_sensor.gate_auto_open_ready
+      icon: mdi:gate-arrow-right
+      state: >
+        {{ is_state('input_boolean.gate_auto_open_enabled', 'on') and cars | selectattr('ready') | list | count > 0 }}
+      attributes:
+        car: "{{ cars | selectattr('ready') | map(attribute='car') | first | default('') }}"
+        a_away_long_enough: "{{ cars | selectattr('away_ok') | map(attribute='car') | list }}"
+        c_navigating_home: "{{ cars | selectattr('navigating_home') | map(attribute='car') | list }}"
+
+# --- Measurement: how often do the positions update (to tune the zone radius) ------------------------------
+# State = seconds since the previous position change of that tracker; attributes = metres moved and implied speed.
+# Long-term statistics (state_class) give mean/min/max per hour in the history graph.
+<% set trackers = [] %>
+<% for a in cars %>
+<% set _ = trackers.append({'id': car_entity(a, 'location'), 'slug': a.prefix, 'name': a.name, 'phone': false}) %>
+<% endfor %>
+<% for x in people if x.get('phone') %>
+<% set _ = trackers.append({'id': 'device_tracker.' ~ x.phone, 'slug': 'phone_' ~ x.key, 'name': t('sensor_phone_of', name=x.name), 'phone': true}) %>
+<% endfor %>
+<% for tr in trackers %>
+- trigger:
+    - trigger: state
+      entity_id: <@ tr.id @>
+  sensor:
+    - name: "<@ t('sensor_update_interval', name=tr.name) @>"
+      unique_id: gate_update_interval_<@ tr.slug @>
+      default_entity_id: sensor.gate_update_interval_<@ tr.slug @>
+      icon: mdi:timer-refresh-outline
+      unit_of_measurement: s
+      device_class: duration
+      state_class: measurement
+      state: >
+        {% set f, t = trigger.from_state, trigger.to_state %}
+        {{ ((t.last_updated - f.last_updated).total_seconds() | round(1)) if f is not none and t is not none else none }}
+      attributes:
+        moved_m: >
+          {% set f, t = trigger.from_state, trigger.to_state %}
+          {% if f is not none and t is not none and f.attributes.latitude is number and t.attributes.latitude is number %}
+            {{ (distance(f.attributes.latitude, f.attributes.longitude, t.attributes.latitude, t.attributes.longitude) * 1000) | round(0) }}
+          {% else %}{{ none }}{% endif %}
+        km_per_hour: >
+          {% set f, t = trigger.from_state, trigger.to_state %}
+          {% set s = (t.last_updated - f.last_updated).total_seconds() if f is not none and t is not none else 0 %}
+          {% if s > 0 and f.attributes.latitude is number and t.attributes.latitude is number %}
+            {{ (distance(f.attributes.latitude, f.attributes.longitude, t.attributes.latitude, t.attributes.longitude) * 3600 / s) | round(0) }}
+          {% else %}{{ none }}{% endif %}
+<% if tr.phone %>
+        accuracy_m: "{{ trigger.to_state.attributes.gps_accuracy | default(none) }}"
+<% endif %>
+
+<% endfor %>
+<% if gate_sensor %>
+# --- Gate position ------------------------------------------------------------------------------------------
+# One stable entity for the whole module: binary_sensor.gate_open, on = open or moving, off = fully closed.
+# Source: entities.gate_sensor in house.yaml<@ ' (inverted: the source is on while the gate is CLOSED)' if entities.get('gate_sensor_inverted') else '' @>.
+- binary_sensor:
+    - name: "<@ t('sensor_gate_open') @>"
+      unique_id: gate_open
+      default_entity_id: binary_sensor.gate_open
+      device_class: garage_door
+      availability: "{{ has_value('<@ gate_sensor @>') }}"
+<% if gate_sensor.startswith('cover.') %>
+      state: "{{ not is_state('<@ gate_sensor @>', 'closed') }}"
+<% elif entities.get('gate_sensor_inverted') %>
+      state: "{{ is_state('<@ gate_sensor @>', 'off') }}"
+<% else %>
+      state: "{{ is_state('<@ gate_sensor @>', 'on') }}"
+<% endif %>
+<% endif %>

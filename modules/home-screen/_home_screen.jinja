@@ -1,0 +1,189 @@
+<# Shared preamble of the module home-screen: the whole card config, derived from house.yaml, modules: and the
+   capabilities at fill time. Imported by lovelace/home.yaml and deploy.py:
+     <% from '_home_screen.jinja' import card, view with context %>
+   Rule: the JavaScript has no entity id of its own. Every id below is either a house.yaml role or a contract id of an
+   installed module (docs/phase4-contracts.md, README "Contracts between modules"). A block whose module is not in
+   modules: gets no feature flag and no roles, so the card does not draw it. #>
+<% set E = entities if entities is defined and entities else {} %>
+<% set HS = home_screen if home_screen is defined and home_screen else {} %>
+<% set ppl = people if people is defined and people else [] %>
+<% set car_list = cars if cars is defined and cars else [] %>
+<% set room_list = rooms if rooms is defined and rooms else [] %>
+<% set caps = capabilities %>
+<% set has = {
+  'climate': 'climate' in modules,
+  'gate': 'gate' in modules,
+  'shading': 'shading' in modules,
+  'presence': 'presence' in modules,
+  'cars': 'tesla-route' in modules,
+  'doorbell': 'doorbell' in modules,
+  'parcel_service': 'parcel-service' in modules,
+  'ev_charging': 'ev-charging' in modules,
+  'tariff': 'tariff' in caps,
+  'energy': 'energy-plan' in modules,
+  'hot_water': 'hot-water' in modules,
+  'heat_pump': 'heat-pump' in caps,
+  'cameras': (HS.get('cameras') or '') | length > 0,
+  'media': (HS.get('media_players') or []) | length > 0,
+  'todo': (HS.get('todo') or '') | length > 0,
+} %>
+<# --- roles: role -> entity id, only the ones that exist in this house --- #>
+<% set roles = {} %>
+<% for key in ['indoor_temperature', 'outdoor_temperature', 'weather'] %>
+<% if E.get(key) %><% set _ = roles.update({key: E[key]}) %><% endif %>
+<% endfor %>
+<% set _ = roles.update({'sun': 'sun.sun'}) %>
+<% if has.gate %>
+<% if E.get('gate_sensor') %><% set _ = roles.update({'gate_open': 'binary_sensor.gate_open'}) %><% endif %>
+<% set _ = roles.update({'gate_close_script': 'script.gate_close_manual'}) %>
+<% endif %>
+<% if has.shading %>
+<% set _ = roles.update({'shading_automatic': 'input_boolean.shading_automatic'}) %>
+<% endif %>
+<% if has.doorbell %>
+<% set _ = roles.update({'doorbell_button': E.doorbell_button, 'doorbell_camera': E.doorbell_camera,
+   'doorbell_visit': 'input_text.doorbell_visit', 'doorbell_description': 'input_text.doorbell_description',
+   'doorbell_reply': 'script.doorbell_reply'}) %>
+<% if E.get('doorbell_package') %><% set _ = roles.update({'doorbell_package': E.doorbell_package}) %><% endif %>
+<% endif %>
+<% if has.parcel_service %>
+<% set _ = roles.update({'parcel_expected': 'input_datetime.parcel_expected', 'parcel_ajar': 'input_number.parcel_service_ajar',
+   'parcel_open': 'input_number.parcel_service_open', 'parcel_expected_script': 'script.parcel_expected'}) %>
+<% endif %>
+<% if has.tariff %>
+<% set _ = roles.update({'price_import': 'sensor.power_price_import', 'price_export': 'sensor.power_price_export',
+   'price_level': 'sensor.power_price_level', 'capacity_month_peak': 'sensor.capacity_month_peak_kw',
+   'capacity_quarter': 'sensor.capacity_quarter_expected_kw'}) %>
+<% endif %>
+<% if has.energy %>
+<% set _ = roles.update({'surplus': 'binary_sensor.energy_plan_surplus', 'house_power': E.get('house_power_w') or 'sensor.energy_plan_house_power'}) %>
+<% for key, role in [('solar_power', 'solar_power_w'), ('battery_soc', 'battery_soc'), ('battery_power', 'battery_power_w'),
+   ('grid_import', 'grid_import_w'), ('grid_export', 'grid_export_w')] %>
+<% if E.get(role) %><% set _ = roles.update({key: E[role]}) %><% endif %>
+<% endfor %>
+<% endif %>
+<% if has.ev_charging %>
+<% set _ = roles.update({'ev_charger_power': 'sensor.ev_charger_power', 'ev_charger_mode': 'sensor.ev_charger_mode',
+   'ev_charging_car': 'sensor.ev_charging_car', 'ev_charging_status': 'sensor.ev_charging_status',
+   'ev_charging_smart': 'input_boolean.ev_charging_smart'}) %>
+<% endif %>
+<% if has.hot_water %>
+<% set _ = roles.update({'hot_water_temperature': 'sensor.hot_water_temperature', 'hot_water_shower_tomorrow': 'input_boolean.hot_water_shower_tomorrow',
+   'hot_water_shower': 'input_number.hot_water_shower', 'hot_water_minimum': 'input_number.hot_water_minimum',
+   'hot_water_morning': 'sensor.hot_water_cheapest_hour_before_sunrise', 'hot_water_surplus_active': 'input_boolean.hot_water_surplus_active'}) %>
+<% endif %>
+<% if has.climate %>
+<% set _ = roles.update({'climate_indoor_peak': 'sensor.climate_indoor_peak', 'climate_floor_mode': 'input_select.climate_floor_mode'}) %>
+<% endif %>
+<% if has.heat_pump %>
+<% set _ = roles.update({'heat_pump_state': 'sensor.heat_pump_state'}) %>
+<% endif %>
+<% if has.todo %><% set _ = roles.update({'todo': HS.todo}) %><% endif %>
+<# --- lists from house.yaml --- #>
+<% set person_list = [] %>
+<% for x in ppl %>
+<% set _ = person_list.append({'key': x.key, 'name': x.name, 'person': x.get('person') or 'person.' ~ x.key}) %>
+<% endfor %>
+<% set car_rows = [] %>
+<% if has.cars %>
+<% for a in car_list %>
+<% set row = {'prefix': a.prefix, 'name': a.name, 'battery': car_entity(a, 'battery'), 'charging': car_entity(a, 'charging_state'),
+   'cable': car_entity(a, 'charge_cable'), 'location': car_entity(a, 'location'), 'at_home': car_entity(a, 'located_at_home')} %>
+<% if has.ev_charging and a.get('charge_plan') %><% set _ = row.update({'plan': 'sensor.ev_plan_' ~ a.prefix}) %><% endif %>
+<% set _ = car_rows.append(row) %>
+<% endfor %>
+<% endif %>
+<% set room_rows = [] %>
+<% if has.shading %>
+<% for r in room_list if r.get('blind') or r.get('curtain') %>
+<% set row = {'slug': r.slug, 'name': r.name} %>
+<% if r.get('blind') %><% set _ = row.update({'blind': r.blind, 'flag': 'input_boolean.shading_closed_' ~ r.slug}) %><% endif %>
+<% if r.get('curtain') %><% set _ = row.update({'curtain': r.curtain}) %><% endif %>
+<% set _ = room_rows.append(row) %>
+<% endfor %>
+<% endif %>
+<% set phases = [] %>
+<% if has.energy %>
+<% for ph in E.get('grid_phases') or [] %>
+<% set _ = phases.append({'import': ph.get('import_w'), 'export': ph.get('export_w')}) %>
+<% endfor %>
+<% endif %>
+<# --- paths: where a chip goes on tap; empty = only the info sheet (no Open button) --- #>
+<% set paths = {} %>
+<% if has.energy or has.tariff %><% set _ = paths.update({'energy': '/energy'}) %><% endif %>
+<% if has.presence %><% set _ = paths.update({'presence': '/lovelace/our-week'}) %><% endif %>
+<% if has.todo %><% set _ = paths.update({'todo': '/todo?entity_id=' ~ HS.todo}) %><% endif %>
+<% for k, v in (HS.get('paths') or {}).items() %>
+<% if v %><% set _ = paths.update({k: v}) %><% endif %>
+<% endfor %>
+<# --- arrival card of tesla-route (custom:tesla-arrival-card), shown inside the home screen --- #>
+<% set arrival = none %>
+<% if has.cars and car_list %>
+<% set arr_cars = [] %>
+<% for a in car_list %>
+<% set ents = {'loc': car_entity(a, 'location'), 'dest': car_entity(a, 'route'), 'destName': car_entity(a, 'destination'),
+   'eta': car_entity(a, 'time_to_arrival'), 'dist': car_entity(a, 'distance_to_arrival'), 'delay': car_entity(a, 'traffic_delay'),
+   'socArr': car_entity(a, 'battery_at_arrival'), 'shift': car_entity(a, 'shift_state'), 'speed': car_entity(a, 'speed'),
+   'online': car_entity(a, 'status'), 'route': car_entity(a, 'tesla_route')} %>
+<% if has.gate %><% set _ = ents.update({'nav': 'binary_sensor.gate_' ~ a.prefix ~ '_navigating_home', 'away': 'binary_sensor.gate_' ~ a.prefix ~ '_away_long_enough'}) %><% endif %>
+<% set ac = {'p': a.prefix, 'name': a.name, 'entities': ents} %>
+<% for k in ['driver', 'color', 'badge'] %><% if a.get(k) %><% set _ = ac.update({k: a[k]}) %><% endif %><% endfor %>
+<% set _ = arr_cars.append(ac) %>
+<% endfor %>
+<% set arr_people = [] %>
+<% for x in ppl if x.get('phone') %>
+<% set _ = arr_people.append({'name': x.name, 'key': x.key, 'tracker': 'device_tracker.' ~ x.phone}) %>
+<% endfor %>
+<% set arrival = {'type': 'custom:tesla-arrival-card', 'home': 'zone.home', 'cars': arr_cars, 'people': arr_people} %>
+<% if has.gate %>
+<% set gate_cfg = {'open_script': 'script.gate_open_manual', 'close_script': 'script.gate_close_manual'} %>
+<% if E.get('gate_sensor') %><% set _ = gate_cfg.update({'sensor': 'binary_sensor.gate_open'}) %><% endif %>
+<% if (E.get('gate_relay') or '').startswith('switch.') %><% set _ = gate_cfg.update({'relay': E.gate_relay}) %><% endif %>
+<% set _ = arrival.update({'gate': gate_cfg}) %>
+<% endif %>
+<% if HS.get('map_token') %><% set _ = arrival.update({'mapbox_token': HS.map_token}) %><% endif %>
+<% endif %>
+<# --- user-facing texts (strings.yaml, house.language); {placeholders} are filled in by the card (fmt) --- #>
+<% set string_keys = ['locale', 'greet_night', 'greet_morning', 'greet_afternoon', 'greet_evening', 'choose_chips', 'advanced_view',
+  'chip_indoor', 'chip_indoor_name', 'chip_indoor_info', 'chip_indoor_info_comfort', 'chip_outdoor', 'chip_outdoor_name', 'chip_outdoor_info', 'chip_outdoor_info_weather',
+  'chip_gate', 'gate_closed', 'gate_open', 'gate_open_title', 'gate_closed_title', 'gate_open_since', 'gate_closed_since', 'gate_close', 'gate_close_confirm', 'gate_close_reason',
+  'chip_blinds', 'chip_blinds_open', 'blinds_all_open', 'blinds_all_closed', 'blinds_info', 'cover_open', 'cover_closed', 'cover_opening', 'cover_closing', 'cover_offline',
+  'chip_home', 'chip_home_name', 'home_nobody', 'home_one', 'home_many', 'person_home', 'person_away', 'presence_page',
+  'car_info_charging', 'car_info_plugged', 'car_info_unplugged', 'cars_page',
+  'chip_doorbell', 'doorbell_rings', 'doorbell_quiet', 'doorbell_label_parcel', 'doorbell_label_doorbell', 'doorbell_last_rang',
+  'doorbell_title', 'doorbell_seen', 'doorbell_parcel_left', 'doorbell_at_door', 'doorbell_coming', 'doorbell_protect',
+  'chip_parcel', 'parcel_yes', 'parcel_off', 'parcel_today', 'parcel_tomorrow', 'parcel_title', 'parcel_expected', 'parcel_text_on', 'parcel_text_off',
+  'parcel_ajar_row', 'parcel_open_row', 'parcel_ajar_value', 'parcel_open_value', 'parcel_no', 'parcel_set_today', 'parcel_set_tomorrow', 'parcel_set_off', 'parcel_garage_ajar',
+  'chip_climate', 'chip_climate_name', 'climate_info', 'day_type_cool', 'day_type_sunny_fresh', 'day_type_warm', 'day_type_normal',
+  'floor_heating', 'floor_neutral', 'floor_cooling',
+  'chip_cameras', 'chip_cameras_aria', 'chip_media', 'chip_media_playing', 'media_quiet', 'chip_media_aria_playing', 'chip_media_aria_quiet',
+  'chip_charging', 'charging_kw', 'charging_target', 'charging_smart', 'charging_on', 'charging_off', 'chip_charging_aria',
+  'chip_week', 'chip_week_aria',
+  'energy', 'details', 'solar_kw', 'solar_title', 'solar_info', 'battery_title', 'battery_gives', 'battery_charges', 'battery_rests', 'battery_info',
+  'grid_title', 'grid_from', 'grid_to', 'grid_none', 'grid_kw', 'grid_info_from', 'grid_info_to', 'grid_info_none', 'house_kw', 'house_title', 'house_info',
+  'price_now', 'price_now_title', 'price_cheapest', 'price_cheapest_tomorrow', 'price_cheapest_title', 'price_cheapest_info', 'price_back', 'price_back_title', 'price_back_info',
+  'peak_month', 'peak_title', 'peak_info', 'peak_over', 'peak_over_title', 'cents',
+  'level_negative', 'level_very_cheap', 'level_cheap', 'level_normal', 'level_expensive', 'level_very_expensive', 'level_unknown',
+  'advice_peak', 'advice_surplus', 'advice_negative', 'advice_price', 'advice_cheapest',
+  'phases', 'controls', 'hot_water', 'hot_water_title', 'hot_water_sub', 'hot_water_info', 'hot_water_info_morning',
+  'toggle_on', 'toggle_off', 'toggle_info', 'blinds', 'curtains', 'up', 'down', 'blinds_info_all', 'curtains_info_all', 'covers_confirm_open', 'covers_confirm_close',
+  'playing_now', 'all', 'pause', 'todo_one', 'todo_many',
+  'climate', 'living_room', 'floor', 'floor_idle', 'floor_heats', 'floor_cools', 'floor_hot_water', 'expected_today', 'expected_value', 'floor_next_days', 'hot_water_row',
+  'cars', 'car_home', 'car_elsewhere', 'car_plug_in', 'car_plug_out', 'car_charging_now', 'charger', 'charger_free', 'charger_free_info', 'charger_info',
+  'mode_solar_only', 'mode_solar_min', 'mode_fast', 'mode_stop', 'mode_unknown',
+  'rooms', 'shading_auto_on', 'shading_auto_off', 'room_toggle_close', 'room_toggle_open', 'room_sub_blind', 'room_sub_curtain', 'sun_kept_out',
+  'house_does', 'auto_hot_water', 'auto_hot_water_heating', 'auto_waiting', 'auto_charging', 'auto_shading', 'auto_shading_closed', 'auto_not_needed', 'auto_off',
+  'auto_morning', 'status_off', 'status_no_car', 'status_car_full', 'status_solar', 'status_paused_battery', 'status_grid_assist', 'status_plan', 'status_manual', 'status_peak_limited',
+  'none_yet'] %>
+<% set strings = {} %>
+<% for k in string_keys %><% set _ = strings.update({k: t(k)}) %><% endfor %>
+<% set card = {'type': 'custom:home-screen-card', 'features': has, 'roles': roles, 'battery_sign': ((energy if energy is defined and energy else {}).get('battery_power_sign') or 'discharge_positive'),
+   'capacity_minimum_kw': ((tariff.capacity.minimum_kw if tariff is defined and tariff and tariff.get('capacity') else 0) if has.tariff else 0),
+   'comfort': ((climate.get('comfort') if climate is defined and climate else none) or {'low': 20.5, 'high': 22.5}),
+   'people': person_list, 'cars': car_rows, 'rooms': room_rows, 'phases': phases,
+   'toggles': HS.get('toggles') or [], 'media_players': HS.get('media_players') or [], 'cameras': HS.get('cameras') or '',
+   'paths': paths, 'strings': strings} %>
+<% if HS.get('protect_url') and has.doorbell %><% set _ = card.update({'protect_url': HS.protect_url}) %><% endif %>
+<% if HS.get('map_token') %><% set _ = card.update({'map': {'token': HS.map_token}}) %><% endif %>
+<% if arrival %><% set _ = card.update({'arrival': arrival}) %><% endif %>
+<% set view = {'title': t('view_title'), 'path': HS.get('view_path') or 'home', 'icon': 'mdi:home-outline', 'type': 'panel', 'cards': [card]} %>

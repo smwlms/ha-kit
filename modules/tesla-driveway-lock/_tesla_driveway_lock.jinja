@@ -1,0 +1,18 @@
+<# Shared preamble of the module tesla-driveway-lock, derived from house.yaml. Every templated file imports the names
+   it needs:  <% from '_tesla_driveway_lock.jinja' import photo, car_list with context %> #>
+<% set tdl = tesla_driveway_lock if tesla_driveway_lock is defined and tesla_driveway_lock else {} %>
+<% from '_ai_task.jinja' import ai_entity %>
+<% set db = doorbell if doorbell is defined and doorbell else {} %>
+<# tesla_driveway_lock.ai_task: empty = doorbell.ai_task (empty there too = the first ai_task entity); none = no
+   garage photo to an AI service, even when the doorbell uses one. The garage photo is only taken to be judged, so
+   garage_photo: true with none is an error (deploy.py also stops when no ai_task entity exists). #>
+<% set ai_value = ai_entity(tdl.get('ai_task') or db.get('ai_task')) %>
+<% set photo = tdl.get('garage_photo') is sameas true %>
+<% if photo and ai_value == '""' %>
+<@ fail('tesla_driveway_lock.garage_photo: true needs an AI service to judge the photo, but ai_task is none: set garage_photo: false, or tesla_driveway_lock.ai_task to auto or an ai_task entity') @>
+<% endif %>
+<% set ent = entities if entities is defined and entities else {} %>
+<% set car_list = cars if cars is defined and cars else [] %>
+<% set spots = car_list | selectattr('garage_spot', 'defined') | selectattr('garage_spot') | map(attribute='garage_spot') | unique | list %>
+<% set minutes = module.defaults['input_number.tesla_driveway_lock_minutes'] %>
+<% set radius = module.defaults['zone.driveway'] %>

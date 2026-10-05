@@ -1,0 +1,9 @@
+<# Which AI service may look at camera images: the ai_task setting of house.yaml (doorbell.ai_task,
+   tesla_driveway_lock.ai_task), turned into the YAML value of an automation variable ai_entity.
+     empty, auto             -> the first ai_task entity Home Assistant has (at run time): when an AI integration
+                                such as Google Generative AI exists, camera images ARE sent to it
+     none, off, false        -> ""  no camera image leaves the house (the AI step is skipped)
+     ai_task.<name>          -> that entity
+   Anything else stops fill.py. Use: <% from '_ai_task.jinja' import ai_entity %>  ai_entity: <@ ai_entity(doorbell.ai_task) @>
+   and test the opt-out with <% if ai_entity(value) == '""' %>. #>
+<% macro ai_entity(value) %><% set v = 'none' if value is sameas false else ('' if value is none else (value | string | trim)) %><% if v | lower in ['none', 'off', 'false'] %>""<% elif v | lower in ['', 'auto'] %>"{{ states.ai_task | map(attribute='entity_id') | first | default('') }}"<% elif v is regex_search('^ai_task\\.[a-z0-9_]+$') %><@ v | tojson @><% else %><@ fail('ai_task must be empty or auto (the first ai_task entity), none (no camera image is sent) or an entity id ai_task.<name>, not ' ~ (v | tojson)) @><% endif %><% endmacro %>

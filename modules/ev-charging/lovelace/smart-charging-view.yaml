@@ -1,0 +1,142 @@
+<% from '_ev_charging.jinja' import plan_cars, amps_cars, has_tariff, battery, own_counter, has_gate with context %>
+# EV charging: a "Smart charging" view with core cards only (ha-kit module ev-charging). Not deployed by deploy.py:
+# open a dashboard, Edit > three dots > Raw configuration editor, and paste this item under views:. Or add a view
+# of type Sections and paste the sections. Every entity comes from this module (filled in from house.yaml).
+title: <@ t('view_title') | tojson @>
+path: smart-charging
+icon: mdi:ev-station
+type: sections
+max_columns: 3
+sections:
+  - type: grid
+    cards:
+      - type: heading
+        heading: <@ t('view_charger') | tojson @>
+        icon: mdi:ev-station
+      - type: tile
+        entity: input_boolean.ev_charging_smart
+        features:
+          - type: toggle
+        grid_options: { columns: 12 }
+      - type: tile
+        entity: sensor.ev_charging_status
+      - type: tile
+        entity: sensor.ev_charging_car
+      - type: tile
+        entity: input_select.ev_charging_owner
+        features:
+          - type: select-options
+        grid_options: { columns: 12 }
+      - type: markdown
+        content: <@ t('view_owner_hint') | tojson @>
+        visibility:
+          - condition: state
+            entity: input_select.ev_charging_owner
+            state: manual
+      - type: tile
+        entity: sensor.ev_charging_wanted
+      - type: tile
+        entity: sensor.ev_charging_available_power_avg
+      - type: tile
+        entity: sensor.ev_charger_mode
+      - type: tile
+        entity: sensor.ev_charging_energy_needed
+  - type: grid
+    cards:
+      - type: heading
+        heading: <@ t('view_settings') | tojson @>
+        icon: mdi:tune-variant
+      - type: tile
+        entity: input_number.ev_charging_solar_share
+        features:
+          - type: numeric-input
+            style: slider
+        grid_options: { columns: 12 }
+<% if battery %>
+      - type: tile
+        entity: input_number.ev_charging_battery_floor
+        features:
+          - type: numeric-input
+            style: slider
+        grid_options: { columns: 12 }
+      - type: tile
+        entity: binary_sensor.ev_charging_battery_feeds_car
+<% endif %>
+<% if amps_cars %>
+      - type: heading
+        heading: <@ t('view_car_current') | tojson @>
+        heading_style: subtitle
+      - type: tile
+        entity: input_boolean.ev_charging_car_amps_auto
+        features:
+          - type: toggle
+      - type: tile
+        entity: counter.tesla_commands_today
+      - type: tile
+        entity: input_number.ev_charging_min_amps
+        features:
+          - type: numeric-input
+            style: buttons
+      - type: tile
+        entity: input_number.ev_charging_car_commands_per_day
+        features:
+          - type: numeric-input
+            style: buttons
+<% endif %>
+<% if has_tariff %>
+  - type: grid
+    cards:
+      - type: heading
+        heading: <@ t('view_cheap') | tojson @>
+        icon: mdi:cash-clock
+      - type: tile
+        entity: input_boolean.ev_charging_cheap_enabled
+        features:
+          - type: toggle
+      - type: tile
+        entity: sensor.ev_charging_cheap_status
+      - type: tile
+        entity: input_number.ev_charging_cheap_max_grid_kw
+        features:
+          - type: numeric-input
+            style: buttons
+<% if battery %>
+      - type: tile
+        entity: input_number.ev_charging_cheap_battery_full
+        features:
+          - type: numeric-input
+            style: buttons
+<% endif %>
+      - type: tile
+        entity: input_number.ev_charging_cheap_stop_min
+        features:
+          - type: numeric-input
+            style: buttons
+      - type: tile
+        entity: binary_sensor.ev_charging_peak_risk
+<% endif %>
+<% for c in plan_cars %>
+  - type: grid
+    cards:
+      - type: heading
+        heading: <@ t('helper_plan', name=c.name) | tojson @>
+        icon: mdi:car-clock
+      - type: tile
+        entity: input_boolean.ev_plan_<@ c.prefix @>
+        features:
+          - type: toggle
+      - type: tile
+        entity: sensor.ev_plan_<@ c.prefix @>
+      - type: tile
+        entity: input_number.ev_plan_<@ c.prefix @>_target
+        features:
+          - type: numeric-input
+            style: slider
+        grid_options: { columns: 12 }
+      - type: entities
+        entities:
+          - input_datetime.ev_plan_<@ c.prefix @>_departure
+          - input_number.ev_plan_<@ c.prefix @>_margin
+          - input_number.ev_plan_<@ c.prefix @>_reserve
+          - input_number.ev_plan_<@ c.prefix @>_solar_confidence
+<% endfor %>

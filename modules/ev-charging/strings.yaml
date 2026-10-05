@@ -1,0 +1,201 @@
+# User-facing texts of the module ev-charging, one key per text: {en: ..., nl: ...}. Used as <@ t('key') @>.
+# Rules: no double quotes or backslashes; placeholders like {mode} without a value at fill time stay in the text and
+# are filled in by Home Assistant at run time (replace()); keep them when you translate; no emoji.
+
+# --- helpers (package.yaml) ---
+helper_smart: { en: "Smart charging", nl: "Slim laden" }
+helper_cheap_enabled: { en: "Smart charging: use cheap power", nl: "Slim laden: goedkope stroom benutten" }
+helper_car_amps_auto: { en: "Smart charging: car current automatic", nl: "Slim laden: ampère van de auto automatisch" }
+helper_solar_share: { en: "Smart charging: minimum solar share", nl: "Slim laden: minimum aandeel zon" }
+helper_battery_floor: { en: "Smart charging: home battery floor", nl: "Slim laden: ondergrens thuisbatterij" }
+helper_cheap_max_grid: { en: "Cheap power: max grid import", nl: "Goedkope stroom: max netafname" }
+helper_cheap_battery_full: { en: "Cheap power: battery full from", nl: "Goedkope stroom: batterij vol vanaf" }
+helper_cheap_stop_min: { en: "Cheap power: stop after", nl: "Goedkope stroom: stoppen na" }
+helper_min_amps: { en: "Smart charging: minimum car current", nl: "Slim laden: minimum ampère" }
+helper_commands_per_day: { en: "Smart charging: car commands per day", nl: "Slim laden: auto-commando's per dag" }
+helper_owner: { en: "Smart charging: owner of the charger", nl: "Slim laden: eigenaar van de laadpaal" }
+helper_tesla_commands_today: { en: "Tesla commands today", nl: "Tesla-commando's vandaag" }
+helper_plan: { en: "Charge plan {name}", nl: "Laadplan {name}" }
+helper_plan_target: { en: "Charge plan {name}: target", nl: "Laadplan {name}: doel" }
+helper_plan_departure: { en: "Charge plan {name}: departure", nl: "Laadplan {name}: vertrek" }
+helper_plan_margin: { en: "Charge plan {name}: margin", nl: "Laadplan {name}: marge" }
+helper_plan_reserve: { en: "Charge plan {name}: reserve on return", nl: "Laadplan {name}: reserve bij thuiskomst" }
+helper_plan_solar_confidence: { en: "Charge plan {name}: solar confidence", nl: "Laadplan {name}: zekerheid zon" }
+helper_plan_previous_limit: { en: "Charge plan {name}: previous charge limit", nl: "Laadplan {name}: vorige laadlimiet" }
+
+# --- sensors (templates/ev_charging.yaml, templates/ev_plan.yaml) ---
+sensor_car: { en: "Smart charging: car", nl: "Slim laden: auto" }
+sensor_available_power: { en: "Smart charging: available power", nl: "Slim laden: beschikbaar voor de auto" }
+sensor_energy_needed: { en: "Smart charging: energy needed", nl: "Slim laden: energie nodig" }
+sensor_status: { en: "Smart charging: status", nl: "Slim laden: status" }
+sensor_battery_feeds_car: { en: "Smart charging: battery feeds the car", nl: "Slim laden: batterij voedt de auto" }
+sensor_peak_risk: { en: "Smart charging: month peak at risk", nl: "Slim laden: maandpiek dreigt" }
+sensor_cheap_assist: { en: "Cheap power: grid assist", nl: "Goedkope stroom: netbijstand" }
+sensor_cheap_status: { en: "Cheap power: status", nl: "Goedkope stroom: status" }
+sensor_wanted: { en: "Smart charging: wanted mode", nl: "Slim laden: gewenste modus" }
+sensor_plan: { en: "Charge plan {name}", nl: "Laadplan {name}" }
+appointment: { en: appointment, nl: afspraak }
+day_names_short: { en: "Mon,Tue,Wed,Thu,Fri,Sat,Sun", nl: "ma,di,wo,do,vr,za,zo" }
+
+# --- script ev_charging_manual_mode (scripts.yaml) ---
+script_manual_alias: { en: "Smart charging: charger mode by hand", nl: "Slim laden: laadpaalmodus met de hand" }
+script_manual_description:
+  en: >-
+    Sets the charger to a mode by hand (screens, buttons). Fires ha_kit_ev_charging_manual; the automation
+    ev_charging_apply sets the owner to manual and the charger to this mode, and leaves it alone until the car is
+    unplugged (or the owner is set back to none). Without smart charging on it only sets the mode.
+  nl: >-
+    Zet de laadpaal met de hand in een modus (schermen, knoppen). Vuurt ha_kit_ev_charging_manual; de automation
+    ev_charging_apply zet de eigenaar op manual en de laadpaal in deze modus, en laat hem met rust tot de auto
+    uitgeplugd wordt (of de eigenaar weer op none staat). Met slim laden uit zet hij enkel de modus.
+field_manual_mode_name: { en: Mode, nl: Modus }
+field_manual_mode_description: { en: "solar_only, solar_min, fast or stop", nl: "solar_only, solar_min, fast of stop" }
+field_manual_share_name: { en: "Solar share", nl: "Aandeel zon" }
+field_manual_share_description: { en: "optional: share of the charge power that must be surplus (solar_only); empty = unchanged", nl: "optioneel: aandeel van het laadvermogen dat overschot moet zijn (solar_only); leeg = ongewijzigd" }
+field_manual_reason_name: { en: Reason, nl: Reden }
+field_manual_reason_description: { en: "shown in the logbook", nl: "komt in het logboek" }
+manual_reason_default: { en: "by hand", nl: "met de hand" }
+
+# --- automation ev_charging_apply ---
+auto_apply_alias: { en: "Smart charging: apply", nl: "Slim laden: uitvoeren" }
+auto_apply_description:
+  en: >-
+    Carries out sensor.ev_charging_wanted: the only caller of script.ev_charger_set_mode and the only writer of
+    input_select.ev_charging_owner. A change of the charger that the kit did not make sets the owner to manual until
+    the car is unplugged. Master switch off: hands the charger back once in solar_only. See ev-charging/LOGIC.md.
+  nl: >-
+    Voert sensor.ev_charging_wanted uit: de enige die script.ev_charger_set_mode aanroept en
+    input_select.ev_charging_owner zet. Zet iemand anders de laadpaal om, dan wordt de eigenaar manual tot de auto
+    uitgeplugd wordt. Hoofdschakelaar uit: geeft de laadpaal een keer terug in solar_only. Zie ev-charging/LOGIC.md.
+logbook_name: { en: "Smart charging", nl: "Slim laden" }
+log_applied: { en: "charger {mode} · {reason}", nl: "laadpaal {mode} · {reason}" }
+log_manual: { en: "charger set to {mode} by hand: the kit leaves it alone until the car is unplugged", nl: "laadpaal met de hand op {mode}: de kit laat hem met rust tot de auto uitgeplugd is" }
+log_released: { en: "car unplugged: the kit steers the charger again", nl: "auto uitgeplugd: de kit stuurt de laadpaal weer" }
+log_handed_back: { en: "smart charging off", nl: "slim laden uit" }
+log_manual_request: { en: "charger set to {mode} by hand ({reason}): the kit leaves it alone until the car is unplugged", nl: "laadpaal met de hand op {mode} ({reason}): de kit laat hem met rust tot de auto uitgeplugd is" }
+log_manual_request_off: { en: "charger set to {mode} by hand ({reason})", nl: "laadpaal met de hand op {mode} ({reason})" }
+mode_solar_only: { en: "solar only", nl: "enkel zon" }
+mode_solar_min: { en: "solar with grid minimum", nl: "zon met minimum van het net" }
+mode_fast: { en: fast, nl: snel }
+mode_stop: { en: stopped, nl: gestopt }
+reason_off: { en: "smart charging off", nl: "slim laden uit" }
+reason_manual: { en: "set by hand", nl: "met de hand gezet" }
+reason_no_car: { en: "no car", nl: "geen auto" }
+reason_plan: { en: "charge plan", nl: "laadplan" }
+reason_peak_limited: { en: "charge plan, limited by the month peak", nl: "laadplan, beperkt door de maandpiek" }
+reason_grid_assist: { en: "cheap power: grid assist", nl: "goedkope stroom: netbijstand" }
+reason_car_full: { en: "car at its limit", nl: "auto aan zijn limiet" }
+reason_paused_battery: { en: "paused: the home battery feeds the car", nl: "pauze: de thuisbatterij voedt de auto" }
+reason_battery_behind: { en: "home battery behind: only what it cannot take", nl: "thuisbatterij loopt achter: enkel wat zij niet opneemt" }
+reason_solar: { en: "solar surplus", nl: "zonne-overschot" }
+
+# --- automation ev_charging_car_amps ---
+auto_amps_alias: { en: "Smart charging: car current", nl: "Slim laden: ampère van de auto" }
+auto_amps_description:
+  en: >-
+    The only writer of the car charge current (Teslemetry). Charge plan in fast: the current that fits under the month
+    peak. Fast by hand: the maximum. Surplus or cheap assist: the 10-minute available power divided by voltage x phases,
+    within the minimum and the maximum, only on a difference, at least 10 min apart except a drop of 2 A or more, within
+    the daily command budget (the plan may exceed it). Every command counts in counter.tesla_commands_today.
+  nl: >-
+    De enige die de laadstroom van de auto zet (Teslemetry). Laadplan in fast: de stroom die onder de maandpiek past.
+    Fast met de hand: het maximum. Overschot of netbijstand: het beschikbare vermogen over 10 min gedeeld door spanning
+    x fasen, tussen minimum en maximum, alleen bij verschil, minstens 10 min ertussen behalve bij een daling van 2 A of
+    meer, binnen het dagbudget aan commando's (het laadplan mag erover). Elk commando telt in counter.tesla_commands_today.
+log_amps: { en: "car current {from} -> {to} A · {why}", nl: "laadstroom {from} -> {to} A · {why}" }
+why_amps_plan: { en: "charge plan within the month peak", nl: "laadplan binnen de maandpiek" }
+why_amps_fast: { en: "fast: maximum", nl: "fast: maximum" }
+why_amps_solar: { en: "{kw} kW available", nl: "{kw} kW beschikbaar" }
+
+# --- automations ev_plan_<car>_limit and ev_plan_target_reset ---
+auto_limit_alias: { en: "Charge plan {name}: charge limit", nl: "Laadplan {name}: laadlimiet" }
+auto_limit_description:
+  en: >-
+    The only writer of the car's charge limit. A target above the limit raises the limit to the target (the old limit
+    is kept in input_number.ev_plan_<car>_previous_limit); once there is no target any more (departure passed or plan
+    off) and the car is online or plugged in, the old limit comes back. Every command counts in counter.tesla_commands_today.
+  nl: >-
+    De enige die de laadlimiet van de auto zet. Een doel boven de limiet zet de limiet op het doel (de oude limiet staat
+    in input_number.ev_plan_<car>_previous_limit); zodra er geen doel meer is (vertrek voorbij of plan uit) en de auto
+    online of ingeplugd is, komt de oude limiet terug. Elk commando telt in counter.tesla_commands_today.
+logbook_plan: { en: "Charge plan {name}", nl: "Laadplan {name}" }
+log_limit_raised: { en: "charge limit {to} % (was {from} %)", nl: "laadlimiet {to} % (was {from} %)" }
+log_limit_restored: { en: "charge limit back to {to} %", nl: "laadlimiet terug op {to} %" }
+auto_reset_alias: { en: "Charge plan: manual target back to 0 after departure", nl: "Laadplan: handmatig doel na vertrek terug op 0" }
+auto_reset_description:
+  en: >-
+    A manual target counts until its departure; afterwards it goes back to 0 so an old target never starts charging again.
+  nl: >-
+    Een handmatig doel geldt tot zijn vertrek; daarna gaat het terug op 0, zodat een oud doel nooit opnieuw laden start.
+
+# --- automation ev_charging_notify ---
+auto_notify_alias: { en: "Smart charging: notifications", nl: "Slim laden: meldingen" }
+auto_notify_description:
+  en: >-
+    Start and end of the cheap window (daytime, with cheap power on), a charge plan that is not feasible, and at 21:00
+    the evening before a departure. Through script.send_notification when the module notifications is installed,
+    otherwise only in the logbook.
+  nl: >-
+    Begin en einde van het goedkope venster (overdag, met goedkope stroom aan), een laadplan dat niet haalbaar is, en om
+    21:00 de avond voor een vertrek. Via script.send_notification als de module notifications geinstalleerd is,
+    anders enkel in het logboek.
+notify_cheap_start_title: { en: "Cheap power until {end}", nl: "Goedkope stroom tot {end}" }
+notify_cheap_start_message:
+  en: "Home battery first ({battery} %). When it is full the car keeps charging and may take up to {max_kw} kW from the grid. Now: {status}."
+  nl: "Thuisbatterij eerst ({battery} %). Is ze vol, dan blijft de auto laden en mag hij tot {max_kw} kW van het net nemen. Nu: {status}."
+notify_cheap_start_message_no_battery:
+  en: "The car keeps charging and may take up to {max_kw} kW from the grid. Now: {status}."
+  nl: "De auto blijft laden en mag tot {max_kw} kW van het net nemen. Nu: {status}."
+notify_cheap_end_title: { en: "Cheap power over", nl: "Goedkope stroom voorbij" }
+notify_cheap_end_message: { en: "The charger runs on solar surplus only again.", nl: "De laadpaal werkt weer enkel op zonne-overschot." }
+unknown_time: { en: unknown, nl: onbekend }
+cheap_off: { en: "off", nl: uit }
+cheap_no_cheap_power: { en: "no cheap power", nl: "geen goedkope stroom" }
+cheap_no_sun: { en: "no sun", nl: "geen zon" }
+cheap_no_car: { en: "no car", nl: "geen auto" }
+cheap_car_full: { en: "car at its limit", nl: "auto aan limiet" }
+cheap_battery_behind: { en: "home battery behind", nl: "batterij loopt achter" }
+cheap_battery_not_full: { en: "home battery not full yet", nl: "batterij nog niet vol" }
+cheap_battery_discharging: { en: "home battery discharging", nl: "batterij ontlaadt" }
+cheap_month_peak: { en: "month peak", nl: maandpiek }
+cheap_grid_import_high: { en: "grid import too high", nl: "netafname te hoog" }
+cheap_too_little_surplus: { en: "too little surplus", nl: "te weinig overschot" }
+cheap_commands_used_up: { en: "car commands used up", nl: "auto-commando's op" }
+cheap_charger_busy: { en: "charger busy (plan or by hand)", nl: "laadpaal bezet (laadplan of met de hand)" }
+cheap_grid_assist: { en: "grid assist", nl: netbijstand }
+notify_not_feasible_title: { en: "Charge plan {car}: target not reachable", nl: "Laadplan {car}: doel niet haalbaar" }
+notify_not_feasible_message:
+  en: "{target} % by {departure} will not make it: {shortfall} kWh short. The car is at {current} % and charges in every quarter that is left{peak}."
+  nl: "{target} % tegen {departure} lukt niet: {shortfall} kWh te weinig. De auto staat op {current} % en laadt in elk kwartier dat overblijft{peak}."
+notify_not_feasible_peak: { en: " (the month peak allows only {kw} kW)", nl: " (de maandpiek laat maar {kw} kW toe)" }
+notify_evening_title: { en: "{car} for tomorrow", nl: "{car} voor morgen" }
+evening_trips: { en: "Tomorrow {km} km{appointments}", nl: "Morgen {km} km{appointments}" }
+evening_departure: { en: "Tomorrow departure at {time}", nl: "Morgen vertrek om {time}" }
+evening_needs: { en: ": the car needs {target} %, now {current} %", nl: ": de auto moet {target} % hebben, nu {current} %" }
+evening_not_plugged: { en: ". Note: {car} is not plugged in!", nl: ". Let op: {car} hangt niet aan de laadpaal!" }
+evening_enough: { en: ", that is enough.", nl: ", dat volstaat." }
+evening_blocks: { en: ", charges at {blocks} (about {kwh} kWh, EUR {cost})", nl: ", laadt om {blocks} (ongeveer {kwh} kWh, EUR {cost})" }
+evening_plus_sun: { en: " + {kwh} kWh solar", nl: " + {kwh} kWh zon" }
+evening_sun_only: { en: ", the sun fills it up ({kwh} kWh).", nl: ", de zon vult aan ({kwh} kWh)." }
+evening_over_100: { en: " The trips need {percent} %: charge on the way.", nl: " De ritten vragen {percent} %: onderweg bijladen." }
+evening_without_distance: { en: " Without a distance: {list}.", nl: " Zonder afstand: {list}." }
+
+# --- automation ev_charging_tesla_counter_reset (only without gate) ---
+auto_counter_reset_alias: { en: "Tesla commands: reset at midnight", nl: "Tesla-commando's: op nul om middernacht" }
+auto_counter_reset_description:
+  en: >-
+    Resets counter.tesla_commands_today at midnight. Only installed by ev-charging while the module gate (which owns the
+    counter) is not installed.
+  nl: >-
+    Zet counter.tesla_commands_today om middernacht op nul. Enkel geinstalleerd door ev-charging zolang de module gate
+    (eigenaar van de teller) niet geinstalleerd is.
+
+# --- dashboard view (lovelace/smart-charging-view.yaml) ---
+view_title: { en: "Smart charging", nl: "Slim laden" }
+view_charger: { en: Charger, nl: Laadpaal }
+view_settings: { en: Settings, nl: Instellingen }
+view_cheap: { en: "Cheap power", nl: "Goedkope stroom" }
+view_car_current: { en: "Car current", nl: "Ampère van de auto" }
+view_owner_hint:
+  en: "Owner manual: the kit leaves the charger alone until the car is unplugged. Set the owner to none to hand it back now."
+  nl: "Eigenaar manual: de kit laat de laadpaal met rust tot de auto uitgeplugd is. Zet de eigenaar op none om hem nu terug te geven."

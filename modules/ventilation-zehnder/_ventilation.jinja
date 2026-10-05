@@ -1,0 +1,16 @@
+<# Shared preamble of the module ventilation-zehnder, derived from house.yaml (section ventilation:). Every templated
+   file imports the names it needs:  <% from '_ventilation.jinja' import device_name, clime with context %>
+   friendly and entity_prefix (start of the entity ids) come from tools/partials/_esphome.jinja, like for every
+   ESPHome device. #>
+<% from '_esphome.jinja' import title as make_title, prefix as make_prefix %>
+<% set v = ventilation if ventilation is defined and ventilation else none %>
+<% if not v or not v.get('name') %><@ fail('house.yaml has no ventilation.name (example: section ventilation: in house.example.yaml)') @><% endif %>
+<% set device_name = safe_name(v.name, 'ventilation.name') %>
+<% set clime = v.get('comfoclime', false) %>
+<% set sniffer = v.get('sniffer', false) %>
+<% set suffix = v.get('mac_suffix', false) %>
+<# web_server: the device's own web page on port 80 (state and controls of the unit). Off by default; on = with a
+   username and password from secrets.yaml (anyone on the network could otherwise switch the ventilation). #>
+<% set web = v.get('web_server', false) is sameas true %>
+<% set friendly = make_title(v.name, v.get('display_name')) %>
+<% set entity_prefix = make_prefix(v.name, v.get('display_name')) %>

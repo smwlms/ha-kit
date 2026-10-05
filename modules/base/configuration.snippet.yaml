@@ -1,0 +1,17 @@
+# Merge these lines once into /config/configuration.yaml (keep what is already there), then restart HA.
+# Every module of the kit puts its helpers, automations and sensors in its own file under these folders,
+# so configuration.yaml never needs to change again when a module is added.
+
+homeassistant:
+  # One file per module: packages/<module>.yaml (helpers, scripts, template sensors of that module).
+  packages: !include_dir_named packages/
+
+frontend:
+  # The themes of modules/base/themes/ (Organic, Garden, Coast, Heath, Graphite), one file per theme.
+  themes: !include_dir_merge_named themes
+
+# Template sensors that are not part of a package: one list file per module in templates/.
+template: !include_dir_merge_list templates/
+
+# Command line sensors (e.g. the presence module): one list file per module in command_line/.
+command_line: !include_dir_merge_list command_line/

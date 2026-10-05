@@ -1,0 +1,267 @@
+# User-facing texts of the module doorbell, one key per text: {en: ..., nl: ...}. Used in the module's files as
+# <@ t('key') @> (tools/fill.py picks house.language, default en; a missing language falls back to en with a warning).
+# {name} in a text is replaced at fill time when t() gets that keyword argument; otherwise it stays and Home
+# Assistant (| replace('{name}', ...)) or the card (JavaScript) fills it in at run time.
+# The texts used inside Home Assistant templates and in www/cw-bezoeken.js are inserted with | tojson: any
+# character is allowed.
+
+# --- Helpers and sensors (names shown in the UI) ---
+helper_visit: { en: Doorbell visit, nl: Deurbel bezoek }
+helper_description: { en: Doorbell description, nl: Deurbel beschrijving }
+archive_sensor: { en: Doorbell archive, nl: Deurbel archief }
+archive_unit: { en: photos, nl: "foto's" }
+
+# --- Ring: announcement, notification, TV, Nest Hub ---
+ringing: { en: The doorbell is ringing, nl: Er wordt aangebeld }
+tv_title: { en: Doorbell, nl: Deurbel }
+someone_at_door: { en: "Someone is at the front door ({time}).", nl: "Iemand staat aan de voordeur ({time})." }
+button_leave_at_door: { en: Leave the parcel at the door, nl: Laat pakje aan de deur }
+button_parcel_garage: { en: Parcel in the garage, nl: Pakje in de garage }
+button_coming: { en: "I'm coming", nl: Ik kom eraan }
+button_garage_ajar: { en: "Garage ajar ({seconds} s)", nl: "Garage op een kier ({seconds} s)" }
+button_garage_open: { en: "Garage open ({seconds} s)", nl: "Garage open ({seconds} s)" }
+parcel_day_title: { en: Parcel expected · someone is ringing, nl: Pakje verwacht · er wordt aangebeld }
+parcel_day_message_ajar:
+  en: >-
+    Someone is at the front door ({time}). If Gemini sees a parcel or courier, the garage door opens ajar by itself
+    for {seconds} s. Long-press = button.
+  nl: >-
+    Iemand staat aan de voordeur ({time}). Ziet Gemini een pakje of koerier, dan gaat de garagepoort vanzelf op een
+    kier voor {seconds} s. Lang drukken = knop.
+parcel_day_message_open:
+  en: >-
+    Someone is at the front door ({time}). If Gemini sees a parcel or courier, the garage door opens by itself for
+    {seconds} s. Long-press = button.
+  nl: >-
+    Iemand staat aan de voordeur ({time}). Ziet Gemini een pakje of koerier, dan gaat de garagepoort vanzelf open
+    voor {seconds} s. Lang drukken = knop.
+
+# --- Outcome after Gemini (short label first, so a chip "14:32" does not read as a number) ---
+short_courier_parcel: { en: Courier with parcel, nl: Koerier met pakje }
+short_someone_parcel: { en: Someone with a parcel, nl: Iemand met een pakje }
+short_courier: { en: Courier, nl: Koerier }
+short_nobody: { en: Nobody in view, nl: Niemand in beeld }
+short_people: { en: "{count} people", nl: "{count} personen" }
+short_someone: { en: Someone, nl: Iemand }
+ground_sentence: { en: There is also a parcel on the ground., nl: Er ligt ook een pakje op de grond. }
+# Comma-separated words: when Gemini's sentence already contains one, the ground sentence is left out.
+ground_words: { en: "ground,floor,mat", nl: "grond,mat" }
+title_auto_ajar: { en: Parcel · garage opens ajar, nl: Pakje · garage gaat op een kier }
+title_auto_open: { en: Parcel · garage opens, nl: Pakje · garage gaat open }
+title_parcel_expected: { en: "Parcel expected · {short}", nl: "Pakje verwacht · {short}" }
+title_parcel_at_door: { en: Parcel at the door, nl: Pakje aan de deur }
+message_outcome: { en: "{short} at the front door ({time}).", nl: "{short} aan de voordeur ({time})." }
+message_auto_ajar:
+  en: The garage door is now opening ajar for {seconds} s.
+  nl: De garagepoort gaat nu op een kier voor {seconds} s.
+message_auto_open:
+  en: The garage door is now opening for {seconds} s.
+  nl: De garagepoort gaat nu open voor {seconds} s.
+message_no_parcel:
+  en: "No parcel seen: the garage stays closed. A parcel after all? Long-press this notification."
+  nl: "Geen pakje gezien: de garage blijft dicht. Toch een pakje? Druk lang op deze melding."
+message_gate_not_closed:
+  en: "The gate is not closed: the garage does not open."
+  nl: "De poort staat niet dicht: de garage gaat niet open."
+hub_outcome: { en: "{short} at the door", nl: "{short} aan de deur" }
+
+# --- Logbook and visit calendar ---
+logbook_name: { en: Doorbell, nl: Deurbel }
+logbook_parcel_service: { en: Parcel service, nl: Pakjesdienst }
+log_parcel_day_ring: { en: parcel service · rang on the expected day, nl: pakjesdienst · aangebeld op de verwachte dag }
+log_auto_ajar: { en: "parcel service · garage ajar automatically ({short})", nl: "pakjesdienst · garage automatisch op een kier ({short})" }
+log_auto_open: { en: "parcel service · garage open automatically ({short})", nl: "pakjesdienst · garage automatisch open ({short})" }
+log_rang: { en: "rang · {short}", nl: "aangebeld · {short}" }
+log_no_description: { en: no description · AI Task gave no answer, nl: geen beschrijving · AI Task gaf geen antwoord }
+log_ajar_ignored_running: { en: ajar ignored · ajar already running, nl: kier genegeerd · kier loopt al }
+log_ajar_ignored_handled:
+  en: ajar ignored · already handled for this ring
+  nl: kier genegeerd · al afgehandeld voor deze aanbelling
+calendar_rang: { en: Rang, nl: Aangebeld }
+calendar_no_description: { en: No description (Gemini gave no answer)., nl: Geen beschrijving (Gemini gaf geen antwoord). }
+# Label of the photo line in a calendar event; the card reads both "photo:" and "foto:".
+photo_label: { en: photo, nl: foto }
+
+# --- Gemini (AI Task). Field names (parcel_in_hand, ...) are the structure keys: same in every language. ---
+ai_task_name: { en: "Doorbell: who is at the door", nl: "Deurbel: wie staat er aan de deur" }
+ai_answer_language: { en: Write the description in English., nl: Schrijf de beschrijving in het Nederlands. }
+ai_prompt_two_photos:
+  en: |-
+    You get two photos from the doorbell at the front door, taken at the moment someone rings.
+    Photo 1: the front camera (who is standing at the door). Children and small people are often too low and only half visible here, or only as a hand or a head.
+    Photo 2: the downward package camera: you look from above at the ground in front of the door. Hands, what someone is holding and parcels on the ground are often easier to see here.
+    Describe only what you see. Do not identify anyone and never mention names, not even if you think you recognise someone.
+    - parcel_in_hand: true if someone in either photo holds or carries a parcel, box, envelope or parcel bag, even if it is small or only partly visible.
+    - parcel_on_ground: true if a parcel, box, envelope or parcel bag lies on the ground in photo 2.
+    - courier: true if the person is clearly a delivery person (uniform or logo of bpost, PostNL, DHL, DPD, GLS, UPS, Amazon, or a handheld scanner).
+    - people: number of different people in the two photos together (the same person in both photos counts once).
+    - description: one short sentence (max. 14 words) about who is there, what they are holding and anything lying on the ground, without names. E.g. 'A child with a small parcel; there is another box on the mat.'
+  nl: |-
+    Je krijgt twee foto's van de deurbel aan de voordeur, genomen op het moment dat iemand aanbelt.
+    Foto 1: de frontcamera (wie voor de deur staat). Kinderen en kleine mensen staan vaak te laag en zijn hier maar half of enkel als hand of hoofd zichtbaar.
+    Foto 2: de neerwaartse pakjescamera: je kijkt van boven op de grond voor de deur. Handen, wat iemand vasthoudt en pakjes op de grond zie je hier vaak beter.
+    Beschrijf alleen wat je ziet. Identificeer niemand en noem nooit namen, ook niet als je denkt iemand te herkennen.
+    - parcel_in_hand: true als iemand op een van beide foto's een pakje, doos, envelop of pakketzak vasthoudt of draagt, ook als het klein of maar gedeeltelijk zichtbaar is.
+    - parcel_on_ground: true als er op foto 2 een pakje, doos, envelop of pakketzak op de grond ligt.
+    - courier: true als de persoon duidelijk een bezorger is (uniform of logo van bpost, PostNL, DHL, DPD, GLS, UPS, Amazon, of een handscanner).
+    - people: aantal verschillende personen op de twee foto's samen (dezelfde persoon op beide foto's telt één keer).
+    - description: één korte Nederlandse zin (max. 14 woorden) over wie er staat, wat die vasthoudt en wat er eventueel op de grond ligt, zonder namen. Bv. 'Een kind met een klein pakje; op de mat ligt nog een doos.'
+ai_prompt_one_photo:
+  en: |-
+    You get a photo from the doorbell at the front door, taken at the moment someone rings.
+    Children and small people are often too low and only half visible, or only as a hand or a head.
+    Describe only what you see. Do not identify anyone and never mention names, not even if you think you recognise someone.
+    - parcel_in_hand: true if someone holds or carries a parcel, box, envelope or parcel bag, even if it is small or only partly visible.
+    - parcel_on_ground: true if a parcel, box, envelope or parcel bag lies on the ground.
+    - courier: true if the person is clearly a delivery person (uniform or logo of bpost, PostNL, DHL, DPD, GLS, UPS, Amazon, or a handheld scanner).
+    - people: number of people in view.
+    - description: one short sentence (max. 14 words) about who is there and what they are holding, without names. E.g. 'A courier in a yellow uniform with a big box.'
+  nl: |-
+    Je krijgt een foto van de deurbel aan de voordeur, genomen op het moment dat iemand aanbelt.
+    Kinderen en kleine mensen staan vaak te laag en zijn maar half of enkel als hand of hoofd zichtbaar.
+    Beschrijf alleen wat je ziet. Identificeer niemand en noem nooit namen, ook niet als je denkt iemand te herkennen.
+    - parcel_in_hand: true als iemand een pakje, doos, envelop of pakketzak vasthoudt of draagt, ook als het klein of maar gedeeltelijk zichtbaar is.
+    - parcel_on_ground: true als er een pakje, doos, envelop of pakketzak op de grond ligt.
+    - courier: true als de persoon duidelijk een bezorger is (uniform of logo van bpost, PostNL, DHL, DPD, GLS, UPS, Amazon, of een handscanner).
+    - people: aantal personen in beeld.
+    - description: één korte Nederlandse zin (max. 14 woorden) over wie er staat en wat die vasthoudt, zonder namen. Bv. 'Een koerier in geel uniform met een grote doos.'
+ai_field_parcel_in_hand:
+  en: Is someone holding a parcel, box, envelope or parcel bag?
+  nl: Houdt iemand een pakje, doos, envelop of pakketzak vast?
+ai_field_courier: { en: "Is the person recognisable as a delivery person?", nl: "Is de persoon herkenbaar als bezorger?" }
+ai_field_people: { en: Number of people in view, nl: Aantal personen in beeld }
+ai_field_description: { en: "One short sentence, without names", nl: "Eén korte Nederlandse zin, zonder namen" }
+ai_field_parcel_on_ground:
+  en: Is a parcel, box, envelope or parcel bag lying on the ground?
+  nl: Ligt er een pakje, doos, envelop of pakketzak op de grond?
+
+# --- Automation (alias and description in the automation editor) ---
+ring_alias: { en: "Doorbell: someone is ringing", nl: "Deurbel: er wordt aangebeld" }
+ring_description:
+  en: >-
+    On a ring: photo of that moment to the archive (/media/doorbell/archive, 31 days), notification with photo and
+    buttons to {recipients}{announce}. Then Gemini (AI Task) describes the photo: parcel in hand, courier, number of
+    people, one sentence without names. The notification is silently replaced (same tag), input_text.doorbell_visit
+    and doorbell_description are updated and the visit goes into {calendar}. The buttons put a text on the LCD for
+    3 min (script.doorbell_reply).
+  nl: >-
+    Bij aanbellen: foto van dat moment naar het archief (/media/doorbell/archive, 31 dagen), melding met foto en
+    knoppen naar {recipients}{announce}. Daarna beschrijft Gemini (AI Task) de foto: pakje in de hand, koerier,
+    aantal personen, één zin zonder namen. De melding wordt stil vervangen (zelfde tag), input_text.doorbell_visit en
+    doorbell_description worden bijgewerkt en het bezoek komt in {calendar}. De knoppen zetten 3 min een tekst op het
+    LCD (script.doorbell_reply).
+ring_description_announce: { en: ", announcement on {devices}", nl: ", afroep op {devices}" }
+device_speakers: { en: the speakers, nl: de luidsprekers }
+device_hub: { en: the Nest Hub, nl: de Nest Hub }
+device_tv: { en: the TV, nl: de tv }
+ring_description_parcel:
+  en: >-
+    Parcel service: on the day in input_datetime.parcel_expected the first notification is critical; if Gemini sees a
+    parcel or courier and the gate is closed, the garage opens (or opens ajar) by itself (once per ring).
+  nl: >-
+    Pakjesdienst: op de dag in input_datetime.parcel_expected is de eerste melding kritiek; ziet Gemini een pakje of
+    koerier en is de poort dicht, dan gaat de garage vanzelf open of op een kier (één keer per aanbelling).
+see_logic: { en: See doorbell/LOGIC.md., nl: Zie doorbell/LOGIC.md. }
+
+# --- Script doorbell_reply ---
+reply_alias: { en: "Doorbell: reply on the screen", nl: "Deurbel: antwoord op het scherm" }
+reply_description:
+  en: >-
+    Shared by the doorbell notification (automation doorbell_ring) and the buttons on the dashboard. Puts a text on
+    the LCD of the doorbell for 3 min and then restores the previous text (only if this text is still there).
+  nl: >-
+    Gedeeld door de deurbelmelding (automation doorbell_ring) en de knoppen op het dashboard. Zet 3 min een tekst op
+    het LCD van de deurbel en zet daarna de vorige tekst terug (enkel als er dan nog altijd deze tekst staat).
+reply_description_parcel:
+  en: >-
+    Button 'garage' also starts script.parcel_garage (gate open, 1 min, closed); button 'parcel_service' starts it with
+    ajar_s = input_number.parcel_service_ajar and open_s = input_number.parcel_service_open. Parcel service: one ajar
+    per ring (field ring, remembered in input_text.parcel_service_ring); a second press for the same ring (also from
+    another phone) or while an ajar is running is ignored. Without ring (button on the dashboard) always allowed,
+    except while an ajar is running.
+  nl: >-
+    Knop 'garage' start ook script.parcel_garage (poort open, 1 min, dicht); knop 'parcel_service' start het met
+    ajar_s = input_number.parcel_service_ajar en open_s = input_number.parcel_service_open. Pakjesdienst: één kier
+    per aanbelling (veld ring, onthouden in input_text.parcel_service_ring); een tweede druk voor dezelfde aanbelling
+    (ook vanaf een andere gsm) of tijdens een lopende kier wordt genegeerd. Zonder ring (knop op het dashboard)
+    altijd toegelaten, behalve tijdens een lopende kier.
+reply_description_end: { en: "Parallel: every press counts.", nl: "Parallel: elke druk telt." }
+field_button_name: { en: Button, nl: Knop }
+field_button_description: { en: at_door or coming, nl: at_door of coming }
+field_button_description_parcel: { en: ", garage or parcel_service", nl: ", garage of parcel_service" }
+field_ring_name: { en: Ring, nl: Aanbelling }
+field_ring_description:
+  en: "Parcel service: time of the ring (state of {entity}). Empty = manual."
+  nl: "Pakjesdienst: tijdstip van de aanbelling (state van {entity}). Leeg = handmatig."
+# Texts on the LCD of the doorbell. lcd_parcel_service is English in every language on purpose: couriers often do
+# not speak the local language, and it fits the LCD.
+lcd_at_door: { en: Leave it at the door, nl: Laat het aan de deur }
+lcd_garage: { en: Put the parcel in the garage, nl: Zet het pakje in de garage }
+lcd_parcel_service: { en: Leave in garage, nl: Leave in garage }
+lcd_coming: { en: "I'm coming", nl: Ik kom eraan }
+# Default for doorbell.lcd_default in house.yaml (the text that comes back when the previous one was unknown).
+lcd_default: { en: Welcome, nl: Welkom }
+
+# --- Script doorbell_hub ---
+hub_alias: { en: "Doorbell: announcement on the Nest Hub", nl: "Deurbel: afroep op de Nest Hub" }
+hub_description:
+  en: >-
+    Says a sentence on the Nest Hub ({hub}, Google Translate TTS) and then shows a photo from /media (e.g. the photo
+    of the ring). The Nest Hub has no announce: whatever is playing is interrupted. Queued: the sentence after Gemini
+    follows the first one. Used by the doorbell automations.
+  nl: >-
+    Zegt een zin op de Nest Hub ({hub}, Google Translate TTS) en toont daarna een foto uit /media (bv. de foto van het
+    aanbellen). De Nest Hub kent geen announce: wat er speelt, wordt onderbroken. Queued: de zin na Gemini volgt na
+    de eerste. Gebruikt door de deurbel-automations.
+field_text_name: { en: Text, nl: Tekst }
+hub_field_text_description: { en: What the Nest Hub says, nl: Wat de Nest Hub zegt }
+field_photo_name: { en: Photo, nl: Foto }
+hub_field_photo_description:
+  en: Path under /media, without /media/ (e.g. doorbell/archive/20261004-130743-ring.jpg). Empty = no photo.
+  nl: Pad onder /media, zonder /media/ (bv. doorbell/archive/20261004-130743-ring.jpg). Leeg = geen foto.
+
+# --- Script doorbell_tv ---
+tv_alias: { en: "Doorbell: picture on the TV", nl: "Deurbel: beeld op de tv" }
+tv_description:
+  en: >-
+    Shows the doorbell picture top right on the TV through TvOverlay. Per round: camera.snapshot to
+    /media/doorbell/tv.jpg, then notify.tvoverlay_doorbell (command_line: /config/tvoverlay/doorbell.py scales the
+    photo down and sends it as base64; TvOverlay does not load http:// images). 15 rounds, always with the same id:
+    the picture refreshes in the same window (about 70 s in practice). Only when {tv} is not off or unavailable.
+    Restart: ringing again starts over. Text: 'The doorbell is ringing', and as soon as Gemini has described the
+    photo the short outcome from input_text.doorbell_visit. Fields camera and text: the parcel notification shows
+    the package camera.
+  nl: >-
+    Toont het deurbelbeeld rechtsboven op de tv via TvOverlay. Per ronde: camera.snapshot naar /media/doorbell/tv.jpg,
+    daarna notify.tvoverlay_doorbell (command_line: /config/tvoverlay/doorbell.py verkleint de foto en stuurt hem als
+    base64; TvOverlay laadt geen http://-afbeeldingen). 15 rondes, telkens met dezelfde id: het beeld ververst in
+    hetzelfde venster (± 70 s in de praktijk). Enkel als {tv} niet uit of onbereikbaar is. Restart: opnieuw
+    aanbellen begint opnieuw. Tekst: 'Er wordt aangebeld', en zodra Gemini de foto beschreven heeft de korte
+    uitkomst uit input_text.doorbell_visit. Velden camera en text: de pakjesmelding toont de pakjescamera.
+field_camera_name: { en: Camera, nl: Camera }
+tv_field_camera_description:
+  en: Which camera; default the doorbell ({camera}).
+  nl: Welke camera; standaard de deurbel ({camera}).
+tv_field_text_description:
+  en: Fixed text in the window; empty = 'The doorbell is ringing' / what Gemini saw.
+  nl: Vaste tekst in het venster; leeg = Er wordt aangebeld / wat Gemini zag.
+tv_field_text_example: { en: Parcel left, nl: Pakje achtergelaten }
+
+# --- Example dashboard card (lovelace/doorbell.yaml) ---
+card_front_door: { en: Front door, nl: Voordeur }
+card_last_visit: { en: Last visit, nl: Laatste bezoek }
+card_button_at_door: { en: At the door, nl: Aan de deur }
+card_button_garage: { en: In the garage, nl: In de garage }
+card_button_garage_confirm: { en: "Open the garage door for a parcel?", nl: "Garagepoort openen voor een pakje?" }
+
+# --- Card cw-bezoeken (www/cw-bezoeken.js); {n}, {days} and {version} are filled in by the card ---
+card_name: { en: "Doorbell: visits", nl: "Deurbel: bezoeken" }
+card_description: { en: "Doorbell visits with photo (Local Calendar), v{version}.", nl: "Bezoeken aan de deurbel met foto (Local Calendar), v{version}." }
+card_locale: { en: en-GB, nl: nl-BE }
+card_today: { en: today, nl: vandaag }
+card_visit: { en: Visit, nl: Bezoek }
+card_error: { en: The visits could not be loaded., nl: De bezoeken konden niet geladen worden. }
+card_show_all: { en: "Show all {n}", nl: "Toon alle {n}" }
+card_empty: { en: "No visits in the last {days} days yet.", nl: "Nog geen bezoeken in de laatste {days} dagen." }
+# Regular expression (case-insensitive) on the visit summary: a match colours the row (a parcel).
+card_parcel_regex: { en: "parcel|package|pakje", nl: "pakje|parcel" }

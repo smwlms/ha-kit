@@ -1,0 +1,22 @@
+<% from '_tesla_driveway_lock.jinja' import car_list with context %>
+# Tesla on the driveway gets locked: template sensors (ha-kit module tesla-driveway-lock, see
+# tesla-driveway-lock/LOGIC.md). Uploaded by tesla-driveway-lock/deploy.py to /config/templates/tesla_driveway_lock.yaml.
+# Per car: "home, in P and not locked". The tracker alone is not enough (it sometimes says not_home while the car is
+# parked at home), so "located at home" counts too. automation.tesla_driveway_lock fires when this is on for
+# input_number.tesla_driveway_lock_minutes; it goes off (and can fire again) when the car drives, locks or leaves.
+
+- binary_sensor:
+<% for a in car_list %>
+    - name: "<@ t('sensor_home_unlocked', car=a.name) @>"
+      unique_id: tesla_driveway_<@ a.prefix @>_home_unlocked
+      default_entity_id: binary_sensor.tesla_driveway_<@ a.prefix @>_home_unlocked
+      icon: mdi:car-key
+      state: >
+        {{ is_state('<@ car_entity(a, 'shift_state') @>', 'p')
+           and is_state('<@ car_entity(a, 'lock') @>', 'unlocked')
+           and (is_state('<@ car_entity(a, 'location') @>', 'home') or is_state('<@ car_entity(a, 'located_at_home') @>', 'on')) }}
+      attributes:
+        driveway_distance_m: >
+          {% set d = distance('<@ car_entity(a, 'location') @>', 'zone.driveway') %}
+          {{ (d * 1000) | round(1) if d is number else none }}
+<% endfor %>

@@ -1,0 +1,413 @@
+<% from '_appliances.jinja' import apps, cfg, has_energy, has_battery, has_presence, battery_soc, solar_power with context %>
+<% set auto_apps = apps | selectattr('smart_start', 'equalto', 'auto') | list %>
+<% set ask_apps = apps | selectattr('smart_start', 'equalto', 'ask') | list %>
+<% set txt = {} %>
+<% for k in ['button_now', 'button_smart', 'logbook_name', 'word_ready_by_arrival',
+             'notify_offer_title', 'notify_offer_message', 'notify_cancelled_title', 'notify_cancelled_message',
+             'reason_safety_net', 'reason_missed', 'reason_surplus', 'reason_battery', 'reason_notification',
+             'notify_door_title', 'notify_door_message', 'notify_error_title',
+             'error_error', 'error_actionrequired', 'error_aborting', 'notify_done_title', 'notify_done_message',
+             'notify_reminder_title', 'notify_reminder_message', 'notify_aborted_message', 'notify_maintenance_message',
+             'decimal_separator'] %>
+<% set _ = txt.update({k: t(k)}) %>
+<% endfor %>
+# Appliances (Home Connect): automations (ha-kit module appliances-home-connect, see appliances-home-connect/LOGIC.md).
+# Written by appliances-home-connect/deploy.py through the config API (same as the automation editor).
+# Appliances: <@ apps | map(attribute='key') | join(', ') @>.
+
+# --- 1. Plan by itself (smart_start: auto) or offer the buttons (smart_start: ask) ---------------------------------
+- id: appliance_smart_start_offer
+  alias: <@ t('offer_alias') | tojson @>
+  description: <@ t('offer_description') | tojson @>
+  mode: parallel
+  max: 6
+  triggers:
+<% for a in auto_apps %>
+    - trigger: state
+      entity_id: <@ a.e.power @>
+      to: "on"
+      for:
+        minutes: 2
+      id: auto_<@ a.key @>
+    - trigger: state
+      entity_id: <@ a.e.door @>
+      to: closed
+      for:
+        minutes: 2
+      id: auto_<@ a.key @>
+    - trigger: state
+      entity_id: <@ a.e.remote_start @>
+      to: "on"
+      for:
+        minutes: 2
+      id: auto_<@ a.key @>
+<% endfor %>
+<% for a in ask_apps %>
+    - trigger: state
+      entity_id: <@ a.e.remote_start @>
+      from: "off"
+      to: "on"
+      id: ask_<@ a.key @>
+<% endfor %>
+  variables:
+    cfg: <@ cfg | tojson @>
+    txt: <@ txt | tojson @>
+    key: "{{ trigger.id.split('_', 1)[1] }}"
+    a: "{{ cfg[key] }}"
+  conditions:
+    - "{{ states(a.status) in ['ready', 'inactive'] and is_state(a.waiting, 'off') }}"
+    # auto: switched on (when it has a power switch), door closed and remote start on.
+    - "{{ trigger.id.startswith('ask_') or (not is_state(a.power, 'off') and is_state(a.door, 'closed') and is_state(a.remote_start, 'on')) }}"
+  actions:
+    - choose:
+        - conditions:
+            - "{{ trigger.id.startswith('auto_') }}"
+          sequence:
+            - action: script.appliance_smart_start
+              data:
+                appliance: "{{ key }}"
+      default:
+        - action: script.appliance_notify
+          data:
+            title: "{{ txt.notify_offer_title | replace('{name}', a.name) }}"
+            message: >-
+              {%- set rb = states(a.ready_by) -%}
+              {{ txt.notify_offer_message | replace('{program}', state_translated(a.selected_program))
+                 | replace('{deadline}', (<@ 'txt.word_ready_by_arrival' if has_presence else 'a.auto_time' @>) if rb == 'auto' else rb) }}
+            tag: "{{ key }}_start"
+            actions: >-
+              {{ [{'action': 'APPLIANCE_SMART_' ~ a.upper, 'title': txt.button_smart},
+                  {'action': 'APPLIANCE_NOW_' ~ a.upper, 'title': txt.button_now}] }}
+
+# --- 2. Carry out a plan that waits for sun ----------------------------------------------------------------------
+- id: appliance_smart_start_run
+  alias: <@ t('run_alias') | tojson @>
+  description: <@ t('run_description') | tojson @>
+  mode: queued
+  max: 10
+  triggers:
+<% if has_energy %>
+    - trigger: state
+      entity_id: binary_sensor.energy_plan_surplus
+      to: "on"
+      for:
+        minutes: 5
+      id: sun
+<% if has_battery %>
+    - trigger: template
+      value_template: >-
+        {%- from 'energy_plan.jinja' import watts -%}
+        {{ states('<@ battery_soc @>') | float(0) > states('input_number.appliances_battery_minimum') | float(60)
+           and watts('<@ solar_power @>') | float(0) >= 1000 }}
+      for:
+        minutes: 2
+      id: sun
+<% endif %>
+    # Check again every 5 min: the second appliance waits until the first one has heated up.
+    - trigger: time_pattern
+      minutes: /5
+      id: sun
+<% endif %>
+<% for a in apps %>
+<% if has_energy %>
+    - trigger: state
+      entity_id: <@ a.waiting @>
+      from: "off"
+      to: "on"
+      id: sun
+<% endif %>
+    - trigger: time
+      at: <@ a.smart_start_at @>
+      id: plan_<@ a.key @>
+    - trigger: state
+      entity_id: <@ a.e.door @>
+      to: open
+      id: cancel_<@ a.key @>
+    - trigger: state
+      entity_id: <@ a.e.status @>
+      to:
+        - run
+        - delayedstart
+      id: manual_<@ a.key @>
+<% endfor %>
+    - trigger: homeassistant
+      event: start
+      id: restart
+  variables:
+    cfg: <@ cfg | tojson @>
+    txt: <@ txt | tojson @>
+    order: <@ apps | map(attribute='key') | list | tojson @>
+  conditions:
+    - "{{ cfg.values() | map(attribute='waiting') | select('is_state', 'on') | list | count > 0 }}"
+  actions:
+    - variables:
+        # Waiting appliances in the order of house.yaml (the first one gets the sun first).
+        waiting: >-
+          {%- set ns = namespace(l=[]) -%}
+          {%- for k in order if is_state(cfg[k].waiting, 'on') -%}{%- set ns.l = ns.l + [k] -%}{%- endfor -%}
+          {{ ns.l }}
+    - choose:
+<% if has_energy %>
+        # Sun or battery: start the first waiting appliance; the next one only when no appliance of the kit started
+        # in the last 15 min (not two heating up on the same surplus).
+        - alias: sun or battery
+          conditions:
+            - condition: trigger
+              id: sun
+            - >-
+              {%- from 'energy_plan.jinja' import watts -%}
+              {{ is_state('binary_sensor.energy_plan_surplus', 'on')<% if has_battery %>
+                 or (states('<@ battery_soc @>') | float(0) > states('input_number.appliances_battery_minimum') | float(60)
+                     and watts('<@ solar_power @>') | float(0) >= 1000
+                     and not is_state('binary_sensor.energy_plan_battery_behind', 'on'))<% endif %> }}
+          sequence:
+            - variables:
+                recent: >-
+                  {%- set ns = namespace(n=0) -%}
+                  {%- for c in cfg.values() if is_state(c.status, 'run') -%}
+                  {%- set s = expand(c.status) | first -%}
+                  {%- if s is defined and s.last_changed > now() - timedelta(minutes=15) -%}{%- set ns.n = ns.n + 1 -%}{%- endif -%}
+                  {%- endfor -%}
+                  {{ ns.n > 0 }}
+                first: "{{ waiting[0] if waiting | count > 0 else '' }}"
+                reason: >-
+                  {{ txt.reason_surplus if is_state('binary_sensor.energy_plan_surplus', 'on') else txt.reason_battery }}
+            - if:
+                - "{{ first != '' and not recent }}"
+              then:
+                - action: script.appliance_start_now
+                  data:
+                    appliance: "{{ first }}"
+                    reason: "{{ reason }}"
+                  continue_on_error: true
+<% endif %>
+        - alias: restart, planned moment missed
+          conditions:
+            - condition: trigger
+              id: restart
+          sequence:
+            - repeat:
+                for_each: "{{ waiting }}"
+                sequence:
+                  - if:
+                      - "{{ as_timestamp(now()) >= state_attr(cfg[repeat.item].smart_start_at, 'timestamp') | float(0) }}"
+                    then:
+                      - action: script.appliance_start_now
+                        data:
+                          appliance: "{{ repeat.item }}"
+                          reason: "{{ txt.reason_missed }}"
+                        continue_on_error: true
+        - alias: safety net, no sun came
+          conditions:
+            - "{{ trigger.id.startswith('plan_') and trigger.id[5:] in waiting }}"
+          sequence:
+            - action: script.appliance_start_now
+              data:
+                appliance: "{{ trigger.id[5:] }}"
+                reason: "{{ txt.reason_safety_net }}"
+              continue_on_error: true
+        - alias: door opened, cancel
+          conditions:
+            - "{{ trigger.id.startswith('cancel_') and trigger.id[7:] in waiting }}"
+          sequence:
+            - variables:
+                a: "{{ cfg[trigger.id[7:]] }}"
+            - action: input_boolean.turn_off
+              target:
+                entity_id: "{{ a.waiting }}"
+            - action: script.appliance_notify
+              data:
+                title: "{{ txt.notify_cancelled_title | replace('{name}', a.name) }}"
+                message: "{{ txt.notify_cancelled_message }}"
+                tag: "{{ trigger.id[7:] }}_start"
+        - alias: started on the appliance itself
+          conditions:
+            - "{{ trigger.id.startswith('manual_') and trigger.id[7:] in waiting }}"
+          sequence:
+            - action: input_boolean.turn_off
+              target:
+                entity_id: "{{ cfg[trigger.id[7:]].waiting }}"
+
+# --- 3. Notification buttons ---------------------------------------------------------------------------------------
+- id: appliance_notification_buttons
+  alias: <@ t('buttons_alias') | tojson @>
+  description: <@ t('buttons_description') | tojson @>
+  mode: queued
+  max: 6
+  triggers:
+<% for a in apps %>
+    - trigger: event
+      event_type: mobile_app_notification_action
+      event_data:
+        action: APPLIANCE_SMART_<@ a.upper @>
+      id: smart_<@ a.key @>
+    - trigger: event
+      event_type: mobile_app_notification_action
+      event_data:
+        action: APPLIANCE_NOW_<@ a.upper @>
+      id: now_<@ a.key @>
+<% endfor %>
+  variables:
+    txt: <@ {'reason_notification': t('reason_notification')} | tojson @>
+    key: "{{ trigger.id.split('_', 1)[1] }}"
+  actions:
+    - choose:
+        - conditions:
+            - "{{ trigger.id.startswith('smart_') }}"
+          sequence:
+            - action: script.appliance_smart_start
+              data:
+                appliance: "{{ key }}"
+      default:
+        - action: script.appliance_start_now
+          data:
+            appliance: "{{ key }}"
+            reason: "{{ txt.reason_notification }}"
+          continue_on_error: true
+
+# --- 4. Door open during a program ---------------------------------------------------------------------------------
+- id: appliance_door_open_running
+  alias: <@ t('door_alias') | tojson @>
+  description: <@ t('door_description') | tojson @>
+  mode: parallel
+  max: 6
+  triggers:
+<% for a in apps %>
+    - trigger: state
+      entity_id: <@ a.e.door @>
+      to: open
+      for:
+        minutes: 2
+      id: <@ a.key @>
+<% endfor %>
+  variables:
+    cfg: <@ cfg | tojson @>
+    txt: <@ txt | tojson @>
+    a: "{{ cfg[trigger.id] }}"
+  conditions:
+    - "{{ states(a.status) in ['run', 'pause', 'delayedstart'] }}"
+  actions:
+    - action: script.appliance_notify
+      data:
+        title: "{{ txt.notify_door_title | replace('{name}', a.name) }}"
+        message: >-
+          {{ txt.notify_door_message | replace('{status}', state_translated(a.status) | lower) }}
+        tag: "{{ trigger.id }}_door"
+
+# --- 5. Error, action required, aborting ---------------------------------------------------------------------------
+- id: appliance_error
+  alias: <@ t('error_alias') | tojson @>
+  description: <@ t('error_description') | tojson @>
+  mode: parallel
+  max: 6
+  triggers:
+<% for a in apps %>
+    - trigger: state
+      entity_id: <@ a.e.status @>
+      to:
+        - error
+        - actionrequired
+        - aborting
+      not_from:
+        - unavailable
+        - unknown
+      id: <@ a.key @>
+<% endfor %>
+  variables:
+    cfg: <@ cfg | tojson @>
+    txt: <@ txt | tojson @>
+    a: "{{ cfg[trigger.id] }}"
+  actions:
+    - action: script.appliance_notify
+      data:
+        title: >-
+          {{ txt.notify_error_title | replace('{name}', a.name) | replace('{status}', state_translated(a.status) | lower) }}
+        message: >-
+          {{ {'error': txt.error_error, 'actionrequired': txt.error_actionrequired,
+              'aborting': txt.error_aborting}[trigger.to_state.state] | replace('{name}', a.name) }}
+        tag: "{{ trigger.id }}_error"
+
+# --- 6. Done, then a reminder every 30 min (at most 3) while the door stays closed -------------------------------
+- id: appliance_done_reminder
+  alias: <@ t('done_alias') | tojson @>
+  description: <@ t('done_description') | tojson @>
+  mode: parallel
+  max: 6
+  triggers:
+<% for a in apps %>
+    - trigger: state
+      entity_id: <@ a.e.status @>
+      to: finished
+      not_from:
+        - unavailable
+        - unknown
+      id: <@ a.key @>
+<% endfor %>
+  variables:
+    cfg: <@ cfg | tojson @>
+    txt: <@ txt | tojson @>
+    a: "{{ cfg[trigger.id] }}"
+    program: "{{ state_translated(a.selected_program) }}"
+  actions:
+    - action: script.appliance_notify
+      data:
+        title: "{{ txt.notify_done_title | replace('{name}', a.name) }}"
+        message: >-
+          {{ txt.notify_done_message | replace('{program}', program) | replace('{time}', now().strftime('%H:%M'))
+             | replace('{contents}', a.contents) }}
+        tag: "{{ trigger.id }}"
+    - repeat:
+        count: 3
+        sequence:
+          - wait_template: "{{ is_state(a.door, 'open') }}"
+            timeout:
+              minutes: 30
+          - if:
+              - "{{ wait.completed }}"
+            then:
+              - stop: door opened
+          - action: script.appliance_notify
+            data:
+              title: "{{ txt.notify_reminder_title | replace('{name}', a.name) }}"
+              message: >-
+                {{ txt.notify_reminder_message | replace('{name}', a.name) | replace('{minutes}', (repeat.index * 30) | string)
+                   | replace('{contents}', a.contents) }}
+              tag: "{{ trigger.id }}"
+
+# --- 7. Maintenance: salt, rinse aid, machine care, i-Dos; program aborted -------------------------------------------
+<% set maint = [] %>
+<% set aborted = [] %>
+<% for a in apps %>
+<% set _ = maint.extend(a.maintenance) %>
+<% set _ = aborted.append(a.e.program_aborted) %>
+<% endfor %>
+- id: appliance_maintenance
+  alias: <@ t('maintenance_alias') | tojson @>
+  description: <@ t('maintenance_description') | tojson @>
+  mode: parallel
+  max: 8
+  triggers:
+<% if maint %>
+    - trigger: state
+      entity_id: <@ maint | tojson @>
+      to: present
+      not_from:
+        - unavailable
+        - unknown
+      id: maintenance
+<% endif %>
+    - trigger: state
+      entity_id: <@ aborted | tojson @>
+      to: present
+      not_from:
+        - unavailable
+        - unknown
+      id: aborted
+  variables:
+    txt: <@ txt | tojson @>
+  actions:
+    - action: script.appliance_notify
+      data:
+        title: "{{ trigger.to_state.name }}"
+        message: "{{ txt.notify_aborted_message if trigger.id == 'aborted' else txt.notify_maintenance_message }}"
+        tag: "{{ trigger.entity_id }}"

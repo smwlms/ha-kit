@@ -1,0 +1,117 @@
+<#
+  Shared derivations of the module climate, from house.yaml, modules: and the capabilities. Imported by every templated
+  file of the module (only names set at the top level can be imported):
+    <% from '_climate.jinja' import feat, vent, indoor, ... with context %>
+  Rule: no file of this module names a brand entity of its own. Every entity id is either a house.yaml role, a
+  contract id of another installed module (docs/phase4-contracts.md) or derived the same way the providing module
+  derives it (ventilation-zehnder: from ventilation.name / display_name, like tools/partials/_esphome.jinja).
+  A block whose provider is missing gets feat.<block> = false: no helpers, no automation, not drawn on the screen.
+#>
+<% from '_esphome.jinja' import prefix as make_prefix %>
+<% set E = entities if entities is defined and entities is mapping else {} %>
+<% set C = climate if climate is defined and climate is mapping else {} %>
+<% set V = ventilation if ventilation is defined and ventilation is mapping else {} %>
+<% set caps = capabilities %>
+<# --- required roles --- #>
+<% set indoor = E.get('indoor_temperature') or '' %>
+<% if not indoor %><@ fail('house.yaml: entities.indoor_temperature is required for climate (indoor temperature in °C, state_class measurement)') @><% endif %>
+<% set weather = E.get('weather') or '' %>
+<% if not weather %><@ fail('house.yaml: entities.weather is required for climate (weather entity with an hourly and a daily forecast, e.g. Met.no)') @><% endif %>
+<% set outdoor = E.get('outdoor_temperature') or '' %>
+<% set solar = E.get('solar_power_w') or '' %>
+<% set solar_rest = E.get('solar_forecast_remaining_today') or '' %>
+<% set solar_today = E.get('solar_forecast_today') or '' %>
+<# --- targets and hours --- #>
+<% set comfort_in = C.get('comfort') or {} %>
+<% set target = (C.get('target') if C.get('target') is not none else 21) | float %>
+<% set comfort_low = (comfort_in.get('low') if comfort_in.get('low') is not none else 20.5) | float %>
+<% set comfort_high = (comfort_in.get('high') if comfort_in.get('high') is not none else 22.5) | float %>
+<% if not (comfort_low < comfort_high) %><@ fail('house.yaml: climate.comfort.low must be below climate.comfort.high') @><% endif %>
+<% set loud_in = C.get('loud_hours') or {} %>
+<% set loud_start = (loud_in.get('start') or '23:00') | string %>
+<% set loud_end = (loud_in.get('end') or '06:00') | string %>
+<% for hm in [loud_start, loud_end] if not (hm | regex_search('^([01][0-9]|2[0-3]):[0-5][0-9]$')) %><@ fail('house.yaml: climate.loud_hours start and end are times "HH:MM" in quotes, e.g. { start: "23:00", end: "06:00" }') @><% endfor %>
+<% set forecast_days = (C.get('forecast_days') or 30) | int %>
+<% set boost_in = C.get('comfoclime_boost') %>
+<% set boost_on = boost_in is not sameas false %>
+<% set boost_cfg = boost_in if boost_in is mapping else {} %>
+<% set boost_below = (boost_cfg.get('below') if boost_cfg.get('below') is not none else 19.5) | float %>
+<% set boost_hours = (boost_cfg.get('hours') if boost_cfg.get('hours') is not none else 2) | float %>
+<# Values of the ventilation select entities (Zehnder: Away/Low/Medium/High, profile Normal/Cool/Warm). #>
+<% set vv_in = C.get('ventilation_values') or {} %>
+<% set vv = {
+  'away': vv_in.get('away') or 'Away', 'low': vv_in.get('low') or 'Low', 'medium': vv_in.get('medium') or 'Medium',
+  'high': vv_in.get('high') or 'High', 'profile_heating': vv_in.get('profile_heating') or 'Normal',
+  'profile_cooling': vv_in.get('profile_cooling') or 'Cool', 'profile_warm': vv_in.get('profile_warm') or 'Warm',
+} %>
+<# --- floor (capability heat-pump) --- #>
+<% set has_hp = 'heat-pump' in caps %>
+<% set floor_on = has_hp and (C.get('floor_mode') is not sameas false) %>
+<% set hp_section = heat_pump if heat_pump is defined and heat_pump is mapping else {} %>
+<% set floor_cooling = (C.floor_cooling is sameas true) if C.get('floor_cooling') is not none else ((hp_section.cooling is sameas true) if hp_section.get('cooling') is not none else true) %>
+<# --- ventilation roles: house.yaml first, else derived from ventilation-zehnder (not with mac_suffix) --- #>
+<% set vz = 'ventilation-zehnder' in modules %>
+<% set vp = (make_prefix(V.get('name'), V.get('display_name')) | string | trim) if (vz and V.get('name') and not V.get('mac_suffix')) else '' %>
+<% set derive = {
+  'ventilation': ('fan', 'fan'),
+  'ventilation_speed': ('select', 'fan_speed'),
+  'ventilation_bypass_on': ('button', 'bypass_on_1h'),
+  'ventilation_bypass_off': ('button', 'bypass_off_1h'),
+  'ventilation_bypass_auto': ('button', 'bypass_auto'),
+  'ventilation_bypass_on_12h': ('button', 'bypass_on_12h'),
+  'ventilation_boost_15': ('button', 'boost_15_min'),
+  'ventilation_boost_60': ('button', 'boost_60_min'),
+  'ventilation_boost_180': ('button', 'boost_3h'),
+  'ventilation_boost_720': ('button', 'boost_12h'),
+  'ventilation_boost_off': ('button', 'boost_off'),
+  'ventilation_profile': ('select', 'temperature_profile'),
+  'ventilation_season_heating': ('binary_sensor', 'heating_season'),
+  'ventilation_season_cooling': ('binary_sensor', 'cooling_season'),
+  'ventilation_outdoor_temperature': ('sensor', 'outdoor_air_temperature'),
+  'ventilation_auto': ('switch', 'auto_ventilation'),
+  'ventilation_away': ('switch', 'away_mode'),
+  'ventilation_bypass_state': ('sensor', 'bypass_state'),
+  'ventilation_power_w': ('sensor', 'power'),
+  'ventilation_filter_days': ('sensor', 'filter_replacement_remaining_days'),
+  'ventilation_supply_temperature': ('sensor', 'supply_air_temperature'),
+  'ventilation_extract_temperature': ('sensor', 'extract_air_temperature'),
+  'ventilation_outdoor_humidity': ('sensor', 'outdoor_air_humidity'),
+  'ventilation_extract_humidity': ('sensor', 'extract_air_humidity'),
+} %>
+<% set vent = {} %>
+<% for role, ds in derive.items() %>
+<% set eid = E.get(role) or ((ds[0] ~ '.' ~ vp ~ '_' ~ ds[1]) if vp else '') %>
+<% if eid %><% set _ = vent.update({role: eid | string}) %><% endif %>
+<% endfor %>
+<% set clime_derived = vp and V.get('comfoclime') is sameas true and not E.get('comfoclime') %>
+<% set comfoclime = E.get('comfoclime') or (('climate.' ~ vp ~ '_comfoclime') if clime_derived else '') %>
+<% set comfoclime_power = E.get('comfoclime_power_w') or (('sensor.' ~ vp ~ '_comfoclime_heat_pump_power') if clime_derived else '') %>
+<% set comfoclime_writes = ('switch.' ~ vp ~ '_comfoclime_allow_writes') if clime_derived else '' %>
+<% set vent_outdoor = vent.get('ventilation_outdoor_temperature') or outdoor %>
+<% set cooling_wanted = C.get('ventilation_cooling') is not sameas false %>
+<% set cooling_roles = ['ventilation_speed', 'ventilation_bypass_on', 'ventilation_bypass_off', 'ventilation_bypass_auto'] %>
+<% set cooling_missing = cooling_roles | reject('in', vent) | list %>
+<% if cooling_wanted and vz and V.get('mac_suffix') and cooling_missing %><@ fail('house.yaml: ventilation.mac_suffix is true, so climate cannot derive the ventilation entities; fill in entities.' ~ (cooling_missing | join(', entities.')) ~ ' or set climate.ventilation_cooling: false') @><% endif %>
+<# --- shading (module shading): rooms in "sun and heat", derived like shading/_shading.jinja --- #>
+<% set all_rooms = rooms if rooms is defined and rooms else [] %>
+<% set sh = shading if shading is defined and shading is mapping else {} %>
+<% set shading_sun = (sh.get('sun_protection', true) is not sameas false) %>
+<% set blind_rooms = all_rooms | selectattr('blind', 'defined') | selectattr('blind') | list %>
+<% set sun_rooms = (blind_rooms | selectattr('side', 'defined') | selectattr('side') | rejectattr('shading', 'sameas', false) | list) if shading_sun else [] %>
+<# --- which blocks this house gets --- #>
+<% set feat = {
+  'floor': floor_on,
+  'floor_cooling': floor_on and floor_cooling,
+  'ventilation': (vent.get('ventilation_speed') or vent.get('ventilation') or '') | length > 0,
+  'ventilation_cooling': cooling_wanted and not cooling_missing and (vent_outdoor | length > 0),
+  'season_profile': (C.get('season_profile') is not sameas false) and ('ventilation_profile' in vent) and ('ventilation_season_heating' in vent) and ('ventilation_season_cooling' in vent),
+  'comfoclime': comfoclime | length > 0,
+  'comfoclime_boost': (comfoclime | length > 0) and boost_on,
+  'shading': 'shading' in modules and blind_rooms | length > 0,
+  'shading_sun': 'shading' in modules and sun_rooms | length > 0,
+  'solar': solar | length > 0,
+  'hot_water': 'hot-water-heater' in caps,
+  'hot_water_plan': 'hot-water' in modules,
+  'notifications': 'notifications' in modules,
+} %>
+<% set view_path = (C.get('view_path') or 'climate') | string %>

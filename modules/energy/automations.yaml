@@ -1,0 +1,23 @@
+# Energy screens (ha-kit module energy, see energy/LOGIC.md). Written by energy/deploy.py through the config API.
+# The energy-flows view follows today: at midnight a date that was "today" moves on to the new day; a date picked in
+# the past stays where it is.
+- id: energy_flows_follow_today
+  alias: <@ t('automation_follow_today') | tojson @>
+  description: <@ t('automation_follow_today_description') | tojson @>
+  mode: single
+  triggers:
+    - trigger: time
+      at: "00:00:05"
+    - trigger: homeassistant
+      event: start
+  conditions:
+    - condition: template
+      value_template: >
+        {% set d = strptime(states('input_datetime.energy_flows_date'), '%Y-%m-%d', none) %}
+        {{ d is none or d.date() >= now().date() - timedelta(days=1) }}
+  actions:
+    - action: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.energy_flows_date
+      data:
+        date: "{{ now().date().isoformat() }}"

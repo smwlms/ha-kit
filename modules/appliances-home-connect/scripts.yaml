@@ -1,0 +1,316 @@
+<% from '_appliances.jinja' import apps, cfg with context %>
+<% set keys = apps | map(attribute='key') | list %>
+<% set txt = {} %>
+<% for k in ['word_tomorrow', 'decimal_separator', 'button_now', 'logbook_name',
+             'notify_not_ready_title', 'not_ready_remote', 'not_ready_door', 'not_ready_status',
+             'notify_wait_sun_title', 'notify_wait_sun_message', 'deadline_arrival', 'deadline_asap',
+             'reason_sun', 'reason_cheapest', 'reason_latest', 'reason_too_tight',
+             'notify_started_title', 'notify_started_message', 'notify_scheduled_title', 'notify_scheduled_message',
+             'notify_not_started_title', 'notify_not_started_message', 'notify_no_device_title',
+             'notify_no_device_message', 'log_plan', 'log_started', 'log_scheduled', 'log_not_started'] %>
+<% set _ = txt.update({k: t(k)}) %>
+<% endfor %>
+# Appliances (Home Connect): scripts (ha-kit module appliances-home-connect, see appliances-home-connect/LOGIC.md).
+# Written by appliances-home-connect/deploy.py through the config API (same as the script editor).
+# script.appliance_start_now is the only caller of home_connect.start_selected_program (one writer per appliance).
+# The Home Connect device is found with device_id() from the appliance's program select: no device ids in files.
+
+# --- Internal: notification to who is home (nobody home = everyone) ----------------------------------------------
+appliance_notify:
+  alias: <@ t('notify_alias') | tojson @>
+  description: <@ t('notify_description') | tojson @>
+  icon: mdi:bell-ring
+  mode: parallel
+  max: 20
+  fields:
+    title:
+      name: <@ t('field_title') | tojson @>
+      required: true
+      selector:
+        text:
+    message:
+      name: <@ t('field_message') | tojson @>
+      required: true
+      selector:
+        text:
+          multiline: true
+    tag:
+      name: <@ t('field_tag') | tojson @>
+      description: <@ t('field_tag_description') | tojson @>
+      required: true
+      selector:
+        text:
+    actions:
+      name: <@ t('field_actions') | tojson @>
+      description: <@ t('field_actions_description') | tojson @>
+      required: false
+      selector:
+        object:
+  sequence:
+    - variables:
+        anyone_home: >-
+          {%- from 'notifications.jinja' import at_home -%}
+          {{ (at_home() | from_json | count) > 0 }}
+        extra: >-
+          {{ {'tag': tag, 'group': 'appliances', 'actions': actions if actions is defined and actions else []} }}
+    - action: script.send_notification
+      data:
+        title: "{{ title }}"
+        message: "{{ message }}"
+        only_home: "{{ anyone_home }}"
+        extra: "{{ extra }}"
+
+# --- Start now, or with a delay on the appliance (the only writer) ------------------------------------------------
+appliance_start_now:
+  alias: <@ t('start_now_alias') | tojson @>
+  description: <@ t('start_now_description') | tojson @>
+  icon: mdi:play-circle
+  mode: parallel
+  max: 4
+  fields:
+    appliance:
+      name: <@ t('field_appliance') | tojson @>
+      required: true
+      selector:
+        select:
+          options: <@ keys | tojson @>
+    start_in:
+      name: <@ t('field_start_in') | tojson @>
+      description: <@ t('field_start_in_description') | tojson @>
+      required: false
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 86400
+          unit_of_measurement: s
+          mode: box
+    reason:
+      name: <@ t('field_reason') | tojson @>
+      required: false
+      selector:
+        text:
+  sequence:
+    - variables:
+        cfg: <@ cfg | tojson @>
+        txt: <@ txt | tojson @>
+        a: "{{ cfg[appliance] }}"
+        delay_s: "{{ start_in | default(0) | int(0) }}"
+        why: "{{ reason if reason is defined and reason else '' }}"
+        device: "{{ device_id(a.selected_program) or '' }}"
+        program: "{{ state_translated(a.selected_program) }}"
+    - if:
+        - "{{ device == '' }}"
+      then:
+        - action: script.appliance_notify
+          data:
+            title: "{{ txt.notify_no_device_title | replace('{name}', a.name) }}"
+            message: "{{ txt.notify_no_device_message | replace('{entity}', a.selected_program) }}"
+            tag: "{{ appliance }}_start"
+        - stop: no Home Connect device for this appliance
+          error: true
+    - action: input_boolean.turn_off
+      target:
+        entity_id: "{{ a.waiting }}"
+    # Switched off: switch it on first (only appliances with a power switch).
+    - if:
+        - "{{ is_state(a.power, 'off') }}"
+      then:
+        - action: switch.turn_on
+          target:
+            entity_id: "{{ a.power }}"
+          continue_on_error: true
+        - delay:
+            seconds: 5
+    # "Start now" on a delayed start: cancel the delay on the appliance first, then start again without one. Some
+    # appliances fall back to their default program after the stop: put the selected program back.
+    - if:
+        - "{{ delay_s == 0 and is_state(a.status, 'delayedstart') }}"
+      then:
+        - variables:
+            program_before: "{{ states(a.selected_program) }}"
+        - action: button.press
+          target:
+            entity_id: "{{ a.stop }}"
+        - wait_template: "{{ states(a.status) in ['ready', 'inactive'] }}"
+          timeout:
+            seconds: 60
+        - delay:
+            seconds: 3
+        - if:
+            - "{{ program_before not in ['unknown', 'unavailable', ''] and states(a.selected_program) != program_before }}"
+          then:
+            - action: select.select_option
+              target:
+                entity_id: "{{ a.selected_program }}"
+              data:
+                option: "{{ program_before }}"
+              continue_on_error: true
+            - delay:
+                seconds: 3
+    - choose:
+        - conditions:
+            - "{{ delay_s > 0 and a.delay_option == 'start' }}"
+          sequence:
+            - action: home_connect.start_selected_program
+              data:
+                device_id: "{{ device }}"
+                b_s_h_common_option_start_in_relative: "{{ delay_s }}"
+              continue_on_error: true
+        # Washers and dryers know "finish in": the end of the planned run.
+        - conditions:
+            - "{{ delay_s > 0 }}"
+          sequence:
+            - action: home_connect.start_selected_program
+              data:
+                device_id: "{{ device }}"
+                b_s_h_common_option_finish_in_relative: "{{ delay_s + (states(a.duration) | float(3) * 3600) | int }}"
+              continue_on_error: true
+      default:
+        - action: home_connect.start_selected_program
+          data:
+            device_id: "{{ device }}"
+          continue_on_error: true
+    - wait_template: "{{ states(a.status) in ['run', 'delayedstart'] }}"
+      timeout:
+        seconds: 60
+    - if:
+        - "{{ not wait.completed }}"
+      then:
+        - action: logbook.log
+          data:
+            name: "{{ txt.logbook_name }}"
+            entity_id: "{{ a.waiting }}"
+            message: "{{ txt.log_not_started | replace('{name}', a.name) | replace('{status}', states(a.status)) }}"
+        - action: script.appliance_notify
+          data:
+            title: "{{ txt.notify_not_started_title | replace('{name}', a.name) }}"
+            message: >-
+              {{ txt.notify_not_started_message | replace('{status}', state_translated(a.status) | lower) }}
+            tag: "{{ appliance }}_start"
+        - stop: the appliance did not start
+          error: true
+    - variables:
+        at: "{{ (now() + timedelta(seconds=delay_s)).strftime('%H:%M') }}"
+        suffix: "{{ ' (' ~ why ~ ')' if why else '' }}"
+    - action: logbook.log
+      data:
+        name: "{{ txt.logbook_name }}"
+        entity_id: "{{ a.waiting }}"
+        message: >-
+          {{ (txt.log_scheduled if delay_s > 0 else txt.log_started) | replace('{name}', a.name)
+             | replace('{program}', program) | replace('{time}', at) }}{{ suffix }}
+    - action: script.appliance_notify
+      data:
+        title: >-
+          {{ (txt.notify_scheduled_title if delay_s > 0 else txt.notify_started_title) | replace('{name}', a.name)
+             | replace('{time}', at) }}
+        message: >-
+          {{ (txt.notify_scheduled_message if delay_s > 0 else txt.notify_started_message) | replace('{program}', program)
+             | replace('{time}', at) }}{{ suffix }}.
+        tag: "{{ appliance }}_start"
+        actions: "{{ [{'action': 'APPLIANCE_NOW_' ~ a.upper, 'title': txt.button_now}] if delay_s > 0 else [] }}"
+
+# --- Smart start: sun or battery first, then the deadline, then the price ----------------------------------------
+appliance_smart_start:
+  alias: <@ t('smart_start_alias') | tojson @>
+  description: <@ t('smart_start_description') | tojson @>
+  icon: mdi:sun-clock
+  # queued: a second call (another trigger seconds later) runs after the first and finds the appliance busy.
+  mode: queued
+  max: 6
+  fields:
+    appliance:
+      name: <@ t('field_appliance') | tojson @>
+      required: true
+      selector:
+        select:
+          options: <@ keys | tojson @>
+  sequence:
+    - variables:
+        cfg: <@ cfg | tojson @>
+        txt: <@ txt | tojson @>
+        a: "{{ cfg[appliance] }}"
+        why_not: >-
+          {%- if is_state(a.waiting, 'on') or states(a.status) in ['run', 'delayedstart', 'pause'] -%}busy
+          {%- elif not is_state(a.remote_start, 'on') -%}remote
+          {%- elif not is_state(a.door, 'closed') -%}door
+          {%- elif states(a.status) not in ['ready', 'inactive'] -%}status
+          {%- endif -%}
+    # Already planned, waiting or running (e.g. a second trigger a few seconds later): nothing to do.
+    - if:
+        - "{{ why_not == 'busy' }}"
+      then:
+        - stop: already planned or running
+    - if:
+        - "{{ why_not != '' }}"
+      then:
+        - action: script.appliance_notify
+          data:
+            title: "{{ txt.notify_not_ready_title | replace('{name}', a.name) }}"
+            message: >-
+              {{ {'remote': txt.not_ready_remote, 'door': txt.not_ready_door,
+                  'status': txt.not_ready_status | replace('{status}', state_translated(a.status) | lower)}[why_not] }}
+            tag: "{{ appliance }}_start"
+        - stop: appliance not ready for a remote start
+    - variables:
+        plan: >-
+          {%- from 'appliances.jinja' import start_window -%}
+          {{ start_window(states(a.duration), states(a.ready_by), a.auto_time) | from_json }}
+        start_in: "{{ [plan.start_ts - (as_timestamp(now()) | int), 0] | max }}"
+        start_time: >-
+          {{ (txt.word_tomorrow ~ ' ' if (plan.start_ts | timestamp_custom('%Y-%m-%d')) != now().strftime('%Y-%m-%d') else '')
+             ~ plan.start_ts | timestamp_custom('%H:%M') }}
+        deadline: >-
+          {%- set d = as_local(as_datetime(plan.deadline)) -%}
+          {{ (txt.word_tomorrow ~ ' ' if d.date() != now().date() else '') ~ d.strftime('%H:%M')
+             ~ {'arrival': ' ' ~ txt.deadline_arrival, 'asap': ' ' ~ txt.deadline_asap}.get(plan.by, '') }}
+        reason_text: >-
+          {%- set price = ('%.2f' | format(plan.mean_price | float(0))) | replace('.', txt.decimal_separator) -%}
+          {{ {'sun': txt.reason_sun | replace('{kwh}', (plan.kwh | string) | replace('.', txt.decimal_separator)),
+              'cheapest': txt.reason_cheapest | replace('{price}', price),
+              'latest': txt.reason_latest, 'too_tight': txt.reason_too_tight}[plan.reason]
+             | replace('{deadline}', deadline) }}
+    - action: input_datetime.set_datetime
+      target:
+        entity_id: "{{ a.smart_start_at }}"
+      data:
+        timestamp: "{{ plan.start_ts }}"
+    - action: logbook.log
+      data:
+        name: "{{ txt.logbook_name }}"
+        entity_id: "{{ a.waiting }}"
+        message: >-
+          {{ txt.log_plan | replace('{name}', a.name) | replace('{time}', start_time) | replace('{reason}', reason_text) }}
+    - choose:
+        - conditions:
+            - "{{ start_in < 300 }}"
+          sequence:
+            - action: script.appliance_start_now
+              data:
+                appliance: "{{ appliance }}"
+                reason: "{{ reason_text }}"
+              continue_on_error: true
+        # Sun expected before the latest start: wait for surplus or a full battery (automation
+        # appliance_smart_start_run starts it at once when there already is), at the latest at the safety net.
+        - conditions:
+            - "{{ plan.sun }}"
+          sequence:
+            - action: input_boolean.turn_on
+              target:
+                entity_id: "{{ a.waiting }}"
+            - action: script.appliance_notify
+              data:
+                title: "{{ txt.notify_wait_sun_title | replace('{name}', a.name) }}"
+                message: >-
+                  {{ txt.notify_wait_sun_message | replace('{kwh}', (plan.kwh | string) | replace('.', txt.decimal_separator))
+                     | replace('{time}', start_time) | replace('{deadline}', deadline) }}
+                tag: "{{ appliance }}_start"
+                actions: "{{ [{'action': 'APPLIANCE_NOW_' ~ a.upper, 'title': txt.button_now}] }}"
+      default:
+        - action: script.appliance_start_now
+          data:
+            appliance: "{{ appliance }}"
+            start_in: "{{ start_in }}"
+            reason: "{{ reason_text }}"
+          continue_on_error: true

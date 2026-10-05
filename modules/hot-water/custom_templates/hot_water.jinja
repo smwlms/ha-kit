@@ -1,0 +1,322 @@
+<% from '_hot_water.jinja' import litres, cop_default, heater_kw, max_sessions, bath, bath_from, tariff_on, battery,
+   battery_power, discharge_factor, grid_import, kwh_per_degree_default with context %>
+<% set d = module.defaults %>
+{#- Hot water buffer: macros (ha-kit module hot-water, see hot-water/LOGIC.md). Uploaded by hot-water/deploy.py to
+    /config/custom_templates/hot_water.jinja. Filled in from house.yaml: do not edit it in Home Assistant.
+
+    kwh_per_degree()    electrical kWh per °C of the tank: <@ litres @> l x 1.163 Wh/(l.K) / 1000 / COP, COP from
+                        sensor.hot_water_cop (default <@ cop_default @>)
+    morning_goal()      °C the tank must have at sunrise: the minimum, or the shower temperature with the shower button
+    cheapest_hour(a, b) JSON {start, end, mean} of the cheapest consecutive hour of sensor.power_price_import that starts
+                        at or after epoch a and ends at or before epoch b; {} when there is none
+    morning_hour()      cheapest_hour between sunset (or now) and the next sunrise
+    bath_hour()         cheapest_hour between <@ bath_from @> (or now) and input_datetime.hot_water_bath_check, today
+    decide(tid)         JSON: what automation hot_water_buffer does for trigger id tid (keys: action, kind, reason,
+                        target, boost, log, result, goal, shower_off, session). The automation only carries it out. -#}
+
+{%- macro kwh_per_degree() -%}
+{%- set cop = states('sensor.hot_water_cop') | float(<@ cop_default @>) -%}
+{%- set cop = [[cop, 0.8] | max, 6] | min -%}
+{{ (<@ litres @> * 1.163 / 1000 / cop) | round(4) }}
+{%- endmacro %}
+
+{%- macro morning_goal() -%}
+{%- set mn = states('input_number.hot_water_minimum') | float(<@ d['input_number.hot_water_minimum'] @>) -%}
+{%- if is_state('input_boolean.hot_water_shower_tomorrow', 'on') -%}
+{{ [states('input_number.hot_water_shower') | float(<@ d['input_number.hot_water_shower'] @>), mn] | max }}
+{%- else -%}
+{{ mn }}
+{%- endif -%}
+{%- endmacro %}
+
+{%- macro cheapest_hour(a, b) -%}
+{%- set s = state_attr('sensor.power_price_import', 'starts') or [] -%}
+{%- set p = state_attr('sensor.power_price_import', 'prices') or [] -%}
+{%- set n = [s | count, p | count] | min -%}
+{%- set slot = (as_timestamp(s[1], 0) - as_timestamp(s[0], 0)) if n > 1 else 900 -%}
+{%- set slot = slot if slot > 0 else 900 -%}
+{%- set w = [(3600 / slot) | round(0) | int, 1] | max -%}
+{%- set ns = namespace(best=none, i=0) -%}
+{%- for i in range(0, [n - w + 1, 0] | max) -%}
+{%- set t = as_timestamp(s[i], 0) -%}
+{%- if t >= a and t + w * slot <= b and as_timestamp(s[i + w - 1], 0) - t == (w - 1) * slot -%}
+{%- set m = (p[i:i + w] | sum) / w -%}
+{%- if ns.best is none or m < ns.best -%}{%- set ns.best = m -%}{%- set ns.i = i -%}{%- endif -%}
+{%- endif -%}
+{%- endfor -%}
+{%- if ns.best is none -%}
+{}
+{%- else -%}
+{%- set st = as_local(as_datetime(s[ns.i])) -%}
+{{ {'start': st.isoformat(), 'end': (st + timedelta(seconds=w * slot)).isoformat(), 'mean': ns.best | round(4)} | to_json }}
+{%- endif -%}
+{%- endmacro %}
+
+{%- macro morning_hour() -%}
+{%- set rise = as_datetime(state_attr('sun.sun', 'next_rising'), none) -%}
+{%- set down = as_datetime(state_attr('sun.sun', 'next_setting'), none) -%}
+{%- if rise is none -%}
+{}
+{%- else -%}
+{%- set a = now().timestamp() - 840 -%}
+{%- set a = [a, down.timestamp()] | max if down is not none and down < rise else a -%}
+{{ cheapest_hour(a, rise.timestamp()) }}
+{%- endif -%}
+{%- endmacro %}
+
+{%- macro bath_hour() -%}
+{%- set c = states('input_datetime.hot_water_bath_check') -%}
+{%- if c is match('^[0-2][0-9]:[0-5][0-9]') -%}
+{{ cheapest_hour([now().timestamp() - 840, today_at('<@ bath_from @>').timestamp()] | max, today_at(c[:5]).timestamp()) }}
+{%- else -%}
+{}
+{%- endif -%}
+{%- endmacro %}
+
+{%- macro decide(tid) -%}
+{%- from 'energy_plan.jinja' import watts -%}
+<% if tariff_on %>
+{%- from 'tariff.jinja' import price_at, reference_price -%}
+<% endif %>
+{#- --- what is now ------------------------------------------------------------------------------------------ -#}
+{%- set now_ts = now().timestamp() -%}
+{%- set T = states('sensor.hot_water_temperature') | float(none) -%}
+{%- set master = is_state('input_boolean.hot_water_on_surplus', 'on') -%}
+{%- set active = is_state('input_boolean.hot_water_surplus_active', 'on') -%}
+{%- set session = states('sensor.hot_water_session') -%}
+{%- set session = session if session in ['solar', 'cheap_power', 'boost'] else 'idle' -%}
+{%- set s_reason = state_attr('sensor.hot_water_session', 'reason') -%}
+{%- set s_target = state_attr('sensor.hot_water_session', 'target') | float(none) -%}
+{%- set s_temp = state_attr('sensor.hot_water_session', 'start_temperature') | float(none) -%}
+{%- set s_started = as_datetime(state_attr('sensor.hot_water_session', 'started') or '', none) -%}
+{%- set s_ended = as_datetime(state_attr('sensor.hot_water_session', 'ended') or '', none) -%}
+{%- set same_day = state_attr('sensor.hot_water_session', 'day') == now().date().isoformat() -%}
+{%- set starts_today = (state_attr('sensor.hot_water_session', 'starts_today') | int(0)) if same_day else 0 -%}
+{%- set mn = states('input_number.hot_water_minimum') | float(<@ d['input_number.hot_water_minimum'] @>) -%}
+{%- set mx = states('input_number.hot_water_surplus_max') | float(<@ d['input_number.hot_water_surplus_max'] @>) -%}
+{%- set from_kw = states('input_number.hot_water_surplus_from_kw') | float(<@ d['input_number.hot_water_surplus_from_kw'] @>) -%}
+{%- set goal_m = morning_goal() | float(mn) -%}
+<% if bath %>
+{%- set bath_t = states('input_number.hot_water_bath') | float(<@ d['input_number.hot_water_bath'] @>) -%}
+<% else %>
+{%- set bath_t = none -%}
+<% endif %>
+{%- set kpd = kwh_per_degree() | float(<@ kwh_per_degree_default @>) -%}
+{%- set needed = ([mx - T, 0] | max * kpd) if T is not none else none -%}
+{%- set room = states('sensor.hot_water_room') | float(none) -%}
+{%- set export_kw = [states('sensor.energy_plan_export_avg') | float(0), 0] | max -%}
+{%- set import_kw = [watts('<@ grid_import @>') | float(0), 0] | max / 1000 -%}
+{%- set heater = <@ heater_kw @> -%}
+<% if battery %>
+{%- set soc = states('<@ battery @>') | float(none) -%}
+{%- set bat_min = states('input_number.hot_water_battery_minimum') | float(<@ d['input_number.hot_water_battery_minimum'] @>) -%}
+{%- set behind = is_state('binary_sensor.energy_plan_battery_behind', 'on') -%}
+{%- set battery_ok = (soc is not none and soc >= bat_min) or (room is not none and needed is not none and room >= needed) -%}
+<% else %>
+{%- set soc = none -%}
+{%- set bat_min = 0 -%}
+{%- set behind = false -%}
+{%- set battery_ok = true -%}
+<% endif %>
+<% if battery_power %>
+{#- positive = the battery discharges -#}
+{%- set bat_w = <@ discharge_factor @> * (watts('<@ battery_power @>') | float(0)) -%}
+<% else %>
+{%- set bat_w = 0 -%}
+<% endif %>
+{%- set discharge_w = [bat_w, 0] | max -%}
+{%- set charge_kw = [0 - bat_w, 0] | max / 1000 -%}
+{%- set sun_up = is_state('sun.sun', 'above_horizon') -%}
+<% if tariff_on %>
+{%- set cheap = is_state('binary_sensor.power_price_cheap', 'on') -%}
+{%- set cheap_max = states('input_number.hot_water_cheap_max_grid_kw') | float(<@ d['input_number.hot_water_cheap_max_grid_kw'] @>) -%}
+{%- set pays = is_state('input_boolean.hot_water_price_aware', 'off') or not is_state('binary_sensor.hot_water_heating_pays', 'off') -%}
+{%- set headroom = states('sensor.capacity_headroom_kw') | float(none) -%}
+{%- set p_imp = states('sensor.power_price_import') | float(none) -%}
+{%- set p_exp = states('sensor.power_price_export') | float(none) -%}
+<% else %>
+{%- set cheap = false -%}
+{%- set cheap_max = 0 -%}
+{%- set pays = true -%}
+{%- set headroom = none -%}
+{%- set p_imp = none -%}
+{%- set p_exp = none -%}
+<% endif %>
+{#- --- derived ---------------------------------------------------------------------------------------------- -#}
+{%- set cheap_ok = cheap and sun_up and not behind -%}
+{%- set tolerance = cheap_max if cheap_ok else 0.3 -%}
+{%- set available = export_kw + (charge_kw if battery_ok else 0) -%}
+{%- set extra = [heater - available, 0] | max -%}
+{%- set peak_ok = headroom is none or import_kw + extra <= headroom -%}
+{%- set boost_peak_ok = headroom is none or import_kw + heater <= headroom -%}
+{%- set rest_ok = s_ended is none or now_ts - s_ended.timestamp() >= 1800 -%}
+{%- set count_ok = starts_today < <@ max_sessions @> -%}
+{%- set has_room = T is not none and T < mx - 3 -%}
+{%- set Tr = T | round(1) if T is not none else none -%}
+{%- set o = namespace(action='none', kind='idle', reason=none, target=none, boost=false, log=none, result=none,
+                      goal=none, shower_off=false) -%}
+{#- --- start a session: surplus first, else cheap power ----------------------------------------------------- -#}
+{%- if tid == 'start' -%}
+{%- if master and not active and has_room and rest_ok and count_ok -%}
+{%- set solar = export_kw >= from_kw and battery_ok and available + tolerance >= heater and pays and peak_ok -%}
+{%- set cheap_go = cheap_ok and available + cheap_max >= heater and peak_ok -%}
+{%- if solar or cheap_go -%}
+{%- set o.action = 'start' -%}
+{%- set o.kind = 'solar' if solar else 'cheap_power' -%}
+{%- set o.reason = 'surplus' if solar else 'cheap_power' -%}
+{%- set o.target = mx -%}
+{%- set o.log = {'key': 'log_start_' ~ o.reason, 't': Tr, 'target': mx | round(0) | int, 'kw': export_kw | round(2),
+                 'price': p_imp | round(3) if p_imp is not none else '?'} -%}
+{%- endif -%}
+{%- endif -%}
+{#- --- stop a session (and the master switch also ends a boost) ---------------------------------------------- -#}
+{%- elif tid in ['master_off', 'sunset', 'tank_full', 'battery_discharge', 'grid', 'grid_cheap', 'cheap_end',
+                 'plan_tight', 'price', 'peak'] -%}
+{%- set w = namespace(why=none) -%}
+{%- if active -%}
+{%- if tid == 'master_off' -%}{%- set w.why = 'off' -%}
+{%- elif tid == 'sunset' -%}{%- set w.why = 'evening' -%}
+{%- elif tid == 'tank_full' and T is not none and T >= mx - 0.5 -%}{%- set w.why = 'full' -%}
+{%- elif tid == 'battery_discharge' and discharge_w > 300 -%}{%- set w.why = 'battery' -%}
+{%- elif tid == 'grid' and import_kw > 0.3 and not cheap_ok -%}{%- set w.why = 'grid' -%}
+{%- elif tid == 'grid_cheap' and import_kw > cheap_max -%}{%- set w.why = 'grid' -%}
+{%- elif tid == 'cheap_end' and (session == 'cheap_power' or import_kw > 0.3) -%}{%- set w.why = 'cheap_end' -%}
+{%- elif tid == 'plan_tight' and not (soc is not none and soc >= bat_min) and (room is none or room < 0) -%}{%- set w.why = 'plan' -%}
+{%- elif tid == 'price' and session != 'cheap_power' and not pays -%}{%- set w.why = 'price' -%}
+{%- elif tid == 'peak' and headroom is not none and import_kw > headroom -%}{%- set w.why = 'peak' -%}
+{%- endif -%}
+{%- if w.why is not none -%}
+{%- set o.action = 'stop' -%}
+{%- set o.reason = w.why -%}
+{%- set o.target = mn -%}
+{%- set kwh = ([T - s_temp, 0] | max * kpd) | round(2) if T is not none and s_temp is not none else 0 -%}
+{%- set o.log = {'key': 'log_stop', 'why': w.why, 't0': s_temp | round(1) if s_temp is not none else '?', 't': Tr,
+                 'kwh': kwh} -%}
+{%- if kwh > 0 -%}
+{%- set imp = ((state_attr('sensor.hot_water_session', 'import_price') | float(p_imp)) + p_imp) / 2 if p_imp is not none else none -%}
+{%- set exp = ((state_attr('sensor.hot_water_session', 'export_price') | float(p_exp)) + p_exp) / 2 if p_exp is not none else none -%}
+{%- if session == 'cheap_power' -%}
+<% if tariff_on %>
+{%- set ref = reference_price() | float(imp if imp is not none else 0) -%}
+<% else %>
+{%- set ref = 0 -%}
+<% endif %>
+{%- set o.result = {'kind': 'hot_water_cheap_hour', 'kwh': kwh,
+                    'eur': (kwh * (ref - imp)) | round(3) if imp is not none else 0, 'export_missed': 0} -%}
+{%- else -%}
+{%- set o.result = {'kind': 'hot_water_solar', 'kwh': kwh,
+                    'eur': (kwh * imp) | round(3) if imp is not none else 0,
+                    'export_missed': (kwh * exp) | round(3) if exp is not none else 0} -%}
+{%- endif -%}
+{%- endif -%}
+{%- endif -%}
+{%- elif tid == 'master_off' and session == 'boost' -%}
+{%- set o.action = 'end_boost' -%}
+{%- set o.reason = 'off' -%}
+{%- set o.target = mn -%}
+{%- set o.log = {'key': 'log_boost_end', 'why': 'off', 't': Tr, 'target': mn | round(0) | int} -%}
+{%- endif -%}
+{#- --- morning: cheapest hour before sunrise, safety net 45 min before, goal at sunrise ------------------------ -#}
+{%- elif tid == 'morning_cheap' -%}
+{%- if master and T is not none and T < goal_m - 0.5 and not active and session != 'boost' -%}
+{%- if not boost_peak_ok -%}
+{%- set o.log = {'key': 'log_skip', 'why_what': 'morning_cheap', 'why': 'peak'} -%}
+{%- else -%}
+{%- set o.action = 'boost' -%}
+{%- set o.kind = 'boost' -%}
+{%- set o.reason = 'morning_cheap' -%}
+{%- set o.target = goal_m -%}
+{%- set o.boost = true -%}
+{%- set o.log = {'key': 'log_boost', 'why': 'morning_cheap', 't': Tr, 'target': goal_m | round(0) | int} -%}
+{%- set kwh = ((goal_m - T) * kpd) | round(2) -%}
+{%- set rise = as_datetime(state_attr('sun.sun', 'next_rising'), none) -%}
+<% if tariff_on %>
+{%- set p_safe = price_at(rise - timedelta(minutes=45)) | float(p_imp) if rise is not none else p_imp -%}
+<% else %>
+{%- set p_safe = none -%}
+<% endif %>
+{%- set o.result = {'kind': 'hot_water_cheap_hour', 'kwh': kwh,
+                    'eur': (kwh * (p_safe - p_imp)) | round(3) if p_imp is not none and p_safe is not none else 0,
+                    'export_missed': 0} -%}
+{%- endif -%}
+{%- endif -%}
+{%- elif tid == 'morning_safety' -%}
+{%- if master and T is not none and T < goal_m - 0.5 and not active and not (session == 'boost' and s_target is not none and s_target >= goal_m) -%}
+{%- set o.action = 'boost' -%}
+{%- set o.kind = 'boost' -%}
+{%- set o.reason = 'morning_safety' -%}
+{%- set o.target = goal_m -%}
+{%- set o.boost = true -%}
+{%- set o.log = {'key': 'log_boost', 'why': 'morning_safety', 't': Tr, 'target': goal_m | round(0) | int} -%}
+{%- endif -%}
+{%- elif tid == 'sunrise' -%}
+{%- if master and T is not none -%}
+{%- set o.goal = {'goal': 'morning', 'status': 'met' if T >= goal_m - 0.5 else 'missed', 't': T | round(0) | int,
+                  'target': goal_m | round(0) | int, 'shower': is_state('input_boolean.hot_water_shower_tomorrow', 'on')} -%}
+{%- endif -%}
+{%- set o.shower_off = is_state('input_boolean.hot_water_shower_tomorrow', 'on') -%}
+{#- --- bath: cheapest hour before the bath check, goal and safety net at the check ------------------------------ -#}
+{%- elif tid == 'bath_cheap' and bath_t is not none -%}
+{%- if master and T is not none and T < bath_t - 0.5 and not active and session != 'boost' -%}
+{%- if room is not none and needed is not none and room >= needed -%}
+{%- set o.log = {'key': 'log_skip_solar', 'room': room | round(1)} -%}
+{%- elif not boost_peak_ok -%}
+{%- set o.log = {'key': 'log_skip', 'why_what': 'bath_cheap', 'why': 'peak'} -%}
+{%- else -%}
+{%- set o.action = 'boost' -%}
+{%- set o.kind = 'boost' -%}
+{%- set o.reason = 'bath_cheap' -%}
+{%- set o.target = bath_t -%}
+{%- set o.boost = true -%}
+{%- set o.log = {'key': 'log_boost', 'why': 'bath_cheap', 't': Tr, 'target': bath_t | round(0) | int} -%}
+{%- set kwh = ((bath_t - T) * kpd) | round(2) -%}
+{%- set c = states('input_datetime.hot_water_bath_check') -%}
+<% if tariff_on %>
+{%- set p_safe = price_at(today_at(c[:5])) | float(p_imp) if c is match('^[0-2][0-9]:[0-5][0-9]') else p_imp -%}
+<% else %>
+{%- set p_safe = none -%}
+<% endif %>
+{%- set o.result = {'kind': 'hot_water_cheap_hour', 'kwh': kwh,
+                    'eur': (kwh * (p_safe - p_imp)) | round(3) if p_imp is not none and p_safe is not none else 0,
+                    'export_missed': 0} -%}
+{%- endif -%}
+{%- endif -%}
+{%- elif tid == 'bath_check' and bath_t is not none -%}
+{%- if master and T is not none -%}
+{%- set o.goal = {'goal': 'bath', 'status': 'met' if T >= bath_t - 0.5 else 'missed', 't': T | round(0) | int,
+                  'target': bath_t | round(0) | int, 'time': states('input_datetime.hot_water_bath_check')[:5]} -%}
+{%- if T < bath_t - 0.5 and not active and not (session == 'boost' and s_target is not none and s_target >= bath_t) -%}
+{%- set o.action = 'boost' -%}
+{%- set o.kind = 'boost' -%}
+{%- set o.reason = 'bath_safety' -%}
+{%- set o.target = bath_t -%}
+{%- set o.boost = true -%}
+{%- set o.log = {'key': 'log_boost', 'why': 'bath_safety', 't': Tr, 'target': bath_t | round(0) | int} -%}
+{%- endif -%}
+{%- endif -%}
+{#- --- end of a boost: goal reached, or not within 3 h -------------------------------------------------------- -#}
+{%- elif tid in ['boost_done', 'boost_timeout'] and session == 'boost' and not active -%}
+{%- set done = T is not none and s_target is not none and T >= s_target - 0.5 -%}
+{%- set late = s_started is not none and now_ts - s_started.timestamp() >= 3 * 3600 -%}
+{%- if done or late -%}
+{%- set o.action = 'end_boost' -%}
+{%- set o.reason = 'done' if done else 'timeout' -%}
+{%- set o.target = mn -%}
+{%- set o.log = {'key': 'log_boost_end', 'why': o.reason, 't': Tr, 'target': mn | round(0) | int} -%}
+{%- endif -%}
+{%- endif -%}
+{#- --- the session record (sensor.hot_water_session) after this decision ------------------------------------- -#}
+{%- if o.action in ['start', 'boost'] -%}
+{%- set rec = {'state': o.kind, 'reason': o.reason, 'target': o.target, 'start_temperature': Tr,
+               'started': now().isoformat(), 'ended': s_ended.isoformat() if s_ended is not none else none,
+               'import_price': p_imp, 'export_price': p_exp} -%}
+{%- elif o.action in ['stop', 'end_boost'] -%}
+{%- set rec = {'state': 'idle', 'reason': o.reason, 'target': o.target, 'start_temperature': s_temp,
+               'started': s_started.isoformat() if s_started is not none else none, 'ended': now().isoformat(),
+               'import_price': p_imp, 'export_price': p_exp} -%}
+{%- else -%}
+{%- set rec = none -%}
+{%- endif -%}
+{{ {'action': o.action, 'kind': o.kind, 'reason': o.reason, 'target': o.target, 'boost': o.boost, 'log': o.log,
+    'result': o.result, 'goal': o.goal, 'shower_off': o.shower_off, 'session': rec} | to_json }}
+{%- endmacro %}

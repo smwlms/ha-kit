@@ -1,0 +1,43 @@
+# Test house for tools/check.py: the phase-4 modules WITHOUT a tariff module (no prices, no capacity tariff), so the
+# branches without 'tariff' in capabilities are filled in and compiled too. No home battery, one car with a charge
+# plan. INVENTED: every name and entity id is fictitious.
+house:
+  timezone: Europe/Brussels
+  language: en
+  lat: 52.37
+  lon: 5.22
+modules: [base, notifications, energy-plan, energy, charger-zappi, ev-charging, heat-pump-vaillant, hot-water, climate,
+  appliances-home-connect]
+people:
+  - { key: an, name: An, phone: pixel_an, notify: mobile_app_pixel_an }
+cars:
+  - { prefix: blauwe_y, name: Blauwe Y, battery_kwh: 60, charge_plan: true }
+teslemetry:
+  battery: "sensor.{p}_battery_level"
+  charging_state: "sensor.{p}_charging"
+  charge_switch: "switch.{p}_charge"
+  charge_cable: "binary_sensor.{p}_charge_cable"
+  located_at_home: "binary_sensor.{p}_located_at_home"
+  status: "binary_sensor.{p}_status"
+  charge_current: "number.{p}_charge_current"
+  charge_limit: "number.{p}_charge_limit"
+entities:
+  weather: weather.home
+  indoor_temperature: sensor.living_room_temperature
+  grid_import_w: sensor.grid_import
+  grid_export_w: sensor.grid_export
+  grid_import_kwh: sensor.grid_import_total
+  grid_export_kwh: sensor.grid_export_total
+  solar_power_w: sensor.solar_power
+notifications:
+  kinds: [surplus]
+charger_zappi:
+  prefix: myenergi_zappi_0000000
+heat_pump:
+  system: home
+  zones:
+    - { name: house }
+hot_water:
+  bath: true
+appliances:
+  - { key: washer, kind: washer, prefix: washing_machine }

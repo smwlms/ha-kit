@@ -1,0 +1,42 @@
+# Module metadata, read by tools/fill.py (--list), tools/choose.py (ask:), tools/check.py and deploy.py (defaults).
+# Contract: docs/phase4-contracts.md section 3 (heat-pump, hot-water-heater).
+name: Heat pump (Vaillant)
+description: "Vaillant heat pump through myVAILLANT as heat-pump (floor band, quick veto, state, estimated power) and hot-water-heater (tank target, boost)"
+status: built, not tested on HA
+# Layer: brand adapter. No decision logic: climate decides the floor band, hot-water decides when to heat the tank.
+depends_on: []
+provides: [heat-pump, hot-water-heater]
+requires:
+  integrations:
+    - "myVAILLANT (mypyllant, HACS, cloud with a limited number of commands)"
+  hardware:
+    - "Vaillant flexoTHERM or aroTHERM with a sensoNET/VR921 gateway"
+optional: true
+generate: []
+ask:
+  - id: heat_pump
+    question: "Which heat pump do you have?"
+    options: ["Vaillant (myVAILLANT)", "other", "none"]
+    need: "Vaillant (myVAILLANT)"
+# Fields of house.yaml this module reads (example: house.example.yaml).
+house_fields:
+  - "heat_pump.system (required), zones[] (name, circuit, key, cooling, band, climate; or the older zone)"
+  - "heat_pump.cooling, power_estimate_w, hot_water_modes, hot_water_heat_kwh, hot_water_electric_kwh (optional)"
+  - "entities.heat_pump, entities.water_heater (optional overrides of the derived ids)"
+  - "hot_water.cop (optional default of sensor.hot_water_cop)"
+# Start values that deploy.py sets ONCE, when the helper is new. After that the value is yours.
+defaults:
+  input_number.heat_pump_vaillant_max_writes_per_day: 40
+# The other side of the optional switches, filled in by tools/check.py in its all-modules house: two zones (one
+# without band, one cooling override), cooling off for the system, no COP energy sensors (sensor.hot_water_cop falls
+# back to hot_water.cop) and the default mode names. The example house sets the COP sensors and the mode names.
+check_variant:
+  heat_pump:
+    cooling: false
+    zones:
+      - { name: ground_floor, circuit: 0, key: ground, cooling: true }
+      - { name: first_floor, circuit: 1, key: upstairs, band: false }
+    power_estimate_w: { hot_water: 2200, heating: 1500 }
+    hot_water_modes: null
+    hot_water_heat_kwh: null
+    hot_water_electric_kwh: null

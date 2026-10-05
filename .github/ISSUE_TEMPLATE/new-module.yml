@@ -1,0 +1,42 @@
+name: New module
+description: Propose a new function (a core module that works on roles, or a region module)
+labels: [new module]
+body:
+  - type: input
+    id: name
+    attributes:
+      label: Module name
+      placeholder: e.g. heat-pump, tariff-nl
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What it does for the user
+    validations:
+      required: true
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Layer
+      options:
+        - Core (brand-free, works on roles such as cover.*, climate.*, sensors)
+        - Region (tariffs, grid operator, legal rules of one country)
+    validations:
+      required: true
+  - type: textarea
+    id: roles
+    attributes:
+      label: Roles it reads and what it provides
+      description: Which entities (as roles in house.yaml) it needs, and which helpers, scripts or sensors other modules may read.
+  - type: textarea
+    id: requires
+    attributes:
+      label: Integrations and hardware
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy
+      options:
+        - label: Examples use invented names, addresses and entity ids only
+          required: true

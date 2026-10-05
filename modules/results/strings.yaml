@@ -1,0 +1,195 @@
+# User-facing texts of the module results: one key per text, {en: ..., nl: ...}. tools/fill.py picks house.language
+# (default en). Keys in card_keys of _results.jinja go into the card config as strings: and www/results-screen.js reads
+# them; {placeholders} stay in the text and are filled in by the card (fmt) or by a Home Assistant template (replace).
+# Keep the placeholders when you translate. Numbers are formatted with `locale`.
+language_code: { en: "en", nl: "nl" }
+locale: { en: "en-GB", nl: "nl-BE" }
+# --- Home Assistant side: helpers, sensors, automations, logbook ---
+view_title: { en: "Results", nl: "Resultaten" }
+helper_invoice: { en: "Invoice last month", nl: "Factuur vorige maand" }
+helper_solar_missed_max: { en: "Solar missed: most for the goal", nl: "Zon gemist: maximum voor het doel" }
+helper_compare_variable: { en: "Compare: variable energy price", nl: "Vergelijk: variabele energieprijs" }
+helper_compare_fixed: { en: "Compare: fixed energy price", nl: "Vergelijk: vaste energieprijs" }
+helper_compare_export: { en: "Compare: export price", nl: "Vergelijk: injectieprijs" }
+sensor_saving_ev_solar: { en: "Saving car on own solar", nl: "Besparing auto op eigen zon" }
+sensor_saving_hot_water_cheap_hour: { en: "Saving hot water cheapest hour", nl: "Besparing warm water goedkoopste uur" }
+sensor_saving_hot_water_solar: { en: "Saving hot water on solar", nl: "Besparing warm water op zon" }
+sensor_saving_ev_cheap: { en: "Saving car on cheap power", nl: "Besparing auto op goedkope stroom" }
+sensor_saving_appliance_solar: { en: "Saving appliances on solar", nl: "Besparing toestellen op zon" }
+sensor_saving_appliance_cheap: { en: "Saving appliances on cheap power", nl: "Besparing toestellen op goedkope stroom" }
+sensor_saving_peak_avoided: { en: "Saving peak avoided", nl: "Besparing piek vermeden" }
+sensor_shading_count: { en: "Shading closed against the sun", nl: "Zonwering dicht tegen de zon" }
+sensor_solar_missed: { en: "Solar missed today", nl: "Zon gemist vandaag" }
+sensor_goal_morning: { en: "Goal hot water in the morning", nl: "Doel warm water 's ochtends" }
+sensor_goal_bath: { en: "Goal hot water for the bath", nl: "Doel warm water voor het bad" }
+sensor_goal_solar_used: { en: "Goal solar used well", nl: "Doel zon goed gebruikt" }
+sensor_invoices: { en: "Electricity invoices", nl: "Stroomfacturen" }
+automation_solar_used: { en: "Results: solar used well today?", nl: "Resultaten: zon goed gebruikt vandaag?" }
+automation_log_saving: { en: "Results: write a saving in the logbook", nl: "Resultaten: besparing in het logboek" }
+log_name: { en: "Results", nl: "Resultaten" }
+log_saving: { en: "{what}: € {eur} saved ({kwh} kWh)", nl: "{what}: € {eur} bespaard ({kwh} kWh)" }
+log_saving_peak: { en: "{what}: € {eur} saved (month peak {kw} kW lower)", nl: "{what}: € {eur} bespaard (maandpiek {kw} kW lager)" }
+log_goal_solar_used: { en: "{missed} kWh sold while there was room: {status}", nl: "{missed} kWh verkocht terwijl er plaats was: {status}" }
+goal_solar_used_detail: { en: "{missed} kWh sold while the tank or the car still had room (sold in total {exported} kWh)", nl: "{missed} kWh verkocht terwijl de boiler of de auto nog plaats had (in totaal {exported} kWh verkocht)" }
+status_met: { en: "met", nl: "gehaald" }
+status_missed: { en: "missed", nl: "gemist" }
+# --- the screen: header and formats ---
+title: { en: "Results", nl: "Resultaten" }
+advanced_view: { en: "Extended view", nl: "Uitgebreide weergave" }
+eur: { en: "€ {v}", nl: "€ {v}" }
+kwh: { en: "{v} kWh", nl: "{v} kWh" }
+cents_per_kwh: { en: "{v} c/kWh", nl: "{v} c/kWh" }
+peak_kw: { en: "peak {kw} kW", nl: "piek {kw} kW" }
+times: { en: "{n} ×", nl: "{n} ×" }
+today_word: { en: "today", nl: "vandaag" }
+yesterday_word: { en: "yesterday", nl: "gisteren" }
+so_far: { en: "so far", nl: "tot nu" }
+loading: { en: "Loading…", nl: "Laden…" }
+# --- saved today ---
+saved_today: { en: "Saved today", nl: "Vandaag bespaard" }
+saved_today_info: { en: "What the power the house used smartly would otherwise have cost from the grid.", nl: "Zoveel had de stroom die het huis slim gebruikte anders van het net gekost." }
+no_kinds: { en: "No smart logic that saves money is installed yet (hot water, smart charging).", nl: "Er is nog geen slimme logica geïnstalleerd die iets bespaart (warm water, slim laden)." }
+this_week: { en: "This week", nl: "Deze week" }
+this_month: { en: "This month", nl: "Deze maand" }
+goals_done: { en: "{done} of {all} goals met", nl: "{done} van {all} doelen gehaald" }
+goals_missed_one: { en: "{missed} goal missed, {done} met", nl: "{missed} doel gemist, {done} gehaald" }
+goals_missed: { en: "{missed} goals missed, {done} met", nl: "{missed} doelen gemist, {done} gehaald" }
+goals_pending: { en: ", {n} still to come", nl: ", {n} volgt nog" }
+# --- consumption and electricity cost ---
+energy_title: { en: "Consumption and electricity cost", nl: "Verbruik en stroomkost" }
+col_today: { en: "Today", nl: "Vandaag" }
+col_week: { en: "Week", nl: "Week" }
+col_month: { en: "Month", nl: "Maand" }
+row_use: { en: "Used in the house", nl: "Verbruikt in huis" }
+row_use_sub: { en: "everything, the car too", nl: "alles samen, ook de auto" }
+row_solar: { en: "Generated ourselves", nl: "Zelf opgewekt" }
+row_import: { en: "Bought from the grid", nl: "Gekocht van het net" }
+row_export: { en: "Sold to the grid", nl: "Verkocht aan het net" }
+row_cost: { en: "Cost bought", nl: "Kost gekocht" }
+row_capacity: { en: "Capacity tariff", nl: "Capaciteitstarief" }
+row_capacity_sub: { en: "average peak {kw} kW", nl: "gemiddelde piek {kw} kW" }
+row_fixed: { en: "Fixed fees", nl: "Vaste vergoedingen" }
+row_fixed_sub: { en: "supplier and metering data", nl: "leverancier en databeheer" }
+row_comp: { en: "Earned selling", nl: "Opbrengst verkocht" }
+row_total: { en: "Electricity cost", nl: "Stroomkost" }
+row_total_sub: { en: "everything included", nl: "alles inbegrepen" }
+row_self: { en: "Self-supplied", nl: "Zelf voorzien" }
+row_self_sub: { en: "share of the use without the grid", nl: "deel van het verbruik zonder net" }
+row_bat_in: { en: "Battery charged", nl: "Batterij geladen" }
+row_bat_out: { en: "Battery discharged", nl: "Batterij ontladen" }
+energy_note_exact: { en: "kWh at your quarter-hour prices (cost sensors of the energy dashboard).", nl: "kWh aan je kwartierprijzen (kostsensoren van het energiedashboard)." }
+energy_note_estimate: { en: "≈ = estimate: kWh per hour × the mean price of that hour, up to the last full hour.", nl: "≈ = schatting: kWh per uur × de gemiddelde prijs van dat uur, tot het laatste volle uur." }
+energy_note_capacity: { en: "Capacity tariff: € {rate} per kW per year, spread per day, on your average month peak of the last 12 months (now {months} months measured).", nl: "Capaciteitstarief: € {rate} per kW per jaar, per dag verrekend, op je gemiddelde maandpiek van de laatste 12 maanden (nu {months} maanden gemeten)." }
+energy_note_capacity_full: { en: "Capacity tariff: € {rate} per kW per year, spread per day, on your average month peak of the last 12 months.", nl: "Capaciteitstarief: € {rate} per kW per jaar, per dag verrekend, op je gemiddelde maandpiek van de laatste 12 maanden." }
+energy_note_fixed: { en: "Fixed fees: € {v} per year.", nl: "Vaste vergoedingen: € {v} per jaar." }
+energy_note_unpriced: { en: "{kwh} kWh had no price yet and is not counted.", nl: "{kwh} kWh had nog geen prijs en telt niet mee." }
+energy_note_peak: { en: "Peak this month: {kw} kW.", nl: "Piek deze maand: {kw} kW." }
+# --- other contracts ---
+cmp_title: { en: "Compared with other contracts", nl: "Vergeleken met andere contracten" }
+cmp_dynamic: { en: "Dynamic", nl: "Dynamisch" }
+cmp_dynamic_sub: { en: "yours, with the smart logic", nl: "het jouwe, met sturing" }
+cmp_variable: { en: "Variable", nl: "Variabel" }
+cmp_fixed: { en: "Fixed", nl: "Vast" }
+cmp_price: { en: "{v} c/kWh energy", nl: "{v} c/kWh energie" }
+cmp_saved: { en: "{v} less than the cheapest other contract this month", nl: "{v} minder dan het goedkoopste andere contract deze maand" }
+cmp_lost: { en: "{v} more than the cheapest other contract this month", nl: "{v} meer dan het goedkoopste andere contract deze maand" }
+cmp_note: { en: "Same kWh, other energy price: grid fee (day/night) and levies stay the same; capacity tariff and fixed fees are left out. Up to the last full hour. Change the prices in Settings > Helpers (Compare: …).", nl: "Dezelfde kWh, een andere energieprijs: nettarief (dag/nacht) en heffingen blijven gelijk; capaciteitstarief en vaste vergoedingen tellen niet mee. Tot het laatste volle uur. De prijzen pas je aan bij Instellingen > Helpers (Vergelijk: …)." }
+# --- last year ---
+ly_title: { en: "Compared with last year · {days} days of {month}", nl: "Vergeleken met vorig jaar · {days} dagen van {month}" }
+ly_now: { en: "Now (with the smart logic)", nl: "Nu (met sturing)" }
+ly_then: { en: "Last year", nl: "Vorig jaar" }
+ly_bought: { en: "{kwh} kWh bought · {price}", nl: "{kwh} kWh gekocht · {price}" }
+ly_less: { en: "{v} less than last year ({pct} %)", nl: "{v} minder dan vorig jaar ({pct} %)" }
+ly_more: { en: "{v} more than last year ({pct} %)", nl: "{v} meer dan vorig jaar ({pct} %)" }
+ly_note: { en: "Last year comes from your settlement (house.yaml results.last_year), scaled to the same {days} days. Weather and driving differ too, of course.", nl: "Vorig jaar komt uit je afrekening (house.yaml results.last_year), omgerekend naar dezelfde {days} dagen. Weer en rijgedrag verschillen natuurlijk ook." }
+# --- per month ---
+months_title: { en: "Per month: calculated and invoice", nl: "Per maand: berekend en factuur" }
+col_bought: { en: "Bought", nl: "Gekocht" }
+col_calculated: { en: "Calculated", nl: "Berekend" }
+col_invoice: { en: "Invoice", nl: "Factuur" }
+col_last_year: { en: "Last year", nl: "Vorig jaar" }
+months_note: { en: "Calculated the way the invoice does: kWh at the quarter-hour price, capacity tariff on the average of 12 month peaks, fixed fees, minus what you sold.", nl: "Berekend zoals de factuur: kWh aan de kwartierprijs, capaciteitstarief op het gemiddelde van 12 maandpieken, vaste vergoedingen, min wat je verkocht." }
+months_note_exact: { en: "Exact from {month} (dynamic tariff).", nl: "Exact vanaf {month} (dynamisch tarief)." }
+months_note_invoice: { en: "Enter every monthly invoice in \"Invoice last month\"; it then appears next to the calculation.", nl: "Geef elke maandfactuur in bij \"Factuur vorige maand\"; ze komt dan naast de berekening te staan." }
+# --- goals ---
+goals_title: { en: "Goals of today", nl: "Doelen van vandaag" }
+goal_morning: { en: "Hot water in the morning", nl: "Warm water 's ochtends" }
+goal_bath: { en: "Hot water for the bath", nl: "Warm water voor het bad" }
+goal_solar_used: { en: "Solar used well", nl: "Zon goed gebruikt" }
+goal_morning_short: { en: "Morning", nl: "Ochtend" }
+goal_bath_short: { en: "Bath", nl: "Bad" }
+goal_solar_used_short: { en: "Solar", nl: "Zon" }
+goal_morning_rule: { en: "at least {min} °C at sunrise ({shower} °C with the shower button)", nl: "minstens {min} °C bij zonsopgang ({shower} °C met de douche-knop)" }
+goal_bath_rule: { en: "at least {goal} °C at {time}", nl: "minstens {goal} °C om {time}" }
+goal_solar_used_rule: { en: "less than {limit} kWh sold while the tank or the car still had room", nl: "minder dan {limit} kWh verkocht terwijl de boiler of de auto nog plaats had" }
+goal_rule: { en: "Goal: {rule}", nl: "Doel: {rule}" }
+goal_measured: { en: "measured {when}", nl: "wordt gemeten {when}" }
+goal_solar_live: { en: " · now {kwh} kWh sold with room left", nl: " · nu {kwh} kWh verkocht met plaats vrij" }
+when_sunrise: { en: "at sunrise", nl: "bij zonsopgang" }
+when_at: { en: "at {time}", nl: "om {time}" }
+history_title: { en: "Goals over the last 14 days", nl: "Doelen de voorbije 14 dagen" }
+# --- where today's saving comes from (one name, an 'on' and an 'off' line and a 'how' per kind) ---
+parts_title: { en: "Where does today's saving come from?", nl: "Waar komt de besparing van vandaag vandaan?" }
+part_extra: { en: "this month {month} · since the start {since}", nl: "deze maand {month} · sinds de start {since}" }
+part_net: { en: " · net after the missed sale {v}", nl: " · netto na gemiste verkoop {v}" }
+kind_ev_solar: { en: "Car charged with own solar", nl: "Auto geladen met eigen zon" }
+kind_ev_solar_on: { en: "{kwh} kWh of solar power in the car, which we did not have to buy", nl: "{kwh} kWh zonnestroom in de auto, die we dus niet moesten kopen" }
+kind_ev_solar_off: { en: "no solar power to the car today", nl: "vandaag geen zonnestroom naar de auto" }
+how_ev_solar: { en: "the charger counts how much solar power went into the car; every kWh × the import price of that moment.", nl: "de laadpaal telt hoeveel zonnestroom in de auto ging; elke kWh × de afnameprijs van dat moment." }
+kind_hot_water_cheap_hour: { en: "Hot water at the cheapest hour", nl: "Warm water op het goedkoopste uur" }
+kind_hot_water_cheap_hour_on: { en: "the tank was heated when power was cheapest, not at the last moment", nl: "de boiler warmde bij toen stroom het goedkoopst was, niet op het laatste moment" }
+kind_hot_water_cheap_hour_off: { en: "the tank did not need extra heat today", nl: "de boiler moest vandaag niet extra bijwarmen" }
+how_hot_water_cheap_hour: { en: "the kWh × the difference with what heating at the last moment (or the mean price of the coming day) would have cost.", nl: "de kWh × het verschil met wat bijwarmen op het laatste moment (of de gemiddelde prijs van de komende dag) gekost had." }
+kind_hot_water_solar: { en: "Hot water from solar surplus", nl: "Warm water met overschot van de zon" }
+kind_hot_water_solar_on: { en: "the tank heated up with solar power we would otherwise have sold for little", nl: "de boiler warmde op met zon die we anders voor weinig hadden verkocht" }
+kind_hot_water_solar_off: { en: "no surplus for the tank today (battery and car went first)", nl: "vandaag geen overschot voor de boiler (batterij en auto gingen voor)" }
+how_hot_water_solar: { en: "estimated from how many degrees the water warmed up (kWh per degree from the tank size and the COP) × the import price.", nl: "geschat uit hoeveel graden het water opwarmde (kWh per graad uit de inhoud van de boiler en de COP) × de afnameprijs." }
+kind_ev_cheap: { en: "Car charged on cheap power", nl: "Auto geladen op goedkope stroom" }
+kind_ev_cheap_on: { en: "the car charged from the grid when power was cheap", nl: "de auto laadde van het net toen stroom goedkoop was" }
+kind_ev_cheap_off: { en: "no cheap charging today", nl: "vandaag niet goedkoop bijgeladen" }
+how_ev_cheap: { en: "the kWh from the grid × the difference with the mean price of the coming day.", nl: "de kWh van het net × het verschil met de gemiddelde prijs van de komende dag." }
+kind_appliance_solar: { en: "Appliances on solar", nl: "Toestellen op zon" }
+kind_appliance_solar_on: { en: "the dishwasher or washing machine ran on the sun", nl: "de vaatwas of de wasmachine draaide op de zon" }
+kind_appliance_solar_off: { en: "no appliance on the sun today", nl: "vandaag geen toestel op de zon" }
+how_appliance_solar: { en: "the estimated kWh of the program × the import price at the start.", nl: "de geschatte kWh van het programma × de afnameprijs bij de start." }
+kind_appliance_cheap: { en: "Appliances at the cheapest moment", nl: "Toestellen op het goedkoopste moment" }
+kind_appliance_cheap_on: { en: "an appliance started when power was cheapest", nl: "een toestel startte toen stroom het goedkoopst was" }
+kind_appliance_cheap_off: { en: "no cheap start today", nl: "vandaag geen goedkope start" }
+how_appliance_cheap: { en: "the estimated kWh of the program × the difference with starting right away.", nl: "de geschatte kWh van het programma × het verschil met meteen starten." }
+kind_peak_avoided: { en: "Month peak kept low", nl: "Maandpiek laag gehouden" }
+kind_peak_avoided_on: { en: "charging or heating waited so the month peak did not rise", nl: "laden of opwarmen wachtte zodat de maandpiek niet steeg" }
+kind_peak_avoided_off: { en: "the peak did not need guarding today", nl: "de piek moest vandaag niet bewaakt worden" }
+how_peak_avoided: { en: "the kW the month peak did not rise × the capacity tariff per kW per year ÷ 12 (one month of the 12-month average).", nl: "de kW dat de maandpiek niet steeg × het capaciteitstarief per kW per jaar ÷ 12 (één maand van het 12-maandsgemiddelde)." }
+shading: { en: "Sun kept outside", nl: "Zon buiten gehouden" }
+shading_on_one: { en: "{n} time a blind closed against the heat", nl: "{n} keer een rolluik dicht tegen de warmte" }
+shading_on: { en: "{n} times a blind closed against the heat", nl: "{n} keer een rolluik dicht tegen de warmte" }
+shading_off: { en: "not needed today, it was not warm enough", nl: "vandaag niet nodig, het was niet warm genoeg" }
+how_shading: { en: "only counted, no amount: how much cooling it saves cannot be measured.", nl: "enkel geteld, zonder bedrag: hoeveel koeling dat uitspaart is niet te meten." }
+# --- how we calculate ---
+how_title: { en: "How do we calculate this?", nl: "Hoe rekenen we dit uit?" }
+how_saving: { en: "Saving = the kWh the house used smartly × what that kWh would have cost from the grid at that moment.", nl: "Besparing = de kWh die het huis slim gebruikte × wat die kWh op dat moment van het net gekost zou hebben." }
+how_net: { en: "Solar we would have sold instead also earns something. The extended view shows it separately as \"net\".", nl: "Zon die we in plaats daarvan verkocht zouden hebben, levert ook iets op. Dat staat apart in de uitgebreide weergave als \"netto\"." }
+how_goals: { en: "The goals are checked once a day: the morning at sunrise, the bath at the bath check, the solar at 23:55.", nl: "De doelen worden één keer per dag gecontroleerd: de ochtend bij zonsopgang, het bad bij de badcontrole, de zon om 23:55." }
+# --- what the house did ---
+log_title: { en: "What the house did today", nl: "Wat het huis vandaag deed" }
+log_title_adv: { en: "What the house did · 3 days, with every automation", nl: "Wat het huis deed · 3 dagen, met alle automatiseringen" }
+log_empty: { en: "Nothing happened yet today.", nl: "Vandaag nog niets gebeurd." }
+log_nothing: { en: "nothing to do", nl: "niets te doen" }
+log_loading_runs: { en: "Loading the automations…", nl: "Automatiseringen laden…" }
+log_too_slow: { en: "The automations could not be loaded (the logbook query took too long).", nl: "De automatiseringen konden niet geladen worden (de logboekopvraging duurde te lang)." }
+trigger_by: { en: "by {name}", nl: "door {name}" }
+trigger_pattern: { en: "every few minutes", nl: "elke paar minuten" }
+trigger_time: { en: "at the set time", nl: "op het ingestelde uur" }
+trigger_sun: { en: "sunrise or sunset", nl: "zonsopgang of -ondergang" }
+trigger_event: { en: "by a notification or event", nl: "door een melding" }
+state_on: { en: "on", nl: "aan" }
+state_off: { en: "off", nl: "uit" }
+state_open: { en: "open", nl: "open" }
+state_closed: { en: "closed", nl: "dicht" }
+state_opening: { en: "opening", nl: "gaat open" }
+state_closing: { en: "closing", nl: "gaat dicht" }
+state_heat: { en: "heating", nl: "verwarmen" }
+state_cool: { en: "cooling", nl: "koelen" }
+state_fan_only: { en: "fan only", nl: "alleen lucht" }
+state_heat_cool: { en: "automatic", nl: "automatisch" }
+state_auto: { en: "automatic", nl: "automatisch" }

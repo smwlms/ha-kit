@@ -1,0 +1,115 @@
+<#
+  The card config of the climate screen (custom:climate-screen-card), derived from house.yaml, modules: and the
+  capabilities at fill time. Imported by lovelace/climate.yaml and deploy.py:
+    <% from '_climate_card.jinja' import card, view with context %>
+  Rule: www/climate-screen.js has no entity id of its own. Every id below is a house.yaml role, a contract id of an
+  installed module, or this module's own helper. A block whose feature is false gets no roles and is not drawn.
+#>
+<% from '_climate.jinja' import feat, vent, vv, indoor, outdoor, weather, comfoclime, comfoclime_power, comfoclime_writes,
+   target, comfort_low, comfort_high, loud_start, loud_end, boost_below, boost_hours, blind_rooms, sun_rooms, view_path with context %>
+<% set E = entities if entities is defined and entities is mapping else {} %>
+<% set roles = {'indoor': indoor, 'weather': weather, 'sun': 'sun.sun', 'weather_days': 'sensor.climate_weather_days',
+   'indoor_peak': 'sensor.climate_indoor_peak'} %>
+<% if outdoor %><% set _ = roles.update({'outdoor': outdoor}) %><% endif %>
+<% if E.get('indoor_humidity') %><% set _ = roles.update({'indoor_humidity': E.indoor_humidity}) %><% endif %>
+<% if 'heat-pump' in capabilities %>
+<% set _ = roles.update({'heat_pump_state': 'sensor.heat_pump_state', 'heat_pump_power': 'sensor.heat_pump_power_estimated',
+   'heat_pump_flow_temperature': 'sensor.heat_pump_flow_temperature', 'heat_pump_water_pressure': 'sensor.heat_pump_water_pressure',
+   'heat_pump_fault': 'binary_sensor.heat_pump_fault', 'quick_veto': 'script.heat_pump_quick_veto'}) %>
+<% if E.get('heat_pump') %><% set _ = roles.update({'heat_pump_zone': E.heat_pump}) %><% endif %>
+<% endif %>
+<% if feat.floor %>
+<% set _ = roles.update({'floor_mode': 'input_select.climate_floor_mode', 'floor_auto': 'input_boolean.climate_floor_mode_auto',
+   'floor_since': 'input_datetime.climate_floor_mode_since',
+   'floor_cooling_from': 'input_number.climate_floor_cooling_from_outdoor_max',
+   'floor_heating_below': 'input_number.climate_floor_heating_below_outdoor_max'}) %>
+<% for m in ['heating', 'neutral', 'cooling'] %>
+<% set _ = roles.update({'floor_' ~ m ~ '_low': 'input_number.climate_floor_' ~ m ~ '_low', 'floor_' ~ m ~ '_high': 'input_number.climate_floor_' ~ m ~ '_high'}) %>
+<% endfor %>
+<% endif %>
+<% if feat.ventilation %>
+<% for k, v in vent.items() %><% set _ = roles.update({k: v}) %><% endfor %>
+<% endif %>
+<% if feat.ventilation_cooling %>
+<% set _ = roles.update({'ventilation_cooling': 'input_boolean.climate_ventilation_cooling',
+   'ventilation_cooling_from': 'input_number.climate_ventilation_cooling_from',
+   'ventilation_state': 'input_select.climate_ventilation_state'}) %>
+<% endif %>
+<% if feat.comfoclime %>
+<% set _ = roles.update({'comfoclime': comfoclime}) %>
+<% if comfoclime_power %><% set _ = roles.update({'comfoclime_power': comfoclime_power}) %><% endif %>
+<% if comfoclime_writes %><% set _ = roles.update({'comfoclime_writes': comfoclime_writes}) %><% endif %>
+<% if feat.comfoclime_boost %><% set _ = roles.update({'comfoclime_previous': 'input_text.climate_comfoclime_previous'}) %><% endif %>
+<% endif %>
+<% if feat.shading_sun %>
+<% set _ = roles.update({'shading_automatic': 'input_boolean.shading_automatic', 'shading_outdoor_warm': 'input_number.shading_outdoor_warm_from',
+   'shading_max_cloud': 'input_number.shading_max_cloud_cover'}) %>
+<% if indoor %><% set _ = roles.update({'shading_indoor_warm': 'input_number.shading_indoor_warm_from'}) %><% endif %>
+<% endif %>
+<% if feat.hot_water %>
+<% set _ = roles.update({'hot_water_temperature': 'sensor.hot_water_temperature'}) %>
+<% if feat.hot_water_plan %>
+<% set _ = roles.update({'hot_water_shower_tomorrow': 'input_boolean.hot_water_shower_tomorrow', 'hot_water_surplus_active': 'input_boolean.hot_water_surplus_active'}) %>
+<% endif %>
+<% endif %>
+<# Rooms with a blind (shading); the sun rooms also have the flags of shading's sun and heat. #>
+<% set sun_slugs = sun_rooms | map(attribute='slug') | list %>
+<% set room_rows = [] %>
+<% if feat.shading %>
+<% for r in blind_rooms %>
+<% set row = {'slug': r.slug, 'name': r.name, 'blind': r.blind} %>
+<% if r.slug in sun_slugs %><% set _ = row.update({'flag': 'input_boolean.shading_closed_' ~ r.slug, 'manual': 'input_boolean.shading_manual_' ~ r.slug}) %><% endif %>
+<% set _ = room_rows.append(row) %>
+<% endfor %>
+<% endif %>
+<# User-facing texts (strings.yaml, house.language); {placeholders} are filled in by the card (fmt). #>
+<% set string_keys = [
+  'veto_reason', 'higher', 'locale', 'lower', 'no_measurement', 'title', 'advice_forecast', 'air_in', 'air_out_house', 'alert_cc_offline', 'alert_cc_writes', 'alert_cc_writes_info',
+  'alert_fault', 'alert_fault_info', 'alert_filter', 'alert_filter_info', 'alert_floor_offline', 'alert_forecast',
+  'alert_forecast_info', 'alert_vent_offline', 'at_hour', 'auto_word', 'b_outdoor', 'band_high', 'band_high_sub',
+  'band_low', 'band_low_sub', 'blinds', 'blinds_closed_aria', 'boost', 'boost_15', 'boost_180', 'boost_60',
+  'boost_720', 'boost_off', 'boost_word', 'bypass', 'bypass_auto', 'bypass_closed', 'bypass_info', 'bypass_off_1h',
+  'bypass_on_12h', 'bypass_on_1h', 'bypass_open_pct', 'bypass_pct', 'bypass_sub', 'cc_boost', 'cc_boost_rule',
+  'cc_boost_until', 'cc_boost_waiting', 'cc_cooling', 'cc_defrosting', 'cc_fan_only', 'cc_fan_only_short',
+  'cc_heating', 'cc_idle', 'cc_mode_cool', 'cc_mode_fan_only', 'cc_mode_heat', 'cc_mode_off', 'cc_off',
+  'cc_offline_sub', 'cc_offline_title', 'cc_preset_boost', 'cc_preset_comfort', 'cc_preset_eco', 'cc_preset_none',
+  'cc_settings_sub', 'cc_target_cool', 'cc_target_heat', 'cc_writes', 'cc_writes_sub', 'close', 'closed_for_sun',
+  'comfoclime', 'comfort_band', 'comfortable', 'comfortable_label', 'coming_days', 'cooling_from',
+  'cooling_from_sub', 'cooling_state', 'cools', 'cover_closed', 'cover_closing', 'cover_open', 'cover_opening',
+  'cover_unknown', 'day_cool', 'day_cool_short', 'day_info', 'day_normal', 'day_normal_short', 'day_sunny_fresh',
+  'day_sunny_fresh_short', 'day_type', 'day_warm', 'day_warm_short', 'days_in_mode', 'days_learned', 'duration',
+  'error', 'fan_power', 'faults', 'filter_in', 'floor', 'floor_auto', 'floor_auto_sub', 'floor_band',
+  'floor_band_now', 'floor_coming_days', 'floor_cooling_from', 'floor_cooling_from_sub', 'floor_doing_cooling',
+  'floor_doing_heating', 'floor_doing_hot_water', 'floor_doing_idle', 'floor_heating_below',
+  'floor_heating_below_sub', 'floor_mode', 'floor_mode_info_cooling', 'floor_mode_info_heating',
+  'floor_mode_info_neutral', 'floor_mode_sub', 'floor_off_info', 'floor_rule', 'floor_settings_sub',
+  'flow_temperature', 'forecast_model', 'forecast_model_note', 'heat_pump', 'heats', 'held_rooms', 'hold',
+  'hot_water', 'hot_water_word', 'hours_short', 'hp_cooling', 'hp_heating', 'hp_hot_water', 'hp_idle', 'hp_unknown',
+  'humidity_house', 'humidity_in', 'humidity_in_info', 'humidity_out', 'humidity_out_info', 'hw_in_tank',
+  'hw_shower', 'hw_shower_info', 'hw_shower_sub', 'hw_surplus', 'hw_surplus_info', 'indoor', 'indoor_info',
+  'indoor_not_measured', 'indoor_peak', 'is_off', 'k_per_kwh', 'loud_hours', 'manual_word', 'mode', 'mode_cooling',
+  'mode_heating', 'mode_neutral', 'model_terms', 'morning_error', 'n_closed', 'n_closed_for_sun', 'n_days',
+  'no_measurements', 'none', 'none_shut', 'not_measured', 'now', 'off_word', 'offline', 'open', 'outdoor',
+  'outdoor_info', 'outdoor_info_weather', 'outdoor_vent', 'peak_info', 'peak_info_at', 'power_estimated', 'preset',
+  'profile_cool', 'profile_normal', 'profile_now', 'profile_warm', 'rests', 'rise', 'room_closed_sun',
+  'room_manual', 'season_between', 'season_cooling', 'season_heating', 'season_profile', 'season_profile_rule',
+  'season_vent', 'shading', 'shading_auto', 'shading_auto_off', 'shading_auto_on', 'shading_indoor_warm',
+  'shading_max_cloud', 'shading_max_cloud_sub', 'shading_outdoor_warm', 'shading_rule', 'shading_settings_sub',
+  'shower_word', 'shut_rooms', 'smart_cooling', 'smart_cooling_rule', 'smart_cooling_sub', 'solar_left', 'speed',
+  'speed_away', 'speed_high', 'speed_info', 'speed_low', 'speed_medium', 'state', 'sun_word', 'tab_controls',
+  'tab_details', 'tab_settings', 'tab_smart', 'tab_status', 'target_info', 'target_label', 'target_temperature',
+  'temperature', 'temperature_profile', 'temperature_profile_auto', 'temporary', 'term_base', 'term_outdoor',
+  'term_solar', 'today', 'too_cold', 'too_cold_info', 'too_cold_label', 'too_warm', 'too_warm_info',
+  'too_warm_label', 'vent_air_cooled', 'vent_air_heated', 'vent_auto', 'vent_auto_sub', 'vent_away',
+  'vent_away_sub', 'vent_away_toggle', 'vent_bypass_open', 'vent_calm', 'vent_cool_air_in', 'vent_free_cooling',
+  'vent_free_cooling_info', 'vent_keeps_heat', 'vent_settings_sub', 'vent_unreachable', 'ventilation', 'veto_label',
+  'veto_start', 'veto_stop', 'veto_sub', 'veto_title', 'veto_until', 'vstate_auto', 'vstate_auto_info',
+  'vstate_bypass_closed', 'vstate_bypass_closed_info', 'vstate_cooling_high', 'vstate_cooling_high_info',
+  'vstate_cooling_medium', 'vstate_cooling_medium_info', 'water_pressure', 'yes_word', 'zone_temperature'
+] %>
+<% set strings = {} %>
+<% for k in string_keys %><% set _ = strings.update({k: t(k)}) %><% endfor %>
+<% set card = {'type': 'custom:climate-screen-card', 'features': feat, 'roles': roles, 'rooms': room_rows, 'values': vv,
+   'target': target, 'comfort': {'low': comfort_low, 'high': comfort_high}, 'loud_hours': {'start': loud_start, 'end': loud_end},
+   'boost': {'below': boost_below, 'hours': boost_hours}, 'strings': strings} %>
+<% set view = {'title': t('view_title'), 'path': view_path, 'icon': 'mdi:thermometer', 'type': 'panel', 'cards': [card]} %>

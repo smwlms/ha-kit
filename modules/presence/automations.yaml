@@ -1,0 +1,866 @@
+<# Shared preamble (who and what this module follows): _presence.jinja in this folder. #>
+<% from '_presence.jinja' import P, tracked, car_list, places, school, drop_offs, family, work, runs, calendar,
+   stay_calendar, work_zone, day_names, every, kind_of with context %>
+<# Lookup tables for the HA templates, filled in from house.yaml and passed as automation variables (JSON). #>
+<% set ppl = {} %>
+<% set key_of = {} %>
+<% for p in tracked %>
+<% set person = p.get('person') or 'person.' ~ p.key %>
+<% set _ = ppl.update({p.key: {'name': p.name, 'person': person, 'phone': 'device_tracker.' ~ p.phone}}) %>
+<% set _ = key_of.update({person: p.key}) %>
+<% endfor %>
+<% set car_map = {} %>
+<% set car_of = {} %>
+<% for a in car_list %>
+<% set _ = car_map.update({a.prefix: {'name': a.name, 'driver': a.driver if a.get('driver') in ppl else '', 'location': car_entity(a, 'location'), 'route': car_entity(a, 'route'), 'battery': car_entity(a, 'battery')}}) %>
+<% set _ = car_of.update({car_entity(a, 'location'): a.prefix, car_entity(a, 'charging_state'): a.prefix}) %>
+<% endfor %>
+<% set trackers = [] %>
+<% set chargers = [] %>
+<% for a in car_list %>
+<% set _ = trackers.append(car_entity(a, 'location')) %>
+<% set _ = chargers.append(car_entity(a, 'charging_state')) %>
+<% endfor %>
+<% set zone_names = ([school.name] if school is not none else []) + (family | map(attribute='name') | list) %>
+<% set family_info = {} %>
+<% for f in family %>
+<% set _ = family_info.update({f.name: {'zone': 'zone.' ~ f.key, 'label': f.get('label') or f.name}}) %>
+<% endfor %>
+<% set drop_off_info = [] %>
+<% for z in drop_offs %>
+<% set _ = drop_off_info.append({'zone': 'zone.' ~ z.key, 'label': z.get('label') or z.name}) %>
+<% endfor %>
+<% set school_name = school.name if school is not none else '' %>
+<% set logbook = t('logbook_name') %>
+<% set and_ = ' ' ~ t('word_and') ~ ' ' %>
+<% set at_family = t('place_at_family') %>
+# Our week: arrivals, working days, school runs and Supercharger sessions (ha-kit module presence, see
+# presence/LOGIC.md). Written by presence/deploy.py through the config API (same as the automation editor).
+# All writing to <@ calendar @> goes through script.presence_log (calendar + logbook).
+# People (with a phone): <@ tracked | map(attribute='name') | join(', ') @>. Cars: <@ car_list | map(attribute='name') | join(', ') if car_list else 'none' @>.
+<% if zone_names %>
+# Zone names <@ zone_names | join(', ') @> are used literally in state triggers (a tracker in a zone has the zone's name
+# as its state): rename a zone in house.yaml (presence.places) and fill in again, never only in the UI.
+<% endif %>
+
+# --- 1. Bookkeeping: when did someone leave home / leave work; when did a Tesla leave the school zone -------------
+- id: presence_track
+  alias: <@ t('track_alias') | tojson @>
+  description: <@ t('track_description') | tojson @>
+  mode: queued
+  max: 10
+  triggers:
+<% for p in tracked %>
+    - trigger: state
+      entity_id: <@ ppl[p.key].person @>
+      from: home
+      not_to: [unknown, unavailable]
+      id: input_datetime.presence_<@ p.key @>_away_since
+<% if p.key in work_zone %>
+    - trigger: zone
+      entity_id: <@ ppl[p.key].person @>
+      zone: <@ work_zone[p.key] @>
+      event: leave
+      id: input_datetime.presence_<@ p.key @>_left_work
+<% endif %>
+<% endfor %>
+<% if zone_names and car_list %>
+    # From the school or family zone (by zone name): guard for the run without a Tesla.
+    - trigger: state
+      entity_id: <@ trackers | tojson @>
+      from: <@ zone_names | tojson @>
+      not_to: [unknown, unavailable]
+      id: input_datetime.presence_tesla_left_school_zone
+<% endif %>
+<% for a in car_list %>
+    # Last navigation destination (e.g. "Supercharger <place>, <country>"); the sensor goes to unknown on arrival.
+    - trigger: state
+      entity_id: <@ car_entity(a, 'destination') @>
+      not_to: [unknown, unavailable, ""]
+      id: input_text.presence_destination_<@ a.prefix @>
+<% endfor %>
+  actions:
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ trigger.id.startswith('input_text.') }}"
+          sequence:
+            - action: input_text.set_value
+              target:
+                entity_id: "{{ trigger.id }}"
+              data:
+                value: "{{ trigger.to_state.state[:255] }}"
+      default:
+        - action: input_datetime.set_datetime
+          target:
+            entity_id: "{{ trigger.id }}"
+          data:
+            timestamp: "{{ trigger.to_state.last_changed.timestamp() }}"
+
+# --- 2. Arrival at home --------------------------------------------------------------------------------------------
+- id: presence_arrival
+  alias: <@ t('arrival_alias') | tojson @>
+  description: <@ t('arrival_description', cars=t('arrival_description_cars') if car_list else '') | tojson @>
+  mode: parallel
+  max: <@ [tracked | length * 2, 4] | max @>
+  triggers:
+<% for p in tracked %>
+    - trigger: state
+      entity_id: <@ ppl[p.key].person @>
+      to: home
+      not_from: [unknown, unavailable]
+      id: <@ p.key @>
+<% endfor %>
+  variables:
+    ppl: <@ ppl | tojson @>
+    car_map: <@ car_map | tojson @>
+    p: "{{ trigger.id }}"
+    name: "{{ ppl[p].name }}"
+    arrived: "{{ trigger.to_state.last_changed.isoformat() }}"
+    away_since: "{{ state_attr('input_datetime.presence_' ~ p ~ '_away_since', 'timestamp') | float(0) }}"
+    left_work: "{{ state_attr('input_datetime.presence_' ~ p ~ '_left_work', 'timestamp') | float(0) }}"
+    away_min: "{{ ((as_timestamp(arrived) - away_since) / 60) | round(0) | int }}"
+    from_work: "{{ left_work > away_since }}"
+  conditions:
+    # GPS jitter around home flips the person to away and back within minutes; those are not arrivals.
+    - condition: template
+      value_template: "{{ away_min >= 10 }}"
+  actions:
+<% if car_list %>
+    # The phone's geofence usually fires before the car reports its parked position.
+    - delay: "00:02:00"
+<% endif %>
+    - variables:
+        car: >-
+          {%- set t = as_timestamp(arrived) -%}
+          {%- set ns = namespace(own='', any='') -%}
+          {%- for k, a in car_map.items() -%}
+            {%- set s = states[a.location] -%}
+            {%- if s is not none and s.state == 'home' and (as_timestamp(s.last_changed) - t) | abs < 300 -%}
+              {%- if a.driver == p %}{% set ns.own = a.name %}{% else %}{% set ns.any = a.name %}{% endif -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ ns.own or ns.any }}
+        details: >-
+          {%- set away = <@ t('away_value', duration=t('dur_hm')) | tojson @>
+                | replace('{h}', (away_min // 60) | string) | replace('{m}', (away_min % 60) | string)
+                | replace('{since}', away_since | timestamp_custom('%d/%m %H:%M')) -%}
+          {%- set r = [<@ (t('det_away') ~ ': ') | tojson @> ~ away] -%}
+          {%- if from_work %}{% set r = r + [<@ (t('det_left_work') ~ ': ') | tojson @> ~ (left_work | timestamp_custom('%H:%M'))] %}{% endif -%}
+          {%- if car %}{% set r = r + [<@ (t('det_car') ~ ': ') | tojson @> ~ car] %}{% endif -%}
+          {{ r | join('\n') }}
+    - action: script.presence_log
+      data:
+        kind: "{{ 'home_from_work' if from_work else 'home' }}"
+        people: "{{ name }}"
+        start: "{{ arrived }}"
+        details: "{{ details }}"
+<% if runs and car_list %>
+
+# --- 3. School run by Tesla (and picking up at family) ---------------------------------------------------------------
+- id: presence_school_run_car
+  alias: <@ t('run_car_alias') | tojson @>
+<% set d_school = t('run_car_description_school', zone=school_name, drop_off=t('run_car_description_drop_off') if drop_offs else '') if school is not none else '' %>
+<% set d_family = t('run_car_description_family', start=t('run_car_description_family_or') if school is not none else t('run_car_description_family_start'), zones=family | map(attribute='name') | join(', '), school=t('run_car_description_family_school') if school is not none else '') if family else '' %>
+  description: <@ ([d_school, d_family, t('run_car_description_who')] | select | join(' ')) | tojson @>
+  mode: queued
+  max: 4
+  triggers:
+<% if school is not none %>
+    - trigger: state
+      entity_id: <@ trackers | tojson @>
+      to: <@ school_name | tojson @>
+      for: "00:02:00"
+      id: school
+<% endif %>
+<% if family %>
+    # A family house on the daily route: passing takes < 1 min (measured), a pick-up about 10 min.
+    - trigger: state
+      entity_id: <@ trackers | tojson @>
+      to: <@ family | map(attribute='name') | list | tojson @>
+      for: "00:02:00"
+      id: family
+<% endif %>
+  conditions:
+    - condition: or
+      conditions:
+<% if school is not none %>
+        - condition: and
+          conditions:
+            - condition: trigger
+              id: school
+            - condition: state
+              entity_id: [schedule.school_drop_off, schedule.school_pick_up]
+              state: "on"
+              match: any
+<% endif %>
+<% if family %>
+        - condition: and
+          conditions:
+            - condition: trigger
+              id: family
+            - condition: state
+              entity_id: schedule.family_pick_up
+              state: "on"
+<% endif %>
+  variables:
+    ppl: <@ ppl | tojson @>
+    car_map: <@ car_map | tojson @>
+    car_of: <@ car_of | tojson @>
+    family_info: <@ family_info | tojson @>
+    drop_offs: <@ drop_off_info | tojson @>
+    school_name: <@ school_name | tojson @>
+    car: "{{ car_of[trigger.entity_id] }}"
+    car_name: "{{ car_map[car].name }}"
+    where: "{{ trigger.id }}"
+    kind: "{{ 'pick_up' if where == 'family' else ('drop_off' if is_state('schedule.school_drop_off', 'on') else 'pick_up') }}"
+    entered: "{{ trigger.to_state.last_changed.isoformat() }}"
+    place: >-
+      {%- if where == 'family' -%}
+      {%- set f = family_info[trigger.to_state.state] -%}
+      {{ {'name': <@ at_family | tojson @> | replace('{zone}', trigger.to_state.state), 'm': ((distance(trigger.entity_id, f.zone) or 0) * 1000) | round(0) | int} }}
+      {%- elif drop_offs -%}
+      {%- set ns = namespace(name='', m=1000000) -%}
+      {%- for z in drop_offs -%}
+        {%- set d = (distance(trigger.entity_id, z.zone) or 1000) * 1000 -%}
+        {%- if d < ns.m %}{% set ns.m = d %}{% set ns.name = z.label %}{% endif -%}
+      {%- endfor -%}
+      {{ {'name': ns.name, 'm': ns.m | round(0) | int} }}
+      {%- else -%}
+      {{ {'name': school_name, 'm': 0} }}
+      {%- endif -%}
+    who: >-
+      {%- set la = state_attr(trigger.entity_id, 'latitude') | float(0) -%}
+      {%- set lo = state_attr(trigger.entity_id, 'longitude') | float(0) -%}
+      {%- set t_in = as_timestamp(entered) -%}
+      {%- set ns = namespace(in_car=[], away=[]) -%}
+      {%- for k, x in ppl.items() -%}
+        {%- set s = states[x.phone] -%}
+        {%- if s is not none and s.attributes.latitude is number -%}
+          {%- set d = distance(la, lo, s.attributes.latitude, s.attributes.longitude) * 1000 -%}
+          {%- set fresh = now().timestamp() - as_timestamp(s.last_updated) < 1200 -%}
+          {%- if is_state(x.person, trigger.to_state.state) or (as_timestamp(s.last_updated) > t_in - 600 and d < 300) -%}
+            {%- set ns.in_car = ns.in_car + [k] -%}
+          {%- elif fresh and d > 1000 -%}
+            {%- set ns.away = ns.away + [k] -%}
+          {%- endif -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {%- set usual = car_map[car].driver -%}
+      {%- set rest = ppl.keys() | reject('in', ns.away) | reject('eq', usual) | list -%}
+      {%- if ns.in_car -%}{{ {'who': ns.in_car, 'source': <@ t('src_phone_with_car') | tojson @>} }}
+      {%- elif usual and usual not in ns.away -%}{{ {'who': [usual], 'source': <@ t('src_usual_driver') | tojson @>} }}
+      {%- elif rest | count == 1 -%}{{ {'who': rest, 'source': <@ t('src_driver_elsewhere') | tojson @> if usual else <@ t('src_only_phone') | tojson @>} }}
+      {%- else -%}{{ {'who': [], 'source': <@ t('src_all_elsewhere') | tojson @> if usual else <@ t('src_no_driver') | tojson @>} }}{%- endif -%}
+  actions:
+    - variables:
+        # De-duplication: drop people already logged for a school run in the last 45 min (e.g. by a phone run).
+        new: >-
+          {%- set ns = namespace(n=[]) -%}
+          {%- for k in who.who -%}
+            {%- set last = state_attr('input_datetime.presence_' ~ k ~ '_school_run_logged', 'timestamp') | float(0) -%}
+            {%- if now().timestamp() - last > 2700 %}{% set ns.n = ns.n + [k] %}{% endif -%}
+          {%- endfor -%}
+          {{ ns.n }}
+        names: >-
+          {%- set ns = namespace(n=[]) -%}
+          {%- for k in new %}{% set ns.n = ns.n + [ppl[k].name] %}{% endfor -%}
+          {{ ns.n | join(<@ and_ | tojson @>) }}
+        # Children already picked up today (a run after 11:00, by anyone): a stop at family afterwards is a visit.
+        picked_up_at: >-
+          {%- set ns = namespace(t=0) -%}
+          {%- for k in ppl -%}
+            {%- set g = state_attr('input_datetime.presence_' ~ k ~ '_school_run_logged', 'timestamp') | float(0) -%}
+            {%- if g > ns.t and (g | timestamp_custom('%Y-%m-%d')) == now().strftime('%Y-%m-%d')
+                  and (g | timestamp_custom('%H') | int) >= 11 %}{% set ns.t = g %}{% endif -%}
+          {%- endfor -%}
+          {{ ns.t }}
+<% if drop_offs %>
+    - if:
+        - condition: template
+          value_template: "{{ where == 'school' and place.m > 100 }}"
+      then:
+        - action: logbook.log
+          data:
+            name: <@ logbook | tojson @>
+            entity_id: <@ calendar @>
+            message: >-
+              <@ t('log_not_near_drop_off', car='{{ car_name }}', zone='{{ trigger.to_state.state }}', m='{{ place.m }}') @>
+        - stop: "Not near a drop-off point"
+<% endif %>
+<% if family %>
+    - if:
+        - condition: template
+          value_template: "{{ where == 'family' and picked_up_at | float(0) > 0 }}"
+      then:
+        - action: logbook.log
+          data:
+            name: <@ logbook | tojson @>
+            entity_id: <@ calendar @>
+            message: >-
+              <@ t('log_already_picked_up', car='{{ car_name }}', place='{{ place.name }}', time="{{ picked_up_at | float(0) | timestamp_custom('%H:%M') }}") @>
+        - stop: "Already picked up today"
+<% if school is not none %>
+    # A stop at family followed by the school means the children were still at school: wait up to 20 min; when the
+    # same car then stands at school, that run is the pick-up (it is logged by its own trigger).
+    - if:
+        - condition: template
+          value_template: "{{ where == 'family' }}"
+      then:
+        - wait_template: "{{ is_state(trigger.entity_id, school_name) }}"
+          timeout: "00:20:00"
+          continue_on_timeout: true
+        - if:
+            - condition: template
+              value_template: "{{ wait.completed }}"
+          then:
+            - action: logbook.log
+              data:
+                name: <@ logbook | tojson @>
+                entity_id: <@ calendar @>
+                message: >-
+                  <@ t('log_went_on_to_school', car='{{ car_name }}', minutes='{{ ((now().timestamp() - as_timestamp(entered)) / 60) | round(0) | int }}', place='{{ place.name }}') @>
+            - stop: "Went on to the school"
+<% endif %>
+<% endif %>
+    - if:
+        - condition: template
+          value_template: "{{ new | count == 0 }}"
+      then:
+        - action: logbook.log
+          data:
+            name: <@ logbook | tojson @>
+            entity_id: <@ calendar @>
+            message: >-
+              <@ t('log_car_not_logged', car='{{ car_name }}', place="{{ place.name if where == 'family' else " ~ (t('log_at_school') | tojson) ~ " | replace('{place}', place.name) }}", reason="{{ " ~ (t('log_already_logged') | tojson) ~ " if who.who else who.source }}") @>
+        - stop: "Nobody new to log"
+    - action: input_datetime.set_datetime
+      target:
+        entity_id: >-
+          {{ new | map('regex_replace', '^', 'input_datetime.presence_')
+                 | map('regex_replace', '$', '_school_run_logged') | list }}
+      data:
+        timestamp: "{{ now().timestamp() }}"
+    - action: script.presence_log
+      data:
+        kind: "{{ kind }}"
+        people: "{{ names }}"
+        start: "{{ entered }}"
+        end: "{{ now().isoformat() }}"
+        details: |-
+          <@ t('det_place') @>: {{ place.name }} ({{ place.m }} m)
+          <@ t('det_car') @>: {{ car_name }}
+          <@ t('det_source') @>: {{ who.source }}
+<% endif %>
+<% if runs %>
+
+# --- 4. School run without a Tesla (on foot, by bike, another car) -------------------------------------------------
+- id: presence_school_run_phone
+  alias: <@ t('run_phone_alias') | tojson @>
+  description: <@ t('run_phone_description', zones=zone_names | join(' ' ~ t('word_or') ~ ' '), no_tesla=t('run_phone_description_no_tesla') if car_list else '', tesla_passed=t('run_phone_description_tesla_passed') if car_list else '') | tojson @>
+  mode: queued
+  max: 4
+  triggers:
+<% if school is not none %>
+    - trigger: state
+      entity_id: <@ ppl.values() | map(attribute='person') | list | tojson @>
+      to: <@ school_name | tojson @>
+      for: "00:03:00"
+      id: school
+<% endif %>
+<% if family %>
+    - trigger: state
+      entity_id: <@ ppl.values() | map(attribute='person') | list | tojson @>
+      to: <@ family | map(attribute='name') | list | tojson @>
+      for: "00:03:00"
+      id: family
+<% endif %>
+  conditions:
+    - condition: or
+      conditions:
+<% if school is not none %>
+        - condition: and
+          conditions:
+            - condition: trigger
+              id: school
+            - condition: state
+              entity_id: [schedule.school_drop_off, schedule.school_pick_up]
+              state: "on"
+              match: any
+<% endif %>
+<% if family %>
+        - condition: and
+          conditions:
+            - condition: trigger
+              id: family
+            - condition: state
+              entity_id: schedule.family_pick_up
+              state: "on"
+<% endif %>
+<% if car_list %>
+    # A Tesla in the zone is handled by the Tesla run, which also picks up this phone as a rider.
+    - condition: not
+      conditions:
+        - condition: state
+          entity_id: <@ trackers | tojson @>
+          state: <@ zone_names | tojson @>
+          match: any
+<% endif %>
+  variables:
+    ppl: <@ ppl | tojson @>
+    key_of: <@ key_of | tojson @>
+    family_info: <@ family_info | tojson @>
+    drop_offs: <@ drop_off_info | tojson @>
+    school_name: <@ school_name | tojson @>
+    p: "{{ key_of[trigger.entity_id] }}"
+    where: "{{ trigger.id }}"
+    name: "{{ ppl[p].name }}"
+    kind: "{{ 'pick_up' if where == 'family' else ('drop_off' if is_state('schedule.school_drop_off', 'on') else 'pick_up') }}"
+    entered: "{{ trigger.to_state.last_changed.isoformat() }}"
+    tracker: "{{ ppl[p].phone }}"
+    place: >-
+      {%- if where == 'family' -%}
+      {%- set f = family_info[trigger.to_state.state] -%}
+      {{ {'name': <@ at_family | tojson @> | replace('{zone}', trigger.to_state.state), 'm': ((distance(tracker, f.zone) or 0) * 1000) | round(0) | int} }}
+      {%- elif drop_offs -%}
+      {%- set ns = namespace(name='', m=1000000) -%}
+      {%- for z in drop_offs -%}
+        {%- set d = (distance(tracker, z.zone) or 1000) * 1000 -%}
+        {%- if d < ns.m %}{% set ns.m = d %}{% set ns.name = z.label %}{% endif -%}
+      {%- endfor -%}
+      {{ {'name': ns.name, 'm': ns.m | round(0) | int} }}
+      {%- else -%}
+      {{ {'name': school_name, 'm': 0} }}
+      {%- endif -%}
+    reason: >-
+      {%- set tesla_out = state_attr('input_datetime.presence_tesla_left_school_zone', 'timestamp') | float(0) -%}
+      {%- set logged = state_attr('input_datetime.presence_' ~ p ~ '_school_run_logged', 'timestamp') | float(0) -%}
+      {%- set ns = namespace(t=0) -%}
+      {%- for k in ppl -%}
+        {%- set g = state_attr('input_datetime.presence_' ~ k ~ '_school_run_logged', 'timestamp') | float(0) -%}
+        {%- if g > ns.t and (g | timestamp_custom('%Y-%m-%d')) == now().strftime('%Y-%m-%d')
+              and (g | timestamp_custom('%H') | int) >= 11 %}{% set ns.t = g %}{% endif -%}
+      {%- endfor -%}
+      {%- if tesla_out >= as_timestamp(entered) - 60 -%}
+        <@ t('reason_tesla_left', time="{{ tesla_out | timestamp_custom('%H:%M') }}") @>
+      {%- elif now().timestamp() - logged < 2700 -%}
+        <@ t('reason_already_run', time="{{ logged | timestamp_custom('%H:%M') }}") @>
+      {%- elif where == 'family' and ns.t > 0 -%}
+        <@ t('reason_already_picked_up', time="{{ ns.t | timestamp_custom('%H:%M') }}") @>
+      {%- endif -%}
+  actions:
+    - if:
+        - condition: template
+          value_template: "{{ reason | trim != '' }}"
+      then:
+        - action: logbook.log
+          data:
+            name: <@ logbook | tojson @>
+            entity_id: <@ calendar @>
+            message: >-
+              <@ t('log_phone_not_logged', name='{{ name }}', place="{{ place.name if where == 'family' else " ~ (t('log_at_school_short') | tojson) ~ " }}", reason='{{ reason | trim }}') @>
+        - stop: "Skipped"
+    - action: input_datetime.set_datetime
+      target:
+        entity_id: "input_datetime.presence_{{ p }}_school_run_logged"
+      data:
+        timestamp: "{{ now().timestamp() }}"
+    - action: script.presence_log
+      data:
+        kind: "{{ kind }}"
+        people: "{{ name }}"
+        start: "{{ entered }}"
+        end: "{{ now().isoformat() }}"
+        details: |-
+          <@ t('det_place') @>: <@ t('place_phone', place='{{ place.name }}', m='{{ place.m }}', accuracy="{{ state_attr(tracker, 'gps_accuracy') | float(0) | round(0) | int }}") @>
+          <@ t('det_source') @>: <@ t('src_phone_no_tesla') @>
+<% endif %>
+<% if work_zone %>
+
+# --- 5. Working day (one calendar event per working day) -------------------------------------------------------------
+# A working day runs from the first arrival in the person's work zone to the last departure before getting home.
+# Leaving the work zone and coming back without being home first (a meeting elsewhere, lunch out) is a work trip:
+# it stays work and is not a new arrival or departure. So are appointments between leaving work and getting home
+# (workday.py): the working day then ends when the last one ends.
+- id: presence_workday
+  alias: <@ t('workday_alias') | tojson @>
+  description: <@ t('workday_description', title=t('kind_work'), calendar=calendar) | tojson @>
+  mode: queued
+  max: 10
+  # Trigger ids are "<kind>_<person key>"; the key is everything after the first underscore.
+  triggers:
+<% for p in tracked if p.key in work_zone %>
+    - trigger: zone
+      entity_id: <@ ppl[p.key].person @>
+      zone: <@ work_zone[p.key] @>
+      event: enter
+      id: in_<@ p.key @>
+    - trigger: state
+      entity_id: <@ ppl[p.key].person @>
+      to: home
+      not_from: [unknown, unavailable]
+      id: home_<@ p.key @>
+<% endfor %>
+    # Closes a working day that did not end at home (e.g. straight on to a trip).
+    - trigger: time
+      at: "23:55:00"
+      id: night
+  variables:
+    ppl: <@ ppl | tojson @>
+    work_zone: <@ work_zone | tojson @>
+    who: "{{ work_zone.keys() | list if trigger.id == 'night' else [trigger.id.split('_', 1)[1]] }}"
+  actions:
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ trigger.id.startswith('in_') }}"
+          sequence:
+            - variables:
+                p: "{{ trigger.id.split('_', 1)[1] }}"
+                name: "{{ ppl[p].name }}"
+                at: "{{ trigger.to_state.last_changed.isoformat() }}"
+                open_ts: "{{ state_attr('input_datetime.presence_' ~ p ~ '_arrived_at_work', 'timestamp') | float(0) }}"
+                # Still the same working day: arrived today, not logged yet (0 = closed), not home in between.
+                back: >-
+                  {{ open_ts > 0 and (open_ts | timestamp_custom('%Y-%m-%d')) == now().strftime('%Y-%m-%d')
+                     and (state_attr('input_datetime.presence_' ~ p ~ '_away_since', 'timestamp') | float(0)) < open_ts }}
+            - if:
+                - condition: template
+                  value_template: "{{ back }}"
+              then:
+                - variables:
+                    left: "{{ state_attr('input_datetime.presence_' ~ p ~ '_left_work', 'timestamp') | float(0) }}"
+                    old: "{{ states('input_text.presence_' ~ p ~ '_work_trips') | replace('unknown', '') }}"
+                    trip: "{{ left | timestamp_custom('%H:%M') }}-{{ as_timestamp(at) | timestamp_custom('%H:%M') }}"
+                - action: input_text.set_value
+                  target:
+                    entity_id: "input_text.presence_{{ p }}_work_trips"
+                  data:
+                    value: "{{ ((old ~ ', ') if old else '') ~ trip if left > open_ts else old }}"
+                - action: logbook.log
+                  data:
+                    name: <@ logbook | tojson @>
+                    entity_id: <@ calendar @>
+                    message: >-
+                      <@ t('log_back_at_work', name='{{ name }}', trip='{{ trip }}', since="{{ open_ts | timestamp_custom('%H:%M') }}") @>
+              else:
+                - action: input_datetime.set_datetime
+                  target:
+                    entity_id: "input_datetime.presence_{{ p }}_arrived_at_work"
+                  data:
+                    timestamp: "{{ as_timestamp(at) }}"
+                - action: input_text.set_value
+                  target:
+                    entity_id: "input_text.presence_{{ p }}_work_trips"
+                  data:
+                    value: ""
+      default:
+        # Appointments between leaving work and getting home are work too: workday.py finds the stops outside
+        # every zone in today's positions; the working day then ends when the last one ends.
+        - action: homeassistant.update_entity
+          target:
+            entity_id: sensor.presence_workday
+          continue_on_error: true
+        - repeat:
+            for_each: "{{ who }}"
+            sequence:
+              - variables:
+                  p: "{{ repeat.item }}"
+                  name: "{{ ppl[p].name }}"
+                  in_ts: "{{ state_attr('input_datetime.presence_' ~ p ~ '_arrived_at_work', 'timestamp') | float(0) }}"
+                  left_ts: "{{ state_attr('input_datetime.presence_' ~ p ~ '_left_work', 'timestamp') | float(0) }}"
+                  info: "{{ (state_attr('sensor.presence_workday', 'people') or {}).get(name) or {} }}"
+                  # Only today's result (sensor state = date) for this same departure from work (within 30 min).
+                  appointment_ts: >-
+                    {{ (info.end_ts or 0) | float(0)
+                       if states('sensor.presence_workday') == (in_ts | timestamp_custom('%Y-%m-%d'))
+                          and ((info.left_work_ts or 0) | float(0) - left_ts) | abs < 1800
+                       else 0 }}
+                  out_ts: "{{ [left_ts, appointment_ts] | max }}"
+                  duration_min: "{{ ((out_ts - in_ts) / 60) | round(0) | int }}"
+                  # Still at work = the person's state is the name of their work zone.
+                  at_work: "{{ states(ppl[p].person) == state_attr(work_zone[p], 'friendly_name') }}"
+                  previous: "{{ states('input_text.presence_' ~ p ~ '_work_trips') | replace('unknown', '') }}"
+                  trips: >-
+                    {{ ((previous ~ ', ') if previous else '') ~ (left_ts | timestamp_custom('%H:%M')) ~ '-'
+                       ~ (out_ts | timestamp_custom('%H:%M')) if out_ts > left_ts else previous }}
+              # Nothing open, still at work (23:55), or left before arriving: nothing to log.
+              - if:
+                  - condition: template
+                    value_template: "{{ in_ts > 0 and out_ts > in_ts and not at_work }}"
+                then:
+                  # Working day closed: the next arrival at work starts a new one.
+                  - action: input_datetime.set_datetime
+                    target:
+                      entity_id: "input_datetime.presence_{{ p }}_arrived_at_work"
+                    data:
+                      timestamp: 0
+                  - action: input_text.set_value
+                    target:
+                      entity_id: "input_text.presence_{{ p }}_work_trips"
+                    data:
+                      value: ""
+                  - if:
+                      - condition: template
+                        value_template: "{{ duration_min < 10 or duration_min > 960 }}"
+                    then:
+                      - action: logbook.log
+                        data:
+                          name: <@ logbook | tojson @>
+                          entity_id: <@ calendar @>
+                          message: >-
+                            <@ t('log_workday_not_logged', name='{{ name }}', minutes='{{ duration_min }}') @>
+                    else:
+                      - action: script.presence_log
+                        data:
+                          kind: work
+                          people: "{{ name }}"
+                          start: "{{ in_ts | timestamp_local }}"
+                          end: "{{ out_ts | timestamp_local }}"
+                          details: |-
+                            <@ t('det_arrival') @>: {{ in_ts | timestamp_custom('%H:%M') }}
+                            <@ t('det_departure') @>: {{ out_ts | timestamp_custom('%H:%M') }}
+                            <@ t('det_duration') @>: <@ t('dur_hm', h='{{ duration_min // 60 }}', m='{{ duration_min % 60 }}') @>
+                            {%- if trips %}
+                            <@ t('det_work_trips') @>: {{ trips }}
+                            {%- endif %}
+                            {%- if out_ts > left_ts %}
+                            <@ t('det_appointments') @>: {{ info.appointments }}
+                            {%- endif %}
+<% endif %>
+<% if car_list %>
+
+# --- 6. Supercharger sessions ----------------------------------------------------------------------------------------
+# At a Supercharger (DC) Teslemetry reports charger power/voltage as 0 (Fleet Telemetry only sends AC values), so
+# the session is recognised by place and speed: charging more than 300 m from home and the battery rising at least
+# 20 %/h (measured at a Supercharger: about 15 -> 99 % in 62 min; home AC charging stays far below).
+- id: presence_supercharger
+  alias: <@ t('supercharger_alias') | tojson @>
+  description: <@ t('supercharger_description', title=t('kind_charge'), unknown=t('unknown')) | tojson @>
+  mode: queued
+  max: <@ [car_list | length * 2, 4] | max @>
+  triggers:
+    - trigger: state
+      entity_id: <@ chargers | tojson @>
+      to: charging
+      id: start
+    - trigger: state
+      entity_id: <@ chargers | tojson @>
+      to: disconnected
+      not_from: [unknown, unavailable]
+      id: end
+  variables:
+    ppl: <@ ppl | tojson @>
+    car_map: <@ car_map | tojson @>
+    car_of: <@ car_of | tojson @>
+    car: "{{ car_of[trigger.entity_id] }}"
+    car_name: "{{ car_map[car].name }}"
+    tracker: "{{ car_map[car].location }}"
+    from_home_m: "{{ ((distance(tracker, 'zone.home') or 0) * 1000) | round(0) | int }}"
+    start_ts: "{{ state_attr('input_datetime.presence_charge_start_' ~ car, 'timestamp') | float(0) }}"
+    soc: "{{ states(car_map[car].battery) | float(0) }}"
+  actions:
+    - choose:
+        - conditions:
+            - condition: trigger
+              id: start
+            # A session already running (e.g. charging resumes after a blip) keeps its start.
+            - condition: template
+              value_template: "{{ from_home_m > 300 and now().timestamp() - start_ts > 6 * 3600 }}"
+          sequence:
+            - action: input_datetime.set_datetime
+              target:
+                entity_id: "input_datetime.presence_charge_start_{{ car }}"
+              data:
+                timestamp: "{{ trigger.to_state.last_changed.timestamp() }}"
+            - action: input_number.set_value
+              target:
+                entity_id: "input_number.presence_charge_start_battery_{{ car }}"
+              data:
+                value: "{{ soc }}"
+        - conditions:
+            - condition: trigger
+              id: end
+            - condition: template
+              value_template: "{{ now().timestamp() - start_ts < 6 * 3600 }}"
+          sequence:
+            - variables:
+                # End of charging: when it stopped (stopped/complete before the cable came out), else now.
+                ended: >-
+                  {{ (trigger.from_state.last_changed if trigger.from_state.state != 'charging' else now()).isoformat() }}
+                duration_min: "{{ ((as_timestamp(ended) - start_ts) / 60) | round(0) | int }}"
+                soc_start: "{{ states('input_number.presence_charge_start_battery_' ~ car) | float(0) }}"
+                per_hour: "{{ ((soc - soc_start) / ([duration_min, 1] | max) * 60) | round(0) | int }}"
+            # Session closed: the next charge away from home starts a new one.
+            - action: input_datetime.set_datetime
+              target:
+                entity_id: "input_datetime.presence_charge_start_{{ car }}"
+              data:
+                timestamp: 0
+            - if:
+                - condition: template
+                  value_template: "{{ duration_min < 5 or per_hour < 20 }}"
+              then:
+                - action: logbook.log
+                  data:
+                    name: <@ logbook | tojson @>
+                    entity_id: <@ calendar @>
+                    message: >-
+                      <@ t('log_not_supercharger', car='{{ car_name }}', minutes='{{ duration_min }}', from='{{ soc_start | round(0) | int }}', to='{{ soc | round(0) | int }}', rate='{{ per_hour }}') @>
+                - stop: "Not fast charging"
+            - variables:
+                who: >-
+                  {%- set la = state_attr(tracker, 'latitude') | float(0) -%}
+                  {%- set lo = state_attr(tracker, 'longitude') | float(0) -%}
+                  {%- set ns = namespace(r=[]) -%}
+                  {%- for k, x in ppl.items() -%}
+                    {%- set s = states[x.phone] -%}
+                    {%- if s is not none and s.attributes.latitude is number
+                          and as_timestamp(s.last_updated) > start_ts - 600
+                          and distance(la, lo, s.attributes.latitude, s.attributes.longitude) * 1000 < 300 -%}
+                      {%- set ns.r = ns.r + [x.name] -%}
+                    {%- endif -%}
+                  {%- endfor -%}
+                  {%- set usual = car_map[car].driver -%}
+                  {{ ns.r | join(<@ and_ | tojson @>) if ns.r else (ppl[usual].name if usual else <@ t('unknown') | tojson @>) }}
+                # Name: the last navigation destination, if it was a Supercharger and lies where the car charged.
+                # The country names are the ones the car's navigation adds to a destination (data, not texts).
+                place: >-
+                  {%- set dest = states('input_text.presence_destination_' ~ car) -%}
+                  {%- set route = car_map[car].route -%}
+                  {%- if 'supercharger' in dest | lower and state_attr(route, 'latitude') is number
+                        and (distance(tracker, route) or 1) < 0.5 -%}
+                  {{ dest | regex_replace(',\\s*(Belgium|België|Belgique|Nederland|Netherlands|France|Deutschland|Germany|Luxembourg)$', '') }}
+                  {%- else -%}<@ t('unknown') @>{%- endif -%}
+                location: "{{ state_attr(tracker, 'latitude') | float(0) | round(5) }}, {{ state_attr(tracker, 'longitude') | float(0) | round(5) }}"
+            - action: script.presence_log
+              data:
+                kind: charge
+                people: "{{ who }}"
+                start: "{{ start_ts | timestamp_local }}"
+                end: "{{ ended }}"
+                details: |-
+                  <@ t('det_place') @>: {{ place }}
+                  <@ t('det_location') @>: {{ location }}
+                  <@ t('det_car') @>: {{ car_name }}
+                  <@ t('det_battery') @>: {{ soc_start | round(0) | int }} → {{ soc | round(0) | int }} %
+                  <@ t('det_duration') @>: <@ t('dur_hm', h='{{ duration_min // 60 }}', m='{{ duration_min % 60 }}') @>
+<% endif %>
+
+# --- 7. Store where we stayed, per day (for "Where we spend our time"; the recorder keeps only ~10 days) -----------
+- id: presence_stays
+  alias: <@ t('stays_alias') | tojson @>
+  description: <@ t('stays_description', calendar=stay_calendar, title=t('kind_stay')) | tojson @>
+  mode: single
+  triggers:
+    - trigger: time
+      at: "00:10:00"
+  variables:
+    # Titles of a stay event in every language of strings.yaml (a day stored before a language switch counts).
+    stay_titles: <@ every.kind_stay | tojson @>
+  actions:
+    # Runs the command now; HA waits for it to finish.
+    - action: homeassistant.update_entity
+      target:
+        entity_id: sensor.presence_stays
+    - action: calendar.get_events
+      target:
+        entity_id: <@ stay_calendar @>
+      data:
+        start_date_time: "{{ (now() - timedelta(days=5)).replace(hour=0, minute=0, second=0, microsecond=0).isoformat() }}"
+        end_date_time: "{{ now().isoformat() }}"
+      response_variable: existing
+    - variables:
+        new: >-
+          {%- set ns = namespace(have=[], out=[]) -%}
+          {%- for e in existing[<@ stay_calendar | tojson @>].events -%}
+            {%- set parts = e.summary.split(':', 1) -%}
+            {%- if parts | count == 2 and parts[0] | trim in stay_titles -%}
+              {%- set ns.have = ns.have + [(parts[1] | trim) ~ '|' ~ (e.start | string)[:10]] -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {%- for day, ppl in (state_attr('sensor.presence_stays', 'days') or {}).items() -%}
+            {%- for p, text in ppl.items() -%}
+              {%- if (p ~ '|' ~ day) not in ns.have -%}
+                {%- set ns.out = ns.out + [{'day': day, 'person': p, 'text': text}] -%}
+              {%- endif -%}
+            {%- endfor -%}
+          {%- endfor -%}
+          {{ ns.out }}
+    - repeat:
+        for_each: "{{ new }}"
+        sequence:
+          - action: calendar.create_event
+            target:
+              entity_id: <@ stay_calendar @>
+            data:
+              summary: <@ (t('kind_stay') ~ ': {{ repeat.item.person }}') | tojson @>
+              description: "{{ repeat.item.text }}"
+              start_date: "{{ repeat.item.day }}"
+              end_date: "{{ (as_datetime(repeat.item.day) + timedelta(days=1)).date() }}"
+    - action: logbook.log
+      data:
+        name: <@ logbook | tojson @>
+        entity_id: <@ stay_calendar @>
+        message: >-
+          <@ t('log_stays_saved', count='{{ new | count }}') @>
+          {%- if state_attr('sensor.presence_stays', 'error') %}<@ t('log_stays_error', error="{{ state_attr('sensor.presence_stays', 'error') }}") @>{% endif %}
+
+# --- 8. Learn the usual arrival time per weekday (for other modules, e.g. appliances) --------------------------------
+- id: arrival_learn
+  alias: <@ t('learn_alias') | tojson @>
+  description: <@ t('learn_description', calendar=calendar, home=t('kind_home'), pick_up=t('kind_pick_up')) | tojson @>
+  mode: single
+  triggers:
+    - trigger: time
+      at: "00:40:00"
+  variables:
+    # Title -> kind and the "away" detail, in every language of strings.yaml (events from before a language switch
+    # count as well).
+    kinds: <@ kind_of | tojson @>
+    away_re: <@ ('(?:' ~ every.det_away | join('|') ~ '): (\\d+)\\D+(\\d+)') | tojson @>
+  actions:
+    - action: calendar.get_events
+      target:
+        entity_id: <@ calendar @>
+      data:
+        start_date_time: "{{ (now() - timedelta(days=56)).isoformat() }}"
+        end_date_time: "{{ now().isoformat() }}"
+      response_variable: log
+    - variables:
+        learned: |-
+          {%- set days = <@ day_names | tojson @> -%}
+          {%- set ns = namespace(items=[]) -%}
+          {%- for e in log[<@ calendar | tojson @>].events -%}
+            {%- set t = as_local(as_datetime(e.start)) -%}
+            {%- set kind = kinds.get(e.summary.split(':')[0] | trim, '') -%}
+            {%- set ok = false -%}{%- set m = 0 -%}
+            {%- if kind == 'pick_up' -%}
+              {%- set t2 = as_local(as_datetime(e.end)) -%}{%- set m = t2.hour * 60 + t2.minute + 10 -%}{%- set ok = true -%}
+            {%- elif kind in ['home', 'home_from_work'] -%}
+              {%- set w = (e.description or '') | regex_findall(away_re) -%}
+              {%- set m = t.hour * 60 + t.minute -%}
+              {%- set ok = w | count > 0 and (w[0][0] | int * 60 + w[0][1] | int) >= 60 -%}
+            {%- endif -%}
+            {%- if ok and 660 <= m <= 1260 -%}{%- set ns.items = ns.items + [[t.date() | string, t.weekday(), m]] -%}{%- endif -%}
+          {%- endfor -%}
+          {%- set out = namespace(r=[]) -%}
+          {%- for wd in range(7) -%}
+            {%- set earliest = namespace(l=[]) -%}
+            {%- for d in ns.items | selectattr(1, 'eq', wd) | map(attribute=0) | unique -%}
+              {%- set earliest.l = earliest.l + [ns.items | selectattr(0, 'eq', d) | map(attribute=2) | min] -%}
+            {%- endfor -%}
+            {%- set n = earliest.l | count -%}
+            {%- set q = ((earliest.l[-4:] | min) // 15 * 15) | int if n else 0 -%}
+            {%- set out.r = out.r + [{'entity': 'input_datetime.arrival_' ~ days[wd], 'n': n, 'time': '%02d:%02d:00' | format(q // 60, q % 60), 'measured': earliest.l}] -%}
+          {%- endfor -%}
+          {{ out.r }}
+    # Weekdays with fewer than 3 measurements keep their start value (deploy.py) or the last learned value.
+    - repeat:
+        for_each: "{{ learned | selectattr('n', 'ge', 3) | list }}"
+        sequence:
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: "{{ repeat.item.entity }}"
+            data:
+              time: "{{ repeat.item.time }}"

@@ -1,0 +1,71 @@
+<# Smart charging of the wall tablet: only with e_ink_display.charger_relay (and battery) in house.yaml; otherwise an
+   empty list (deploy.py then writes no automation). Relay through homeassistant.turn_on/off, so a switch, a light
+   or an input_boolean all work. #>
+<% from '_e_ink.jinja' import relay, battery with context %>
+<% if not relay %>
+[]
+<% else %>
+- id: e_ink_display_smart_charging
+  alias: "<@ t('automation_alias') @>"
+  description: "<@ t('automation_description') @>"
+  mode: queued
+  max: 3
+  triggers:
+    - trigger: numeric_state
+      entity_id: <@ battery @>
+      below: input_number.e_ink_display_charge_on_below
+      id: low
+    - trigger: numeric_state
+      entity_id: <@ battery @>
+      above: input_number.e_ink_display_charge_off_above
+      id: high
+    # Fail-safe: the battery sensor is unavailable, or has not changed for 3 h while the charger is off (the app
+    # stopped reporting, e.g. the tablet went into deep sleep): charge rather than let the screen die.
+    - trigger: state
+      entity_id: <@ battery @>
+      to: [unavailable, unknown]
+      for: { minutes: 30 }
+      id: silent
+    - trigger: time_pattern
+      minutes: "/15"
+      id: check
+    - trigger: homeassistant
+      event: start
+      id: check
+    - trigger: state
+      entity_id: [input_number.e_ink_display_charge_on_below, input_number.e_ink_display_charge_off_above, input_boolean.e_ink_display_smart_charging]
+      id: check
+  conditions:
+    - condition: state
+      entity_id: input_boolean.e_ink_display_smart_charging
+      state: "on"
+  actions:
+    - variables:
+        level: "{{ states('<@ battery @>') | float(-1) }}"
+        low: "{{ states('input_number.e_ink_display_charge_on_below') | float(30) }}"
+        high: "{{ states('input_number.e_ink_display_charge_off_above') | float(80) }}"
+        relay_on: "{{ is_state('<@ relay @>', 'on') }}"
+        silent: >-
+          {{ level < 0 or (not relay_on and (now() - states['<@ battery @>'].last_changed).total_seconds() > 3 * 3600) }}
+    - choose:
+        - conditions: "{{ not relay_on and (silent or level < low) }}"
+          sequence:
+            - action: homeassistant.turn_on
+              target:
+                entity_id: <@ relay @>
+            - action: logbook.log
+              data:
+                name: "<@ t('automation_alias') @>"
+                entity_id: <@ relay @>
+                message: "{{ '<@ t('log_on_silent') @>' if silent else '<@ t('log_on', level="' ~ (level | round(0)) ~ '") @>' }}"
+        - conditions: "{{ relay_on and not silent and level > high }}"
+          sequence:
+            - action: homeassistant.turn_off
+              target:
+                entity_id: <@ relay @>
+            - action: logbook.log
+              data:
+                name: "<@ t('automation_alias') @>"
+                entity_id: <@ relay @>
+                message: "<@ t('log_off', level='{{ level | round(0) }}') @>"
+<% endif %>

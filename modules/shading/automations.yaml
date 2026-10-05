@@ -1,0 +1,325 @@
+<% from '_shading.jinja' import all_rooms, blinds, curtains, sun_on, sun, sides with context %>
+<% set logbook = t('logbook_name') %>
+# Shading: automations (ha-kit module shading, see shading/LOGIC.md).
+# Written by shading/deploy.py through the config API (same as the automation editor).
+# Rooms come from house.yaml (rooms[]): a room without a blind is not in the blind automations, a room without a
+# curtain is not in the curtain automation.
+<% if blinds %>
+
+# --- 1. Blinds on schedule -----------------------------------------------------------------------------------------
+- id: blinds_schedule
+  alias: <@ t('blinds_schedule_alias') | tojson @>
+  description: <@ t('blinds_schedule_description', rooms=blinds | map(attribute='name') | join(', ')) | tojson @>
+  mode: single
+  triggers:
+    - trigger: time
+      at: input_datetime.blinds_open_workday
+      weekday: [mon, tue, wed, thu, fri]
+      id: open
+    - trigger: time
+      at: input_datetime.blinds_open_weekend
+      weekday: [sat, sun]
+      id: open
+    - trigger: time
+      at: input_datetime.blinds_close
+      id: close
+  actions:
+    - choose:
+        - alias: <@ t('step_morning_open_except_sun') | tojson @>
+          conditions:
+            - condition: trigger
+              id: open
+          sequence:
+            - variables:
+                to_open: >-
+                  {{ [
+<% for k in blinds %>
+                    '<@ k.blind @>'<% if k in sun %> if is_state('input_boolean.shading_closed_<@ k.slug @>', 'off') else none<% endif %>,
+<% endfor %>
+                  ] | reject('none') | list }}
+<% if sun %>
+                kept_closed: >-
+                  {{ [
+<% for k in sun %>
+                    <@ k.name | tojson @> if is_state('input_boolean.shading_closed_<@ k.slug @>', 'on') else none,
+<% endfor %>
+                  ] | reject('none') | list }}
+            - if:
+                - condition: template
+                  value_template: "{{ kept_closed | count > 0 }}"
+              then:
+                - action: logbook.log
+                  data:
+                    name: <@ logbook | tojson @>
+                    entity_id: input_boolean.shading_automatic
+                    message: <@ t('msg_schedule_kept_closed', rooms="{{ kept_closed | join(', ') }}") | tojson @>
+<% endif %>
+            - if:
+                - condition: template
+                  value_template: "{{ to_open | count > 0 }}"
+              then:
+                - action: cover.open_cover
+                  target:
+                    entity_id: "{{ to_open }}"
+        - alias: <@ t('step_evening_close_all') | tojson @>
+          conditions:
+            - condition: trigger
+              id: close
+          sequence:
+            - action: cover.close_cover
+              target:
+                entity_id:
+<% for k in blinds %>
+                  - <@ k.blind @>
+<% endfor %>
+<% endif %>
+<% if curtains %>
+
+# --- 2. Curtains on schedule ---------------------------------------------------------------------------------------
+- id: curtains_schedule
+  alias: <@ t('curtains_schedule_alias') | tojson @>
+  description: <@ (t('curtains_schedule_description', rooms=curtains | map(attribute='name') | join(', ')) ~ ((' ' ~ t('curtains_schedule_follow_note')) if blinds else '')) | tojson @>
+  mode: single
+  triggers:
+    - trigger: time
+      at: input_datetime.curtains_open_workday
+      weekday: [mon, tue, wed, thu, fri]
+      id: open
+    - trigger: time
+      at: input_datetime.curtains_open_weekend
+      weekday: [sat, sun]
+      id: open
+    - trigger: time
+      at: input_datetime.curtains_close
+      id: close
+  actions:
+    - choose:
+        - alias: <@ t('step_morning_open') | tojson @>
+          conditions:
+            - condition: trigger
+              id: open
+          sequence:
+            - action: cover.open_cover
+              target:
+                entity_id:
+<% for k in curtains %>
+                  - <@ k.curtain @>
+<% endfor %>
+        - alias: <@ t('step_evening_close') | tojson @>
+          conditions:
+            - condition: trigger
+              id: close
+          sequence:
+            - action: cover.close_cover
+              target:
+                entity_id:
+<% for k in curtains %>
+                  - <@ k.curtain @>
+<% endfor %>
+<% endif %>
+<% if blinds and curtains %>
+
+# --- 3. Curtains follow the blind times ----------------------------------------------------------------------------
+- id: curtains_sync_times
+  alias: <@ t('curtains_sync_alias') | tojson @>
+  description: <@ t('curtains_sync_description') | tojson @>
+  mode: restart
+  triggers:
+    - trigger: state
+      entity_id:
+        - input_datetime.blinds_open_workday
+        - input_datetime.blinds_open_weekend
+        - input_datetime.blinds_close
+    - trigger: state
+      entity_id: input_boolean.curtains_follow_blinds
+      to: "on"
+  conditions:
+    - condition: state
+      entity_id: input_boolean.curtains_follow_blinds
+      state: "on"
+  actions:
+    - action: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.curtains_open_workday
+      data:
+        time: "{{ states('input_datetime.blinds_open_workday') }}"
+    - action: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.curtains_open_weekend
+      data:
+        time: "{{ states('input_datetime.blinds_open_weekend') }}"
+    - action: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.curtains_close
+      data:
+        time: "{{ states('input_datetime.blinds_close') }}"
+<% endif %>
+<% if sun %>
+
+# --- 4. Blinds closed against sun and heat -------------------------------------------------------------------------
+- id: shading_sun
+  alias: <@ t('shading_sun_alias') | tojson @>
+  description: <@ t('shading_sun_description', rooms=sun | map(attribute='name') | join(', ')) | tojson @>
+  mode: queued
+  max: 10
+  triggers:
+<% for z in sides %>
+<% set zl = z | lower %>
+    - trigger: state
+      entity_id: binary_sensor.shading_sun_<@ zl @>
+      to: "on"
+      for: "00:10:00"
+      id: close_<@ zl @>
+    - trigger: state
+      entity_id: binary_sensor.shading_sun_<@ zl @>
+      from: "on"
+      to: "off"
+      for: "00:30:00"
+      id: open_<@ zl @>
+<% endfor %>
+    - trigger: state
+      entity_id:
+<% for k in sun %>
+        - <@ k.blind @>
+<% endfor %>
+      to: [open, opening]
+      id: manual
+    - trigger: time
+      at: input_datetime.blinds_close
+      id: reset
+    - trigger: time
+      at: "03:00:00"
+      id: reset
+  variables:
+    # Room slug -> blind and name, blind -> room, facade -> rooms. Filled in from house.yaml.
+    blind:
+<% for k in sun %>
+      "<@ k.slug @>": <@ k.blind @>
+<% endfor %>
+    room_of:
+<% for k in sun %>
+      <@ k.blind @>: "<@ k.slug @>"
+<% endfor %>
+    names:
+<% for k in sun %>
+      "<@ k.slug @>": <@ k.name | tojson @>
+<% endfor %>
+    per_facade:
+<% for z in sides %>
+      "<@ z | lower @>": [<% for k in sun if k.side | upper == z %>"<@ k.slug @>"<% if not loop.last %>, <% endif %><% endfor %>]
+<% endfor %>
+  actions:
+    - variables:
+        kind: "{{ trigger.id.split('_')[0] }}"
+        facade: "{{ trigger.id.split('_')[1] if '_' in trigger.id else '' }}"
+        rooms: "{{ per_facade.get(facade, []) }}"
+        open_time: >-
+          {{ states('input_datetime.blinds_open_weekend') if now().weekday() >= 5
+             else states('input_datetime.blinds_open_workday') }}
+        # Daytime: after the morning opening and until 30 min before the evening closing.
+        daytime: >-
+          {{ today_at(open_time) <= now() < today_at(states('input_datetime.blinds_close')) - timedelta(minutes=30) }}
+        reason: >-
+          {% set s = 'binary_sensor.shading_sun_' ~ facade %}
+          <@ t('reason', side="{{ facade | upper }}", angle="{{ state_attr(s, 'angle_to_sun') }}", clouds="{{ state_attr(s, 'cloud_cover_next_3h') }}", warmest="{{ states('sensor.shading_weather') }}") @>
+    - choose:
+        - alias: <@ t('step_sun_close') | tojson @>
+          conditions:
+            - condition: template
+              value_template: "{{ kind == 'close' }}"
+            - condition: state
+              entity_id: input_boolean.shading_automatic
+              state: "on"
+          sequence:
+            - repeat:
+                for_each: "{{ rooms }}"
+                sequence:
+                  - if:
+                      - condition: template
+                        value_template: "{{ is_state('input_boolean.shading_manual_' ~ repeat.item, 'off') }}"
+                    then:
+                      - action: input_boolean.turn_on
+                        target:
+                          entity_id: "input_boolean.shading_closed_{{ repeat.item }}"
+                      - if:
+                          - condition: template
+                            value_template: "{{ not is_state(blind[repeat.item], 'closed') }}"
+                        then:
+                          - action: cover.close_cover
+                            target:
+                              entity_id: "{{ blind[repeat.item] }}"
+                      - action: logbook.log
+                        data:
+                          name: <@ logbook | tojson @>
+                          entity_id: input_boolean.shading_automatic
+                          message: <@ t('msg_closed_sun', room='{{ names[repeat.item] }}', reason='{{ reason }}') | tojson @>
+                    else:
+                      - action: logbook.log
+                        data:
+                          name: <@ logbook | tojson @>
+                          entity_id: input_boolean.shading_automatic
+                          message: <@ t('msg_stays_open_manual', room='{{ names[repeat.item] }}', reason='{{ reason }}') | tojson @>
+        - alias: <@ t('step_sun_gone') | tojson @>
+          conditions:
+            - condition: template
+              value_template: "{{ kind == 'open' }}"
+          sequence:
+            - repeat:
+                for_each: "{{ rooms }}"
+                sequence:
+                  - if:
+                      - condition: template
+                        value_template: "{{ is_state('input_boolean.shading_closed_' ~ repeat.item, 'on') }}"
+                    then:
+                      # Flag off first: the "manual" trigger below then does not see this opening as a hand.
+                      - action: input_boolean.turn_off
+                        target:
+                          entity_id: "input_boolean.shading_closed_{{ repeat.item }}"
+                      - if:
+                          - condition: template
+                            value_template: "{{ daytime and is_state('input_boolean.shading_manual_' ~ repeat.item, 'off') }}"
+                        then:
+                          - action: cover.open_cover
+                            target:
+                              entity_id: "{{ blind[repeat.item] }}"
+                      - action: logbook.log
+                        data:
+                          name: <@ logbook | tojson @>
+                          entity_id: input_boolean.shading_automatic
+                          message: >-
+                            {% if daytime %}<@ t('msg_sun_gone_open', room='{{ names[repeat.item] }}', side='{{ facade | upper }}') @>{% else %}<@ t('msg_sun_gone_closed', room='{{ names[repeat.item] }}', side='{{ facade | upper }}') @>{% endif %}
+        - alias: <@ t('step_manual') | tojson @>
+          conditions:
+            - condition: trigger
+              id: manual
+            - condition: template
+              value_template: >-
+                {% set k = room_of.get(trigger.entity_id, '') %}
+                {{ k != '' and is_state('input_boolean.shading_closed_' ~ k, 'on') }}
+          sequence:
+            - variables:
+                room: "{{ room_of[trigger.entity_id] }}"
+            - action: input_boolean.turn_on
+              target:
+                entity_id: "input_boolean.shading_manual_{{ room }}"
+            - action: input_boolean.turn_off
+              target:
+                entity_id: "input_boolean.shading_closed_{{ room }}"
+            - action: logbook.log
+              data:
+                name: <@ logbook | tojson @>
+                entity_id: input_boolean.shading_automatic
+                message: <@ t('msg_opened_by_hand', room='{{ names[room] }}') | tojson @>
+        - alias: <@ t('step_reset') | tojson @>
+          conditions:
+            - condition: trigger
+              id: reset
+          sequence:
+            - action: input_boolean.turn_off
+              target:
+                entity_id:
+<% for k in sun %>
+                  - input_boolean.shading_closed_<@ k.slug @>
+                  - input_boolean.shading_manual_<@ k.slug @>
+<% endfor %>
+<% endif %>

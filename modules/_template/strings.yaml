@@ -1,0 +1,6 @@
+# User-facing texts: one key per text, {en: ..., nl: ...}. In the module's files: <@ t('key', name=...) @>.
+# en is required; another language is optional (fill.py falls back to en with a warning).
+helper_name: { en: Template module, nl: Sjabloonmodule }
+automation_alias: { en: "Template: switch turned on", nl: "Sjabloon: schakelaar aangezet" }
+notify_title: { en: Template, nl: Sjabloon }
+notify_message: { en: "Hello {name}, the template module works.", nl: "Hallo {name}, de sjabloonmodule werkt." }

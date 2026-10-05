@@ -1,0 +1,35 @@
+# Module metadata, read by tools/fill.py (--list), tools/choose.py (ask:) and tools/check.py.
+# Layer: core (UI). Brand-free: any Android e-ink tablet (or any browser) that runs the HA app or a kiosk browser.
+name: E-ink display
+description: "Touch e-ink wall display: one high-contrast page (weather, agenda, who is home, gate, energy, price) with a refresh interval you set, and optional smart charging of the tablet through a relay"
+status: built (screen tested in a browser by the source), not tested on the device
+# No hard dependency: every block follows modules:, the capabilities and the roles in house.yaml. It only reads the
+# entities of other modules (contract ids); it provides nothing they read.
+depends_on: []
+provides: []
+requires:
+  integrations: ["Home Assistant Companion app or Fully Kiosk Browser on the tablet (battery sensor for smart charging)"]
+  hardware: ["e-ink tablet with touch (Android, e.g. Kaleido 3 colour)", "relay that switches its USB-C charger (optional)"]
+optional: true
+generate: []
+ask:
+  - id: e_ink_display
+    question: "Do you have an e-ink wall display?"
+# Fields of house.yaml this module reads (example: house.fragment.yaml, to be merged into house.example.yaml).
+house_fields:
+  - "modules (feature flags), capabilities (tariff, hot-water-heater)"
+  - "people[].name, person; cars[] (with tesla-route); rooms[].blind (with shading)"
+  - "entities.weather, outdoor_temperature, indoor_temperature (all optional)"
+  - "entities.solar_power_w, grid_import_w, grid_export_w, battery_soc, battery_power_w, house_power_w, solar_forecast_today, price_import (all optional); energy.battery_power_sign"
+  - "entities.gate_sensor (gate tile, with gate); entities.doorbell_button, doorbell_camera (with doorbell)"
+  - "home_screen.view_path, climate.view_path, results.view_path (default paths of the buttons)"
+  - "e_ink_display.dashboard, view_path, calendars, battery, charger_relay, tiles, paths, solar_today_kwh, grid_import_today_kwh (all optional)"
+# Start values that deploy.py sets ONCE, when the helper is new (never `initial`).
+defaults:
+  input_number.e_ink_display_refresh: 30
+  input_number.e_ink_display_charge_on_below: 30
+  input_number.e_ink_display_charge_off_above: 80
+  input_boolean.e_ink_display_smart_charging: "on"
+# check.py: the other side of the optional parts (no charging relay, no agenda, no extra tiles, own dashboard name).
+check_variant:
+  e_ink_display: { charger_relay: null, battery: null, calendars: [], tiles: [], dashboard: wall-display, view_path: entrance, paths: { energy: "", shading: /lovelace/shading } }

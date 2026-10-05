@@ -1,0 +1,25 @@
+# Module metadata, read by tools/fill.py (--list shows it as a table), tools/choose.py (ask:) and by spa-spanet/deploy.py.
+name: Spa (SpaNET)
+description: ESP32 on the EXP1 port of a SpaNET SV3 spa (read and set, own probes, lid); SpaNET SV only
+status: built, bench test only
+depends_on: []
+requires:
+  integrations: [ESPHome, ESPHome Device Builder app (or esphome on a computer)]
+  hardware: [SpaNET SV3 controller with a free EXP1 port, ESP32 DevKit, step-down 12 V to 3.3 V, 2 RJ45 breakouts, DS18B20 (optional), MC-38 reed contact (optional)]
+optional: true
+generate: []
+ask:
+  - id: spa
+    question: Which spa controller do you have?
+    options: [SpaNET SV, other, none]
+    need: SpaNET SV
+# Fields of house.yaml this module reads (example: section spa: in house.example.yaml). All optional.
+house_fields:
+  - spa.name, display_name, probes, lid (all optional)
+# Secrets the firmware needs in /config/esphome/secrets.yaml (example: secrets.example.yaml).
+secrets: [wifi_ssid, wifi_password, wifi_hotspot_password, ota_password, spa_api_encryption_key]
+pins:
+  esphome_tested: 2026.9.0
+# tools/check.py: the other side of the optional switches, used in its all-modules house.
+check_variant:
+  spa: { probes: false, lid: false }

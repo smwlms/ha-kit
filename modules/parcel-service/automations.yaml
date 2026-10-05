@@ -1,0 +1,191 @@
+<# Parcel service automations. doorbell_parcel_left needs the downward package camera and its Protect event;
+   without them (entities.doorbell_package_camera / doorbell_package empty) it is left out.
+   The photo goes to the AI service of doorbell.ai_task (empty = the first ai_task entity); none = never. #>
+<% from '_ai_task.jinja' import ai_entity %>
+<% set speakers = doorbell.speakers | default([], true) %>
+<% set hub = doorbell.nest_hub | default(none) %>
+<% set tv = doorbell.tv | default(none) %>
+<% set package_cam = entities.doorbell_package_camera | default(none) %>
+<% set package_event = entities.doorbell_package | default(none) %>
+<% set notify_keys = doorbell.recipients | default(none) %>
+<% set recipients = people | selectattr('key', 'in', notify_keys) | list if notify_keys else people %>
+<% set tap = doorbell.tap_url | default(none) or 'entityId:' ~ entities.doorbell_camera %>
+# Module parcel-service: automations (HA YAML, list). Pushed through the config API by parcel-service/deploy.py.
+- id: parcel_service_buttons
+  alias: <@ t('buttons_alias') | tojson @>
+  description: >-
+    <@ t('buttons_description') @>
+  mode: parallel
+  max: 5
+  triggers:
+    - trigger: event
+      event_type: mobile_app_notification_action
+      event_data:
+        action: DOORBELL_GARAGE
+      id: garage
+    - trigger: event
+      event_type: mobile_app_notification_action
+      event_data:
+        action: PARCEL_GARAGE
+      id: parcel_service
+  conditions: []
+  actions:
+    - action: script.turn_on
+      target:
+        entity_id: script.doorbell_reply
+      data:
+        variables:
+          button: "{{ trigger.id }}"
+          ring: >-
+            {{ trigger.event.data.action_data.ring | default('')
+               if trigger.id == 'parcel_service' and trigger.event.data.action_data is defined else '' }}
+<% if package_cam and package_event %>
+- id: doorbell_parcel_left
+  alias: <@ t('left_alias') | tojson @>
+  description: >-
+    <@ t('left_description') @>
+  mode: queued
+  max: 3
+  triggers:
+    - trigger: event.received
+      target:
+        entity_id: <@ package_event @>
+      options:
+        event_type:
+          - detected
+  conditions: []
+  actions:
+    - variables:
+        ring_time: "{{ now().strftime('%H:%M') }}"
+        start: "{{ now().isoformat() }}"
+        photo: "doorbell/archive/{{ now().strftime('%Y%m%d-%H%M%S') }}-parcel.jpg"
+        ai_entity: <@ ai_entity(doorbell.ai_task | default(none)) @>
+    - alias: Photo from the downward package camera into the archive
+      action: camera.snapshot
+      continue_on_error: true
+      target:
+        entity_id: <@ package_cam @>
+      data:
+        filename: "/media/{{ photo }}"
+    - alias: "Gemini first: is there really a parcel? (no names). On error 'ai' stays undefined and the parcel is announced anyway."
+      if:
+        - condition: template
+          value_template: "{{ ai_entity != '' }}"
+      then:
+        - action: ai_task.generate_data
+          continue_on_error: true
+          response_variable: ai
+          data:
+            entity_id: "{{ ai_entity }}"
+            task_name: <@ t('left_ai_task_name') | tojson @>
+            instructions: |-
+              <@ (t('left_ai_prompt') ~ '\n' ~ t('ai_answer_language')) | indent(14) @>
+            structure:
+              parcel_visible:
+                description: <@ t('left_ai_field_visible') | tojson @>
+                required: true
+                selector:
+                  boolean: {}
+              description:
+                description: <@ t('left_ai_field_description') | tojson @>
+                required: true
+                selector:
+                  text: {}
+            attachments:
+              - media_content_id: "media-source://media_source/local/{{ photo }}"
+                media_content_type: image/jpeg
+    - variables:
+        gemini: "{{ ai is defined and ai.data is mapping }}"
+        description: "{{ (ai.data.description | default('') | string | trim)[:200] if ai is defined and ai.data is mapping else '' }}"
+        visible: "{{ ai.data.parcel_visible | bool(true) if ai is defined and ai.data is mapping else true }}"
+    - if:
+        - condition: template
+          value_template: "{{ visible }}"
+      then:
+<% for p in recipients %>
+        - action: notify.<@ p.notify @>
+          continue_on_error: true
+          data:
+            title: <@ t('parcel_left') | tojson @>
+            message: <@ (t('left_message', time='{{ ring_time }}') ~ "{{ ' ' ~ description if description }}") | tojson @>
+            data:
+              image: "/media/local/{{ photo }}"
+              url: <@ tap @>
+              tag: doorbell_parcel
+              push:
+                sound: default
+                interruption-level: active
+<% endfor %>
+<% if hub %>
+        - alias: "Nest Hub: says it and shows the photo"
+          action: script.turn_on
+          continue_on_error: true
+          target:
+            entity_id: script.doorbell_hub
+          data:
+            variables:
+              text: <@ t('left_spoken') | tojson @>
+              photo: "{{ photo }}"
+<% endif %>
+<% if tv %>
+        - alias: "TV (TvOverlay): restart the window with the package camera; the script checks whether the TV is on"
+          action: script.turn_on
+          continue_on_error: true
+          target:
+            entity_id: script.doorbell_tv
+          data:
+            variables:
+              camera: <@ package_cam @>
+              text: <@ t('parcel_left') | tojson @>
+<% endif %>
+<% if speakers %>
+        - alias: Announce on the speakers (unavailable speakers are skipped)
+          action: media_player.play_media
+          continue_on_error: true
+          target:
+            entity_id: <@ speakers | tojson @>
+          data:
+            media_content_id: "media-source://tts/<@ doorbell.tts @>?language=<@ house.language @>&message=<@ t('left_spoken') | urlencode @>"
+            media_content_type: music
+            announce: true
+            extra:
+              volume: <@ doorbell.volume | default(50, true) @>
+<% endif %>
+        - action: input_text.set_value
+          target:
+            entity_id: input_text.doorbell_visit
+          data:
+            value: <@ (t('parcel_left') ~ ' · {{ ring_time }}') | tojson @>
+        - action: input_text.set_value
+          target:
+            entity_id: input_text.doorbell_description
+          data:
+            value: >-
+              {{ description if description else <@ t('left_protect_saw') | tojson @> }}
+        - alias: Visit log (read by the cw-bezoeken card)
+          action: calendar.create_event
+          continue_on_error: true
+          target:
+            entity_id: <@ doorbell.calendar @>
+          data:
+            summary: <@ t('parcel_left') | tojson @>
+            description: |-
+              {{ description if description else <@ t('left_protect_saw') | tojson @> }}{{ '' if gemini else ' ' ~ <@ t('left_gemini_no_answer') | tojson @> }}
+              <@ t('photo_label') @>: {{ photo }}
+            start_date_time: "{{ start }}"
+            end_date_time: "{{ (as_datetime(start) + timedelta(minutes=1)).isoformat() }}"
+        - action: logbook.log
+          data:
+            name: <@ t('logbook_doorbell') | tojson @>
+            message: >-
+              {{ <@ t('log_left') | tojson @> | replace('{detail}', description | lower | trim('.')
+                 if description else <@ t('log_without_gemini') | tojson @>) }}
+            entity_id: input_text.doorbell_visit
+      else:
+        - action: logbook.log
+          data:
+            name: <@ t('logbook_doorbell') | tojson @>
+            message: >-
+              {{ <@ t('log_left_not_seen') | tojson @> | replace('{detail}', description | lower | trim('.')) }}
+            entity_id: input_text.doorbell_visit
+<% endif %>

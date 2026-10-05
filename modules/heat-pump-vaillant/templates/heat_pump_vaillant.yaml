@@ -1,0 +1,156 @@
+<% from '_heat_pump_vaillant.jinja' import system, zones, zone_map, main_zone, circuits, water_heater, hot_water_boost, tank_temperature, energy_manager, water_pressure, fault, power_w, mode_normal, mode_heat, cop_heat, cop_electric, cop_default with context %>
+# Heat pump (Vaillant): normalised sensors of the capabilities heat-pump and hot-water-heater
+# (ha-kit module heat-pump-vaillant, see heat-pump-vaillant/LOGIC.md and docs/phase4-contracts.md section 3).
+# Filled in from house.yaml by tools/fill.py; uploaded by heat-pump-vaillant/deploy.py to
+# /config/templates/heat_pump_vaillant.yaml (module base: template: !include_dir_merge_list templates/).
+# Core modules (climate, hot-water, energy) read ONLY these sensors and the scripts, never the myVAILLANT entities.
+# myVAILLANT system: <@ system @>; zones: <@ zones | map(attribute='key') | join(', ') @>; water heater: <@ water_heater @>.
+
+- sensor:
+    # --- heat-pump -------------------------------------------------------------------------------------------
+    # What the heat pump does now, from the energy manager state of myVAILLANT (refreshed by the cloud about every
+    # few minutes, in practice up to half an hour late). Fixed English values: idle, hot_water, heating, cooling,
+    # unknown. The raw value stays in the attribute brand_state.
+    - name: "<@ t('sensor_state') @>"
+      unique_id: heat_pump_state
+      default_entity_id: sensor.heat_pump_state
+      icon: mdi:heat-pump-outline
+      state: >
+        {% set s = states('<@ energy_manager @>') | upper %}
+        {% if s in ['UNKNOWN', 'UNAVAILABLE', 'NONE', ''] %}unknown
+        {% elif 'DHW' in s or 'HOT_WATER' in s or 'DOMESTIC' in s %}hot_water
+        {% elif 'COOL' in s %}cooling
+        {% elif 'HEAT' in s %}heating
+        {% elif s in ['STANDBY', 'IDLE', 'OFF', 'STOP', 'STOPPED', 'NO_DEMAND'] %}idle
+        {% else %}unknown{% endif %}
+      attributes:
+        brand: vaillant
+        brand_state: "{{ states('<@ energy_manager @>') }}"
+        # Climate entity per zone (key -> entity id) and the main zone: for screens and core modules that need the
+        # zone's temperature or band without knowing the brand (they never write to it).
+        zones: >-
+          {{ <@ zone_map | tojson @> }}
+        main_zone: "<@ main_zone.climate @>"
+        water_heater: "<@ water_heater @>"
+
+    # Estimated electrical power. myVAILLANT gives no live power (only daily totals in 1 kWh steps): this is an
+    # estimate from the state, with the start values of heat_pump.power_estimate_w in house.yaml.
+    - name: "<@ t('sensor_power_estimated') @>"
+      unique_id: heat_pump_power_estimated
+      default_entity_id: sensor.heat_pump_power_estimated
+      icon: mdi:heat-pump
+      unit_of_measurement: W
+      device_class: power
+      state_class: measurement
+      state: >
+        {% set w = <@ power_w | tojson @> %}
+        {{ w.get(states('sensor.heat_pump_state'), 0) }}
+      availability: "{{ states('sensor.heat_pump_state') not in ['unknown', 'unavailable'] }}"
+      attributes:
+        estimate: "{{ true }}"
+        per_state_w: >-
+          {{ <@ power_w | tojson @> }}
+
+    # Flow temperature of the main zone's circuit (status row of the climate screen); every circuit in `circuits`.
+    - name: "<@ t('sensor_flow_temperature') @>"
+      unique_id: heat_pump_flow_temperature
+      default_entity_id: sensor.heat_pump_flow_temperature
+      icon: mdi:thermometer-water
+      unit_of_measurement: "°C"
+      device_class: temperature
+      state_class: measurement
+      state: "{{ states('<@ main_zone.flow_temperature @>') | float(0) }}"
+      availability: "{{ states('<@ main_zone.flow_temperature @>') | is_number }}"
+      attributes:
+        circuits: >
+          {{ {
+<% for c in circuits %>
+            '<@ c @>': states('sensor.<@ system @>_circuit_<@ c @>_current_flow_temperature') | float(none),
+<% endfor %>
+          } }}
+
+    - name: "<@ t('sensor_water_pressure') @>"
+      unique_id: heat_pump_water_pressure
+      default_entity_id: sensor.heat_pump_water_pressure
+      icon: mdi:gauge
+      unit_of_measurement: bar
+      device_class: pressure
+      state_class: measurement
+      state: "{{ states('<@ water_pressure @>') | float(0) }}"
+      availability: "{{ states('<@ water_pressure @>') | is_number }}"
+
+    # --- hot-water-heater ------------------------------------------------------------------------------------
+    # Tank temperature: the water heater's current_temperature, else the tank sensor. Attributes: the target and
+    # the mode as the kit names them (normal = brand automatic / time program, heat = hold the target all day,
+    # off, other), and whether the boost runs.
+    - name: "<@ t('sensor_hot_water_temperature') @>"
+      unique_id: hot_water_temperature
+      default_entity_id: sensor.hot_water_temperature
+      icon: mdi:water-boiler
+      unit_of_measurement: "°C"
+      device_class: temperature
+      state_class: measurement
+      state: >
+        {% set t = state_attr('<@ water_heater @>', 'current_temperature') %}
+        {{ (t if t is number else states('<@ tank_temperature @>')) | float(0) }}
+      availability: >
+        {{ state_attr('<@ water_heater @>', 'current_temperature') is number
+           or states('<@ tank_temperature @>') | is_number }}
+      attributes:
+        target: "{{ state_attr('<@ water_heater @>', 'temperature') | float(none) }}"
+        mode: >
+          {% set m = states('<@ water_heater @>') %}
+          {% if m in <@ mode_normal | tojson @> %}normal
+          {% elif m in <@ mode_heat | tojson @> %}heat
+          {% elif m | lower == 'off' %}off
+          {% else %}other{% endif %}
+        brand_mode: "{{ states('<@ water_heater @>') }}"
+        boost: "{{ is_state('<@ hot_water_boost @>', 'on') }}"
+        min_temp: "{{ state_attr('<@ water_heater @>', 'min_temp') | float(35) }}"
+        max_temp: "{{ state_attr('<@ water_heater @>', 'max_temp') | float(70) }}"
+
+    # COP of hot water today = heat into the tank / electrical energy for hot water (myVAILLANT daily totals, 1 kWh
+    # steps), limited to 1.5-4.5. Without those sensors, or before the first kWh of the day: the default from
+    # house.yaml hot_water.cop (<@ cop_default @>). Attribute source: measured or default.
+    - name: "<@ t('sensor_hot_water_cop') @>"
+      unique_id: hot_water_cop
+      default_entity_id: sensor.hot_water_cop
+      icon: mdi:sine-wave
+      state_class: measurement
+<% if cop_heat %>
+      state: >
+        {% set heat = states('<@ cop_heat @>') | float(0) %}
+        {% set el = states('<@ cop_electric @>') | float(0) %}
+        {{ ([[heat / el, 1.5] | max, 4.5] | min | round(2)) if el > 0 and heat > 0 else <@ cop_default @> }}
+      attributes:
+        source: >
+          {{ 'measured' if states('<@ cop_electric @>') | float(0) > 0 and states('<@ cop_heat @>') | float(0) > 0
+             else 'default' }}
+        heat_kwh: "{{ states('<@ cop_heat @>') | float(none) }}"
+        electric_kwh: "{{ states('<@ cop_electric @>') | float(none) }}"
+<% else %>
+      state: "{{ <@ cop_default @> }}"
+      attributes:
+        source: default
+<% endif %>
+
+- binary_sensor:
+    - name: "<@ t('sensor_fault') @>"
+      unique_id: heat_pump_fault
+      default_entity_id: binary_sensor.heat_pump_fault
+      device_class: problem
+      state: "{{ is_state('<@ fault @>', 'on') }}"
+      availability: "{{ states('<@ fault @>') in ['on', 'off'] }}"
+      attributes:
+        brand_entity: <@ fault @>
+
+    # The tank is being heated now: the energy manager says hot water (myVAILLANT, refreshed with a delay).
+    - name: "<@ t('sensor_hot_water_heating') @>"
+      unique_id: hot_water_heating
+      default_entity_id: binary_sensor.hot_water_heating
+      device_class: heat
+      icon: mdi:water-boiler
+      state: "{{ is_state('sensor.heat_pump_state', 'hot_water') }}"
+      availability: "{{ states('sensor.heat_pump_state') not in ['unknown', 'unavailable'] }}"
+      attributes:
+        boost: "{{ is_state('<@ hot_water_boost @>', 'on') }}"

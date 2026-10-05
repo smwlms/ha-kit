@@ -1,0 +1,37 @@
+name: Bug
+description: Something in a module or a tool does not work as described
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Please do not paste your house.yaml, tokens, IPs, addresses or real names: replace them with invented values.
+        A security problem? Do not open an issue: report it privately as described in SECURITY.md.
+  - type: input
+    id: module
+    attributes:
+      label: Module or tool
+      placeholder: e.g. gate, presence, tools/fill.py
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The fill.py / deploy.py command and the relevant (anonymised) part of house.yaml.
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      placeholder: Home Assistant 2026.x, kit commit, ESPHome version (for firmware modules)
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or error output
+      render: text

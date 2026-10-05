@@ -1,0 +1,48 @@
+<% from '_notifications.jinja' import m, kinds, known_kinds, ent, recipient_keys, everyone, recipients, filter_days, price_import with context %>
+<% for s in kinds if s not in known_kinds %><@ fail('house.yaml: notifications.kinds does not know ' ~ s ~ '; choose from power_price, surplus, filter') @><% endfor %>
+<% if 'power_price' in kinds and not price_import %><@ fail('house.yaml: entities.price_import is empty (needed for notifications.kinds power_price): add a tariff module (e.g. tariff-be) to modules:, or fill in a sensor of your own') @><% endif %>
+<% if 'surplus' in kinds and not ent.get('grid_export_w') %><@ fail('house.yaml: entities.grid_export_w is empty (needed for notifications.kinds surplus)') @><% endif %>
+<% if 'filter' in kinds and not filter_days %><@ fail('house.yaml: entities.ventilation_filter_days is empty (needed for notifications.kinds filter). With the module ventilation-zehnder in modules: it follows from ventilation.name, except with ventilation.mac_suffix: true') @><% endif %>
+<% for k in recipient_keys if k not in everyone | map(attribute='key') | list %><@ fail('house.yaml: notifications.recipients contains ' ~ k ~ ', but that key is not in people') @><% endfor %>
+<% if not recipients %><@ fail('house.yaml: nobody to send notifications to (people[].notify is empty, or notifications.recipients points to people without notify)') @><% endif %>
+# Notifications: helpers (ha-kit module notifications, see notifications/LOGIC.md "Settings").
+# Uploaded by notifications/deploy.py to /config/packages/notifications.yaml (module base: packages: !include_dir_named packages/).
+# No `initial`: deploy.py sets the defaults from module.yaml (defaults:) once, when a helper is new.
+# Kinds of notifications in this house: <@ kinds | join(', ') @>. Recipients: <@ recipients | map(attribute='key') | join(', ') @>.
+<% if 'surplus' in kinds %>
+
+input_number:
+  notification_surplus_kw:           # surplus: more than this to the grid ... (default 1.8)
+    name: <@ t('helper_surplus_kw') | tojson @>
+    icon: mdi:solar-power-variant
+    min: 0.2
+    max: 10
+    step: 0.1
+    mode: box
+    unit_of_measurement: kW
+  notification_surplus_minutes:      # ... for this many minutes without a break (default 10)
+    name: <@ t('helper_surplus_minutes') | tojson @>
+    icon: mdi:timer-outline
+    min: 1
+    max: 60
+    step: 1
+    mode: box
+    unit_of_measurement: min
+  notification_surplus_pause_h:      # at most one surplus notification per this many hours (default 3)
+    name: <@ t('helper_surplus_pause') | tojson @>
+    icon: mdi:bell-sleep-outline
+    min: 1
+    max: 12
+    step: 1
+    mode: box
+    unit_of_measurement: h
+<% endif %>
+<% if 'power_price' in kinds %>
+
+input_datetime:
+  notification_price_ahead:          # day of the last "free or negative power coming" check (once per day)
+    name: <@ t('helper_price_ahead') | tojson @>
+    icon: mdi:calendar-check
+    has_date: true
+    has_time: false
+<% endif %>

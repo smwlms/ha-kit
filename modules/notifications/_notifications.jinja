@@ -1,0 +1,33 @@
+<# Shared preamble of the module notifications, derived from house.yaml. Every templated file imports the names it
+   needs:  <% from '_notifications.jinja' import kinds, ent with context %> #>
+<% from '_esphome.jinja' import prefix %>
+<% set m = notifications if notifications is defined and notifications else {} %>
+<# Kinds of notifications. The Dutch values of earlier versions (stroomprijs, overschot) still work as aliases. #>
+<% set kind_aliases = {'stroomprijs': 'power_price', 'overschot': 'surplus'} %>
+<% set known_kinds = ['power_price', 'surplus', 'filter'] %>
+<% set kinds_ns = namespace(list=[]) %>
+<% for k in m.get('kinds') or ['power_price', 'surplus'] %>
+<% set kinds_ns.list = kinds_ns.list + [kind_aliases.get(k, k)] %>
+<% endfor %>
+<% set kinds = kinds_ns.list | unique | list %>
+<% set ent = entities if entities is defined and entities else {} %>
+<% set recipient_keys = m.get('recipients') or [] %>
+<% set everyone = people if people is defined and people else [] %>
+<% set recipients = everyone | selectattr('notify', 'defined') | selectattr('notify') | list %>
+<% set recipients = (recipients | selectattr('key', 'in', recipient_keys) | list) if recipient_keys else recipients %>
+<% set kinds_text = kinds | join(', ') %>
+<# Price sensors: entities.price_import / price_export, or else, with a module that provides the capability tariff
+   (e.g. tariff-be), its sensor.power_price_import / _export (same attributes starts and prices). #>
+<% set has_tariff = capabilities is defined and 'tariff' in capabilities %>
+<% set price_import = ent.get('price_import') or ('sensor.power_price_import' if has_tariff else none) %>
+<% set price_export = ent.get('price_export') or ('sensor.power_price_export' if has_tariff else none) %>
+<% set grid_export = ent.get('grid_export_w') %>
+<% set filter_days = ent.get('ventilation_filter_days') %>
+<# Filter sensor: entities.ventilation_filter_days, or else, with the module ventilation-zehnder in modules:, the
+   sensor its firmware makes: sensor.<prefix of ventilation>_filter_replacement_remaining_days. Not derivable when
+   ventilation.mac_suffix is true (the MAC suffix is in the entity ids): then fill in the field. #>
+<% set v = ventilation if ventilation is defined and ventilation else {} %>
+<% set filter_derived = not filter_days and modules is defined and 'ventilation-zehnder' in modules and v.get('name') and not v.get('mac_suffix') %>
+<% if filter_derived %>
+<% set filter_days = 'sensor.' ~ prefix(v.name, v.get('display_name')) ~ '_filter_replacement_remaining_days' %>
+<% endif %>

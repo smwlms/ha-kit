@@ -1,0 +1,37 @@
+<# Shared preamble (who and what this module follows): _presence.jinja in this folder. #>
+<% from '_presence.jinja' import P, tracked, car_list, school, family, calendar, stay_calendar, work_zone, children with context %>
+<% set sleep = P.get('sleep_window') or module.defaults.sleep_window %>
+# Card "<@ t('view_title') @>" (custom:presence-card). presence/deploy.py --tab puts it on its own tab (panel).
+# By hand: a new view of type Panel, and paste this card config (Edit > card > Code editor).
+# Resource: /local/presence-card.js (deploy.py registers it). One presence-card per page.
+type: custom:presence-card
+calendar: <@ calendar @>
+stay_calendar: <@ stay_calendar @>
+children: <@ children | tojson @> # in sentences: "... took <children> to school"
+school: <@ 'true' if school is not none else 'false' @>
+family: # picking up outside school: zone name (as in the detail "place") and label in the sentences
+<% for f in family %>
+  - { name: <@ f.name | tojson @>, label: <@ (f.get('label') or f.name) | tojson @> }
+<% else %>
+  []
+<% endfor %>
+cars: # without cars: no list of Supercharger sessions
+<% for a in car_list %>
+  - { name: <@ a.name | tojson @> }
+<% else %>
+  []
+<% endfor %>
+sleep_window: { start: <@ sleep.start | string | tojson @>, end: <@ sleep.end | string | tojson @> } # same as stay.py
+people: # key = person.<key> and the helpers; tracker = the phone; work_zone = zone of the work place (empty = none)
+<% for p in tracked %>
+  - name: <@ p.name | tojson @>
+    key: <@ p.key @>
+    person: <@ p.get('person') or 'person.' ~ p.key @>
+    tracker: device_tracker.<@ p.phone @>
+<% if p.key in work_zone %>
+    work_zone: <@ work_zone[p.key] @>
+<% endif %>
+<% if p.get('color') %>
+    color: <@ p.color | tojson @>
+<% endif %>
+<% endfor %>

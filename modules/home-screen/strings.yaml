@@ -1,0 +1,256 @@
+# User-facing texts of the module home-screen: one key per text, {en: ..., nl: ...}. tools/fill.py picks
+# house.language (default en); _home_screen.jinja passes every key listed in string_keys into the card config as
+# strings:, and www/home-screen.js reads them as S.<key>. {placeholders} stay in the text and are filled in by the card
+# in the browser (fmt()); keep them when you translate. Add a key here AND in string_keys of _home_screen.jinja.
+
+view_title: { en: Home, nl: Home }
+# --- formats ---
+locale: { en: en-GB, nl: nl-BE } # numbers, dates and times (BCP 47 tag for toLocaleString)
+cents: { en: "{v} c", nl: "{v} c" } # a price in euro cent per kWh
+
+# --- header ---
+greet_night: { en: Good night, nl: Goedenacht }
+greet_morning: { en: Good morning, nl: Goedemorgen }
+greet_afternoon: { en: Good afternoon, nl: Goedemiddag }
+greet_evening: { en: Good evening, nl: Goedenavond }
+choose_chips: { en: Choose status row, nl: Statusrij kiezen }
+advanced_view: { en: Extended view, nl: Uitgebreide weergave }
+
+# --- status row ---
+chip_indoor: { en: indoors, nl: binnen }
+chip_indoor_name: { en: Indoors, nl: Binnen }
+chip_indoor_info: { en: "It is {t}° inside.", nl: "Het is {t}° binnen." }
+chip_indoor_info_comfort: { en: " Comfortable is between {low} and {high}°.", nl: " Comfortabel is tussen {low} en {high}°." }
+chip_outdoor: { en: outdoors, nl: buiten }
+chip_outdoor_name: { en: Outdoors, nl: Buiten }
+chip_outdoor_info: { en: "It is {t}° outside.", nl: "Buiten is het {t}°." }
+chip_outdoor_info_weather: { en: "It is {t}° outside and {w}.", nl: "Buiten is het {t}° en {w}." }
+chip_gate: { en: gate, nl: poort }
+gate_closed: { en: closed, nl: dicht }
+gate_open: { en: open, nl: open }
+gate_open_title: { en: Gate open, nl: Poort open }
+gate_closed_title: { en: Gate closed, nl: Poort dicht }
+gate_open_since: { en: "The gate has been open since {time}.", nl: "De poort staat open sinds {time}." }
+gate_closed_since: { en: "The gate has been closed since {time}.", nl: "De poort is dicht sinds {time}." }
+gate_close: { en: Close the gate, nl: Poort sluiten }
+gate_close_confirm: { en: "Close the gate?", nl: "Poort sluiten?" }
+gate_close_reason: { en: close from the home screen, nl: sluiten via het startscherm }
+chip_blinds: { en: blinds, nl: rolluiken }
+chip_blinds_open: { en: open, nl: open }
+blinds_all_open: { en: open, nl: open }
+blinds_all_closed: { en: closed, nl: dicht }
+blinds_info: { en: "{n} of the {total} blinds are open.", nl: "{n} van de {total} rolluiken zijn open." }
+cover_open: { en: open, nl: open }
+cover_closed: { en: closed, nl: dicht }
+cover_opening: { en: opening, nl: gaat open }
+cover_closing: { en: closing, nl: gaat dicht }
+cover_offline: { en: offline, nl: offline }
+chip_home: { en: home, nl: thuis }
+chip_home_name: { en: Who is home, nl: Wie is thuis }
+home_nobody: { en: Nobody is home., nl: Er is niemand thuis. }
+home_one: { en: "{who} is home.", nl: "{who} is thuis." }
+home_many: { en: "{who} are home.", nl: "{who} zijn thuis." }
+person_home: { en: home, nl: thuis }
+person_away: { en: away, nl: weg }
+presence_page: { en: Our week, nl: Onze week }
+car_info_charging: { en: "Battery {soc} %. Charging now.", nl: "Batterij {soc} %. Laadt nu." }
+car_info_plugged: { en: "Battery {soc} %. Plugged in, not charging.", nl: "Batterij {soc} %. Ingeplugd, laadt niet." }
+car_info_unplugged: { en: "Battery {soc} %. Not plugged in.", nl: "Batterij {soc} %. Niet ingeplugd." }
+cars_page: { en: Cars, nl: Auto's }
+chip_doorbell: { en: Doorbell, nl: Deurbel }
+doorbell_rings: { en: rings, nl: belt }
+doorbell_quiet: { en: quiet, nl: rust }
+doorbell_label_parcel: { en: parcel, nl: pakje }
+doorbell_label_doorbell: { en: doorbell, nl: deurbel }
+doorbell_last_rang: { en: Last rang, nl: Laatst gebeld }
+doorbell_title: { en: Doorbell, nl: Deurbel }
+doorbell_seen: { en: Seen, nl: Gezien }
+doorbell_parcel_left: { en: Parcel left, nl: Pakje achtergelaten }
+doorbell_at_door: { en: At the door, nl: Aan de deur }
+doorbell_coming: { en: "I'm coming", nl: Ik kom eraan }
+doorbell_protect: { en: Camera app, nl: Camera-app }
+chip_parcel: { en: Parcel service, nl: Pakjesdienst }
+parcel_yes: { en: "yes", nl: ja }
+parcel_off: { en: "off", nl: uit }
+parcel_today: { en: today, nl: vandaag }
+parcel_tomorrow: { en: tomorrow, nl: morgen }
+parcel_title: { en: Parcel service, nl: Pakjesdienst }
+parcel_expected: { en: Expected, nl: Verwacht }
+parcel_text_on:
+  en: "Parcel expected {day}. When the doorbell then sees someone with a parcel, the garage door opens ajar by itself."
+  nl: "Pakje verwacht {day}. Ziet de deurbel dan iemand met een pakje, dan gaat de garagepoort vanzelf op een kier."
+parcel_text_off:
+  en: "No parcel expected. Pick a day: when someone rings with a parcel on that day, the garage door opens ajar by itself."
+  nl: "Geen pakje verwacht. Kies een dag: belt dan iemand aan met een pakje, dan gaat de garagepoort vanzelf op een kier."
+parcel_ajar_row: { en: Ajar, nl: Kier }
+parcel_open_row: { en: Open, nl: Open }
+parcel_ajar_value: { en: "{s} s travel", nl: "{s} s looptijd" }
+parcel_open_value: { en: "{s} s", nl: "{s} s" }
+parcel_no: { en: "no", nl: nee }
+parcel_set_today: { en: Today, nl: Vandaag }
+parcel_set_tomorrow: { en: Tomorrow, nl: Morgen }
+parcel_set_off: { en: "Off", nl: Uit }
+parcel_garage_ajar: { en: Garage ajar, nl: Op een kier }
+chip_climate: { en: expected, nl: verwacht }
+chip_climate_name: { en: Indoor forecast, nl: Binnenverwachting }
+climate_info: { en: "Expected indoor peak today: {t}° ({day}). Floor: {floor}.", nl: "Verwachte binnenpiek vandaag: {t}° ({day}). Vloer: {floor}." }
+day_type_cool: { en: cool day, nl: koele dag }
+day_type_sunny_fresh: { en: sunny and fresh, nl: zonnig en fris }
+day_type_warm: { en: warm day, nl: warme dag }
+day_type_normal: { en: normal day, nl: gewone dag }
+floor_heating: { en: heating, nl: verwarmen }
+floor_neutral: { en: neutral, nl: neutraal }
+floor_cooling: { en: cooling, nl: koelen }
+chip_cameras: { en: cameras, nl: camera's }
+chip_cameras_aria: { en: "Cameras: {live} of {total} live", nl: "Camera's: {live} van {total} live" }
+chip_media: { en: media, nl: media }
+chip_media_playing: { en: playing, nl: speelt }
+media_quiet: { en: quiet, nl: stil }
+chip_media_aria_playing: { en: "Media: {n} playing", nl: "Media: {n} speelt" }
+chip_media_aria_quiet: { en: "Media: all quiet", nl: "Media: alles stil" }
+chip_charging: { en: Smart charging, nl: Slim laden }
+charging_kw: { en: kW charging, nl: kW laden }
+charging_target: { en: charge target, nl: laaddoel }
+charging_smart: { en: smart charging, nl: slim laden }
+charging_on: { en: "on", nl: aan }
+charging_off: { en: "off", nl: uit }
+chip_charging_aria: { en: "Smart charging: {what}", nl: "Slim laden: {what}" }
+chip_week: { en: our week, nl: onze week }
+chip_week_aria: { en: "Our week, week {n}", nl: "Onze week, week {n}" }
+
+# --- energy card ---
+energy: { en: Energy, nl: Energie }
+details: { en: details, nl: details }
+solar_kw: { en: solar kW, nl: zon kW }
+solar_title: { en: Solar, nl: Zon }
+solar_info: { en: "The panels deliver {kw} kW now.", nl: "De panelen leveren nu {kw} kW." }
+battery_title: { en: Home battery, nl: Thuisbatterij }
+battery_gives: { en: "gives {kw}", nl: "geeft {kw}" }
+battery_charges: { en: "charges {kw}", nl: "laadt {kw}" }
+battery_rests: { en: idle, nl: rust }
+battery_info: { en: "The home battery is at {soc} % and {what}.", nl: "De thuisbatterij staat op {soc} % en {what}." }
+grid_title: { en: Grid, nl: Net }
+grid_from: { en: from grid, nl: van net }
+grid_to: { en: to grid, nl: naar net }
+grid_none: { en: grid, nl: net }
+grid_kw: { en: "{what} kW", nl: "{what} kW" }
+grid_info_from: { en: "The house takes {kw} kW from the grid now.", nl: "Het huis haalt nu {kw} kW van het net." }
+grid_info_to: { en: "{kw} kW goes to the grid now.", nl: "Er gaat nu {kw} kW naar het net." }
+grid_info_none: { en: Nothing goes to or from the grid now., nl: Er gaat nu niets van of naar het net. }
+house_kw: { en: house kW, nl: huis kW }
+house_title: { en: Consumption, nl: Verbruik }
+house_info: { en: "The house uses {kw} kW now.", nl: "Het huis verbruikt nu {kw} kW." }
+price_now: { en: "now · {level}", nl: "nu · {level}" }
+price_now_title: { en: Power price now, nl: Stroomprijs nu }
+price_cheapest: { en: "cheapest · {price}", nl: "goedkoopst · {price}" }
+price_cheapest_tomorrow: { en: "tomorrow cheapest · {price}", nl: "morgen goedkoopst · {price}" }
+price_cheapest_title: { en: Cheapest 2 hours, nl: Goedkoopste 2 uur }
+price_cheapest_info: { en: "The cheapest 2-hour block is {when}{from}–{to}, on average {price} per kWh.", nl: "Het goedkoopste blok van 2 uur is {when}{from}–{to}, gemiddeld {price} per kWh." }
+price_back: { en: export, nl: terug }
+price_back_title: { en: Export, nl: Terugsturen }
+price_back_info: { en: "Power to the grid earns {price} per kWh now.", nl: "Stroom naar het net levert nu {price} per kWh op." }
+peak_month: { en: month peak, nl: maandpiek }
+peak_title: { en: Month peak, nl: Maandpiek }
+peak_info: { en: "Your highest quarter hour this month is {peak} kW. This quarter: {q} kW.", nl: "Je hoogste kwartier deze maand is {peak} kW. Dit kwartier: {q} kW." }
+peak_over: { en: above peak!, nl: boven piek! }
+peak_over_title: { en: Switch something off, nl: Zet iets uit }
+level_negative: { en: negative, nl: negatief }
+level_very_cheap: { en: very cheap, nl: heel goedkoop }
+level_cheap: { en: cheap, nl: goedkoop }
+level_normal: { en: normal, nl: normaal }
+level_expensive: { en: expensive, nl: duur }
+level_very_expensive: { en: very expensive, nl: heel duur }
+level_unknown: { en: unknown, nl: onbekend }
+advice_peak: { en: "This quarter you reach {q} kW, above your month peak of {peak} kW.", nl: "Dit kwartier kom je op {q} kW, boven je maandpiek van {peak} kW." }
+advice_surplus: { en: "Solar left over: using it yourself earns more than the {price} you get for export.", nl: "Zon over: zelf gebruiken levert meer op dan de {price} die je krijgt voor terugsturen." }
+advice_negative: { en: "Exporting costs money now. Run the washing, the dishes or the car.", nl: "Stroom terugsturen kost nu geld. Laat de was, de vaat of de auto draaien." }
+advice_price: { en: "Power costs {price}.", nl: "Stroom kost {price}." }
+advice_cheapest: { en: " Cheapest {when}{from}–{to} at {price}.", nl: " Goedkoopst {when}{from}–{to} aan {price}." }
+phases: { en: Per phase L1 · L2 · L3, nl: Per fase L1 · L2 · L3 }
+
+# --- controls ---
+controls: { en: Controls, nl: Bediening }
+hot_water: { en: Hot water, nl: Warm water }
+hot_water_title: { en: Hot water for a morning shower, nl: Warm water voor een ochtenddouche }
+hot_water_sub: { en: "{state}: {t} °C", nl: "{state}: {t} °C" }
+hot_water_info:
+  en: "On: the tank heats up to the shower temperature ({shower} °C) before the morning, only when it is colder. Turns off by itself at sunrise. Off: it keeps at least {min} °C. Now {t} °C."
+  nl: "Aan: de boiler warmt tegen de ochtend bij tot de douchetemperatuur ({shower} °C), alleen als hij kouder is. Gaat bij zonsopgang vanzelf uit. Uit: hij houdt minstens {min} °C. Nu {t} °C."
+hot_water_info_morning: { en: " Cheapest hour: {time}.", nl: " Goedkoopste uur: {time}." }
+toggle_on: { en: "on", nl: aan }
+toggle_off: { en: "off", nl: uit }
+toggle_info: { en: "{name} is {state}.", nl: "{name} staat {state}." }
+blinds: { en: Blinds, nl: Rolluiken }
+curtains: { en: Curtains, nl: Gordijnen }
+up: { en: open, nl: open }
+down: { en: close, nl: dicht }
+blinds_info_all: { en: Open or close all blinds together (you confirm first)., nl: Alle rolluiken samen openen of sluiten (je krijgt eerst een bevestiging). }
+curtains_info_all: { en: Open or close all curtains together (you confirm first)., nl: Alle gordijnen samen openen of sluiten (je krijgt eerst een bevestiging). }
+covers_confirm_open: { en: "Open: {what}?", nl: "Openen: {what}?" }
+covers_confirm_close: { en: "Close: {what}?", nl: "Sluiten: {what}?" }
+playing_now: { en: Playing now, nl: Speelt nu }
+all: { en: all, nl: alles }
+pause: { en: Pause, nl: Pauzeren }
+todo_one: { en: "{n} task to do", nl: "{n} taak te doen" }
+todo_many: { en: "{n} tasks to do", nl: "{n} taken te doen" }
+
+# --- extended view ---
+climate: { en: Climate, nl: Klimaat }
+living_room: { en: inside, nl: binnen }
+floor: { en: floor, nl: vloer }
+floor_idle: { en: idle, nl: rust }
+floor_heats: { en: heats, nl: verwarmt }
+floor_cools: { en: cools, nl: koelt }
+floor_hot_water: { en: hot water, nl: warm water }
+expected_today: { en: Expected today, nl: Verwachting vandaag }
+expected_value: { en: "{day} · peak {t}°", nl: "{day} · piek {t}°" }
+floor_next_days: { en: Floor mode, nl: Vloermodus }
+hot_water_row: { en: Hot water, nl: Warm water }
+cars: { en: Cars, nl: Auto's }
+car_home: { en: home, nl: thuis }
+car_elsewhere: { en: elsewhere, nl: elders }
+car_plug_in: { en: Plugged in, nl: Ingeplugd }
+car_plug_out: { en: Not plugged in, nl: Niet ingeplugd }
+car_charging_now: { en: Charging, nl: Laadt }
+charger: { en: Charger, nl: Laadpaal }
+charger_free: { en: free, nl: vrij }
+charger_free_info: { en: No car is on the charger., nl: Er hangt geen auto aan de laadpaal. }
+charger_info: { en: "{car} is on the charger: {what}.", nl: "{car} hangt aan de laadpaal: {what}." }
+mode_solar_only: { en: solar only, nl: enkel zon }
+mode_solar_min: { en: solar + minimum, nl: zon + minimum }
+mode_fast: { en: fast, nl: snel }
+mode_stop: { en: stopped, nl: gestopt }
+mode_unknown: { en: unknown, nl: onbekend }
+rooms: { en: Rooms, nl: Kamers }
+shading_auto_on: { en: automatic on, nl: automatisch aan }
+shading_auto_off: { en: automatic off, nl: automatisch uit }
+room_toggle_close: { en: "Close the blind {room}", nl: "Rolluik {room} sluiten" }
+room_toggle_open: { en: "Open the blind {room}", nl: "Rolluik {room} openen" }
+room_sub_blind: { en: "blind {state}", nl: "rolluik {state}" }
+room_sub_curtain: { en: "curtain {state}", nl: "gordijn {state}" }
+sun_kept_out: { en: " · sun kept out", nl: " · zon buiten" }
+house_does: { en: What the house does itself, nl: Wat het huis zelf doet }
+auto_hot_water: { en: Hot water on solar surplus, nl: Boiler op zonne-overschot }
+auto_hot_water_heating: { en: heating, nl: warmt op }
+auto_waiting: { en: waiting, nl: wacht }
+auto_charging: { en: Smart charging, nl: Slim laden }
+auto_shading: { en: Keep the sun out, nl: Zon buiten houden }
+auto_shading_closed: { en: blinds closed, nl: rolluiken dicht }
+auto_not_needed: { en: not needed, nl: niet nodig }
+auto_off: { en: "off", nl: uit }
+auto_morning: { en: "Morning: heat the hot water", nl: "Ochtend: boiler bijwarmen" }
+status_off: { en: "off", nl: uit }
+status_no_car: { en: no car, nl: geen auto }
+status_car_full: { en: car full, nl: auto vol }
+status_solar: { en: on solar, nl: op zon }
+status_paused_battery: { en: paused for the battery, nl: pauze voor de batterij }
+status_grid_assist: { en: cheap power, nl: goedkope stroom }
+status_plan: { en: charge plan, nl: laadplan }
+status_manual: { en: manual, nl: handmatig }
+status_peak_limited: { en: limited by the peak, nl: beperkt door de piek }
+none_yet: { en: no measurement yet, nl: nog geen meting }
+
+# --- baked into www/home-screen.js by fill.py (card picker, cache version) ---
+card_name: { en: Home screen, nl: Startscherm }
+card_description: { en: "Start screen with a chip per installed ha-kit module", nl: "Startscherm met een chip per geïnstalleerde ha-kit-module" }
+language_code: { en: en, nl: nl }

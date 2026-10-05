@@ -1,0 +1,22 @@
+# Personal fill-in and secrets: never in the repo
+/house*.yaml
+!/house.example.yaml
+!tests/house*.yaml
+secrets.yaml
+.env
+.env.*
+!.env.example
+*.local.*
+build/
+# Backups of a Home Assistant config or of a dashboard (deploy scripts, by hand)
+backup/
+backup-*.json
+# the same files under their names in earlier (Dutch) versions of the kit
+huis.yaml
+ingevuld/
+.mcp.json
+
+# Clutter
+__pycache__/
+.DS_Store
+*.bak*

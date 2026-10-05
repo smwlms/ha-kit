@@ -1,0 +1,232 @@
+<# Doorbell scripts. doorbell_hub and doorbell_tv only exist when the Nest Hub / TV is filled in.
+   With 'parcel-service' in modules, doorbell_reply also knows the buttons garage and parcel_service. #>
+<% set parcel_service = 'parcel-service' in modules %>
+<% set hub = doorbell.nest_hub | default(none) %>
+<% set tv = doorbell.tv | default(none) %>
+# Module doorbell: scripts (HA YAML, dict object_id -> config). Pushed through the config API by doorbell/deploy.py.
+doorbell_reply:
+  alias: <@ t('reply_alias') | tojson @>
+  description: >-
+    <@ t('reply_description') @><% if parcel_service %> <@ t('reply_description_parcel') @><% endif %> <@ t('reply_description_end') @>
+  icon: mdi:message-text-outline
+  mode: parallel
+  max: 5
+  fields:
+    button:
+      name: <@ t('field_button_name') | tojson @>
+      description: <@ (t('field_button_description') ~ (t('field_button_description_parcel') if parcel_service else '')) | tojson @>
+      required: true
+      example: coming
+      selector:
+        select:
+          options:
+            - at_door
+<% if parcel_service %>
+            - garage
+            - parcel_service
+<% endif %>
+            - coming
+<% if parcel_service %>
+    ring:
+      name: <@ t('field_ring_name') | tojson @>
+      description: <@ t('field_ring_description', entity=entities.doorbell_button) | tojson @>
+      example: "2026-10-05T09:12:03.000+00:00"
+      selector:
+        text: {}
+<% endif %>
+  sequence:
+    - variables:
+        texts:
+          at_door: <@ t('lcd_at_door') | tojson @>
+<% if parcel_service %>
+          garage: <@ t('lcd_garage') | tojson @>
+          # English in every language on purpose (see strings.yaml): couriers often do not speak the local language.
+          parcel_service: <@ t('lcd_parcel_service') | tojson @>
+<% endif %>
+          coming: <@ t('lcd_coming') | tojson @>
+        text: "{{ texts.get(button, '') }}"
+        previous: "{{ states('<@ entities.doorbell_text @>') }}"
+    - condition: template
+      value_template: "{{ text != '' }}"
+<% if parcel_service %>
+    - alias: "Parcel service: one ajar per ring; ignore a second press (another phone, same ring) or a press while an ajar is running"
+      if:
+        - condition: template
+          value_template: >-
+            {{ button == 'parcel_service' and (is_state('script.parcel_garage', 'on')
+               or (ring | default('') != '' and ring == states('input_text.parcel_service_ring'))) }}
+      then:
+        - action: logbook.log
+          data:
+            name: <@ t('logbook_parcel_service') | tojson @>
+            entity_id: input_datetime.parcel_expected
+            message: >-
+              {{ <@ t('log_ajar_ignored_running') | tojson @> if is_state('script.parcel_garage', 'on')
+                 else <@ t('log_ajar_ignored_handled') | tojson @> }}
+        - stop: Ajar already handled for this ring
+    - alias: "Parcel service: remember the ring this ajar is for"
+      if:
+        - condition: template
+          value_template: "{{ button == 'parcel_service' and ring | default('') != '' }}"
+      then:
+        - action: input_text.set_value
+          target:
+            entity_id: input_text.parcel_service_ring
+          data:
+            value: "{{ ring }}"
+<% endif %>
+    - action: text.set_value
+      continue_on_error: true
+      target:
+        entity_id: <@ entities.doorbell_text @>
+      data:
+        value: "{{ text }}"
+<% if parcel_service %>
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ button == 'garage' }}"
+          sequence:
+            - alias: Gate logic lives in its own single-mode script (module parcel-service)
+              action: script.turn_on
+              target:
+                entity_id: script.parcel_garage
+        - conditions:
+            - condition: template
+              value_template: "{{ button == 'parcel_service' }}"
+          sequence:
+            - alias: "Parcel service: gate open or ajar for input_number.parcel_service_open s, garage camera, photo before closing"
+              action: script.turn_on
+              target:
+                entity_id: script.parcel_garage
+              data:
+                variables:
+                  open_s: "{{ states('input_number.parcel_service_open') | int(30) }}"
+                  ajar_s: "{{ states('input_number.parcel_service_ajar') | float(0) }}"
+                  parcel_service: true
+<% endif %>
+    - delay: "00:03:00"
+    - alias: Only restore if nobody replaced our text in the meantime
+      condition: template
+      value_template: "{{ states('<@ entities.doorbell_text @>') | lower == text | lower }}"
+    - action: text.set_value
+      continue_on_error: true
+      target:
+        entity_id: <@ entities.doorbell_text @>
+      data:
+        value: >-
+          {{ previous if previous not in ['unknown', 'unavailable', ''] and previous not in texts.values() | list
+             else <@ doorbell.lcd_default | default(t('lcd_default'), true) | tojson @> }}
+<% if hub %>
+
+doorbell_hub:
+  alias: <@ t('hub_alias') | tojson @>
+  description: >-
+    <@ t('hub_description', hub=hub) @>
+  icon: mdi:tablet-dashboard
+  mode: queued
+  max: 4
+  fields:
+    text:
+      name: <@ t('field_text_name') | tojson @>
+      description: <@ t('hub_field_text_description') | tojson @>
+      required: true
+      example: <@ t('ringing') | tojson @>
+      selector:
+        text: {}
+    photo:
+      name: <@ t('field_photo_name') | tojson @>
+      description: <@ t('hub_field_photo_description') | tojson @>
+      required: false
+      example: doorbell/archive/20261004-130743-ring.jpg
+      selector:
+        text: {}
+  sequence:
+    - condition: not
+      conditions:
+        - condition: state
+          entity_id: <@ hub @>
+          state:
+            - unavailable
+            - unknown
+    - alias: Speak (Google Translate TTS, language from house.language)
+      action: media_player.play_media
+      continue_on_error: true
+      target:
+        entity_id: <@ hub @>
+      data:
+        media_content_id: "media-source://tts/<@ doorbell.tts @>?message={{ text | urlencode }}&language=<@ house.language @>"
+        media_content_type: music
+    - alias: Wait until the sentence has been spoken (playing, then no longer playing)
+      wait_for_trigger:
+        - trigger: state
+          entity_id: <@ hub @>
+          from: playing
+      timeout: "00:00:10"
+      continue_on_timeout: true
+    - if:
+        - condition: template
+          value_template: "{{ photo | default('') != '' }}"
+      then:
+        - alias: Show the photo on the screen (Cast resolves media-source to a signed URL)
+          action: media_player.play_media
+          continue_on_error: true
+          target:
+            entity_id: <@ hub @>
+          data:
+            media_content_id: "media-source://media_source/local/{{ photo }}"
+            media_content_type: image/jpeg
+<% endif %>
+<% if tv %>
+
+doorbell_tv:
+  alias: <@ t('tv_alias') | tojson @>
+  description: >-
+    <@ t('tv_description', tv=tv) @>
+  icon: mdi:television-play
+  mode: restart
+  fields:
+    camera:
+      name: <@ t('field_camera_name') | tojson @>
+      description: <@ t('tv_field_camera_description', camera=entities.doorbell_camera) | tojson @>
+      required: false
+      example: <@ entities.doorbell_camera @>
+      selector:
+        entity:
+          domain: camera
+    text:
+      name: <@ t('field_text_name') | tojson @>
+      description: <@ t('tv_field_text_description') | tojson @>
+      required: false
+      example: <@ t('tv_field_text_example') | tojson @>
+      selector:
+        text: {}
+  sequence:
+    - condition: not
+      conditions:
+        - condition: state
+          entity_id: <@ tv @>
+          state:
+            - "off"
+            - unavailable
+            - unknown
+    - repeat:
+        count: 15
+        sequence:
+          - action: camera.snapshot
+            continue_on_error: true
+            target:
+              entity_id: "{{ camera | default('<@ entities.doorbell_camera @>', true) }}"
+            data:
+              filename: /media/doorbell/tv.jpg
+          - alias: "Text: what the vision model saw at this ring (input_text.doorbell_visit, written ~5-10 s after the ring); until then the ringing text"
+            action: notify.tvoverlay_doorbell
+            continue_on_error: true
+            data:
+              message: >-
+                {% if text | default('', true) %}{{ text }}{% else %}{% set v = states.input_text.doorbell_visit %}{%
+                set ring = as_datetime(states('<@ entities.doorbell_button @>'), none) %}{{ v.state.split(' · ')[0]
+                if v and ring and v.state not in ['', '–'] and v.last_updated >= ring - timedelta(seconds=2)
+                else <@ t('ringing') | tojson @> }}{% endif %}
+          - delay: "00:00:02"
+<% endif %>

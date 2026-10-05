@@ -1,0 +1,8 @@
+<# Shared by every module with an ESPHome device (ventilation-zehnder, spa-spanet) and by modules that read its
+   entities (notifications: the filter sensor of ventilation-zehnder). Import with
+     <% from '_esphome.jinja' import title, prefix %>
+   title(name, display_name)   friendly_name of the device: display_name, else name with spaces and a capital
+   prefix(name, display_name)  start of its entity ids in Home Assistant (object id of the friendly name), e.g.
+                               prefix('heat-recovery') ~ '_fan' = heat_recovery_fan. Without name_add_mac_suffix only. #>
+<% macro title(name, display_name=none) %><@ display_name or (name | replace('-', ' ') | capitalize) @><% endmacro %>
+<% macro prefix(name, display_name=none) %><@ title(name, display_name) | lower | regex_replace('[^a-z0-9]+', '_') | regex_replace('^_+|_+$', '') @><% endmacro %>

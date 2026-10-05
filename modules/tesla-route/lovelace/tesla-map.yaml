@@ -1,0 +1,22 @@
+# "Where are they": all cars on one map with battery and "home". Paste as a card (Edit dashboard > Add card > Manual).
+# Resource /local/tesla-map-card.js (tesla-route/deploy.py). The badges set here are also used by tesla-arrival-card.
+# Without mapbox_token it looks for one in another card of the same dashboard (token_dashboard: url_path of another
+# dashboard), else OpenStreetMap.
+type: custom:tesla-map-card
+height: 340
+home: zone.home
+cars:
+<% for a in cars %>
+  - p: <@ a.prefix @>
+    name: <@ a.name | tojson @>
+<% if a.get('color') %>
+    color: "<@ a.color @>"
+<% endif %>
+<% if a.get('badge') %>
+    badge: <@ a.badge | tojson @>
+<% endif %>
+    entities:
+      loc: <@ car_entity(a, 'location') @>
+      soc: <@ car_entity(a, 'battery') @>
+      home: <@ car_entity(a, 'located_at_home') @>
+<% endfor %>

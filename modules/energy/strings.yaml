@@ -1,0 +1,524 @@
+# User-facing texts of the module energy: {key: {en: ..., nl: ...}}. In the module's files: <@ t('key') @>.
+# {placeholders} are filled in by the card (energy-screen.js) or the dashboard builder (dashboard/views.py).
+# Groups: the energy screen (card config strings:), an_* the analysis and flows dashboards, helper/script names.
+
+# --- energy screen (www/energy-screen.js) ---
+language_code: { en: "en", nl: "nl" }
+locale: { en: "en-GB", nl: "nl-BE" }
+title: { en: "Energy", nl: "Energie" }
+live: { en: "live", nl: "live" }
+live_title: { en: "live data", nl: "live data" }
+stale: { en: "delayed", nl: "vertraagd" }
+stale_title: { en: "data is older than 3 minutes", nl: "data is ouder dan 3 minuten" }
+extended_view: { en: "Extended view", nl: "Uitgebreide weergave" }
+settings: { en: "Settings", nl: "Instellingen" }
+settings_show: { en: "Show settings", nl: "Instellingen tonen" }
+settings_hide: { en: "Hide settings", nl: "Instellingen verbergen" }
+close: { en: "Close", nl: "Sluiten" }
+details_solar: { en: "Solar details", nl: "Details zon" }
+details_grid: { en: "Grid details", nl: "Details net" }
+details_house: { en: "House details", nl: "Details huis" }
+details_battery: { en: "Battery details", nl: "Details batterij" }
+details_charging: { en: "Charging details", nl: "Details laden" }
+details_hot_water: { en: "Hot water details", nl: "Details warm water" }
+node_zon: { en: "solar", nl: "zon" }
+node_net: { en: "grid", nl: "net" }
+node_batt: { en: "battery", nl: "batterij" }
+node_huis: { en: "house", nl: "huis" }
+node_auto: { en: "car", nl: "auto" }
+node_zon_the: { en: "the sun", nl: "de zon" }
+node_net_the: { en: "the grid", nl: "het net" }
+node_batt_the: { en: "the battery", nl: "de batterij" }
+node_huis_the: { en: "the house", nl: "het huis" }
+node_auto_the: { en: "the car", nl: "de auto" }
+node_zon_cap: { en: "Solar", nl: "Zon" }
+node_net_cap: { en: "Grid", nl: "Net" }
+node_batt_cap: { en: "Home battery", nl: "Thuisbatterij" }
+node_huis_cap: { en: "House", nl: "Huis" }
+node_auto_cap: { en: "Car", nl: "Auto" }
+low_carbon: { en: "Low carbon", nl: "Koolstofarm" }
+heat_pump: { en: "Heat pump", nl: "Warmtepomp" }
+hot_water: { en: "Hot water", nl: "Warm water" }
+flow_label: { en: "{from} to {to}: {kw}", nl: "{from} naar {to}: {kw}" }
+flow_info: { en: "Right now {kw} goes from {from} to {to}.", nl: "Nu gaat {kw} van {from} naar {to}." }
+analysis: { en: "Analysis", nl: "Analyse" }
+results: { en: "Results", nl: "Resultaten" }
+energy_analysis: { en: "Energy analysis", nl: "Energie-analyse" }
+cars: { en: "Cars", nl: "Auto's" }
+car_charges_kw: { en: "Car charging {kw}", nl: "Auto laadt {kw}" }
+car_charges_info: { en: "{name} is charging at {kw}.", nl: "{name} laadt nu met {kw}." }
+the_car: { en: "The car", nl: "De auto" }
+saved_today: { en: "Saved today € {eur}", nl: "Vandaag bespaard € {eur}" }
+saved_today_info: { en: "What the smart control saved today (results module).", nl: "Wat de slimme sturing vandaag uitspaarde (module results)." }
+solar_tomorrow: { en: "Solar expected tomorrow: {kwh} kWh", nl: "Zon morgen verwacht: {kwh} kWh" }
+solar_tomorrow_title: { en: "Solar tomorrow", nl: "Zon morgen" }
+solar_tomorrow_info: { en: "The forecast expects {kwh} kWh of solar power tomorrow.", nl: "De voorspelling verwacht morgen {kwh} kWh zonnestroom." }
+forecast_today: { en: "Forecast today", nl: "Voorspeld vandaag" }
+forecast_left_today: { en: "Still to come today", nl: "Vandaag nog" }
+forecast_tomorrow: { en: "Tomorrow", nl: "Morgen" }
+rest_word: { en: "idle", nl: "rust" }
+all_rest: { en: "Everything is idle", nl: "Alles is in rust" }
+all_rest_info: { en: "No notable power flows between sun, battery, grid and house right now.", nl: "Er loopt nu geen noemenswaardige stroom tussen zon, batterij, net en huis." }
+solar_today: { en: "solar today", nl: "zon vandaag" }
+solar_today_info: { en: "The panels produced {kwh} kWh today.", nl: "De panelen leverden vandaag {kwh} kWh." }
+solar_today_info_forecast: { en: "The panels produced {kwh} kWh today; forecast {forecast} kWh.", nl: "De panelen leverden vandaag {kwh} kWh; voorspeld {forecast} kWh." }
+from_grid: { en: "from the grid", nl: "van het net" }
+from_grid_info: { en: "{kwh} kWh taken from the grid today (meter).", nl: "Vandaag {kwh} kWh van het net gehaald (meter)." }
+to_grid: { en: "to the grid", nl: "naar het net" }
+to_grid_info: { en: "{kwh} kWh sent to the grid today (meter).", nl: "Vandaag {kwh} kWh naar het net gestuurd (meter)." }
+self_used: { en: "solar used here", nl: "zon zelf gebruikt" }
+self_used_info: { en: "{self} % of today's solar power was used in the house; {own} % of the use did not come from the grid.", nl: "{self} % van de zonnestroom van vandaag werd zelf gebruikt; {own} % van het verbruik kwam niet van het net." }
+today_caption: { en: "today, since midnight", nl: "vandaag, sinds middernacht" }
+own_caption: { en: "own power: share of our use from sun or battery", nl: "eigen stroom: deel van ons verbruik uit zon of batterij" }
+today: { en: "today", nl: "vandaag" }
+now: { en: "now", nl: "nu" }
+own_today_title: { en: "Own power today", nl: "Eigen stroom vandaag" }
+own_today_info: { en: "Of the {kwh} kWh used today (car included), {share} came from sun or battery; {grid} kWh came from the grid. Self-use: {self} of the solar power was used here, {export} kWh went to the grid.", nl: "Van de {kwh} kWh die we vandaag verbruikten (auto inbegrepen) kwam {share} uit zon of batterij; {grid} kWh kwam van het net. Zelfverbruik: {self} van de zonnestroom gebruikten we zelf, {export} kWh ging naar het net." }
+own_now_title: { en: "Own power now", nl: "Eigen stroom nu" }
+own_now_info: { en: "We use {load} right now; {own} of it comes from sun or battery and {grid} from the grid. Of the sun ({solar}) we use {self} ourselves.", nl: "We verbruiken nu {load}; {own} daarvan komt uit zon of batterij en {grid} van het net. Van de zon ({solar}) gebruiken we nu {self} zelf." }
+use_today: { en: "Use today", nl: "Verbruik vandaag" }
+from_grid_cap: { en: "From the grid", nl: "Van het net" }
+self_used_cap: { en: "Solar used here", nl: "Zon zelf gebruikt" }
+use_now: { en: "Use now", nl: "Verbruik nu" }
+use_now_without_car: { en: "Use now (without the car)", nl: "Verbruik nu (zonder auto)" }
+from_own: { en: "From sun or battery", nl: "Uit zon of batterij" }
+kwh_generated: { en: "kWh generated", nl: "kWh opgewekt" }
+forecast_short: { en: "forecast {kwh}", nl: "voorspeld {kwh}" }
+left_short: { en: "still {kwh}", nl: "nog {kwh}" }
+kwh_from_grid: { en: "kWh from grid", nl: "kWh van net" }
+kwh_to_grid: { en: "kWh to grid", nl: "kWh naar net" }
+autarky_short: { en: "self-sufficient {pct} %", nl: "autarkie {pct} %" }
+kw_per_phase: { en: "kW per phase", nl: "kW per fase" }
+import_per_kwh: { en: "import / kWh", nl: "afname / kWh" }
+export_short: { en: "export {cents} c · {level}", nl: "injectie {cents} c · {level}" }
+fossil_on_grid: { en: "fossil on the grid", nl: "fossiel op het net" }
+fossil_on_grid_cap: { en: "Fossil on the grid", nl: "Fossiel op het net" }
+left_for_car: { en: "left for the car", nl: "over voor de auto" }
+left_for_car_10: { en: "Left for the car (10 min)", nl: "Over voor de auto (10 min)" }
+level_negative: { en: "negative", nl: "negatief" }
+level_very_cheap: { en: "very cheap", nl: "heel goedkoop" }
+level_cheap: { en: "cheap", nl: "goedkoop" }
+level_normal: { en: "normal", nl: "normaal" }
+level_expensive: { en: "expensive", nl: "duur" }
+level_very_expensive: { en: "very expensive", nl: "heel duur" }
+level_unknown: { en: "unknown", nl: "onbekend" }
+battery_charges: { en: "Charging {kw}", nl: "Laadt {kw}" }
+battery_charges_info: { en: "The home battery is charging at {kw}.", nl: "De thuisbatterij laadt nu met {kw}." }
+battery_gives: { en: "Giving {kw}", nl: "Geeft {kw}" }
+battery_gives_info: { en: "The home battery gives {kw} to the house.", nl: "De thuisbatterij geeft nu {kw} aan het huis." }
+full: { en: "full", nl: "vol" }
+battery_full: { en: "Battery full", nl: "Batterij vol" }
+battery_full_info: { en: "The home battery is full.", nl: "De thuisbatterij is vol." }
+sun_gone_short: { en: "sun gone", nl: "zon weg" }
+sun_gone: { en: "The sun has left the panels", nl: "Zon is weg van de panelen" }
+sun_gone_info: { en: "The sun has left the panels; the battery still lacks {kwh} kWh to full.", nl: "De zon is van de panelen; de batterij mist nog {kwh} kWh tot vol." }
+full_by: { en: "Full by {time} (sun leaves the panels)", nl: "Vol om {time} (zon weg van de panelen)" }
+not_full_by: { en: "Not full by {time} (sun leaves the panels)", nl: "Niet vol om {time} (zon weg van de panelen)" }
+full_before_shade: { en: "Full before the shade", nl: "Vol voor de schaduw" }
+not_full_before_shade: { en: "Not full before the shade", nl: "Niet vol voor de schaduw" }
+full_by_info: { en: "At {time} the sun leaves the panels. By the forecast the battery is full by then.", nl: "Om {time} is de zon van de panelen. Volgens de prognose is de batterij dan vol." }
+not_full_by_info: { en: "At {time} the sun leaves the panels. By the forecast the battery is not full by then.", nl: "Om {time} is de zon van de panelen. Volgens de prognose is de batterij dan nog niet vol." }
+needed_to_full: { en: "Needed to full", nl: "Nodig tot vol" }
+solar_left: { en: "Solar still to come", nl: "Zon nog verwacht" }
+house_left: { en: "House still uses", nl: "Huis verbruikt nog" }
+margin: { en: "Margin", nl: "Marge" }
+solar_left_label: { en: "Solar still expected: {kwh} kWh", nl: "Zon nog verwacht: {kwh} kWh" }
+solar_left_info: { en: "Until the sun leaves the panels we expect another {kwh} kWh of solar power.", nl: "Tot de zon van de panelen is, verwachten we nog {kwh} kWh zonnestroom." }
+by_forecast: { en: "By the forecast", nl: "Volgens de voorspelling" }
+by_history: { en: "By history", nl: "Volgens de historiek" }
+house_left_label: { en: "House still uses {kwh} kWh", nl: "Huis verbruikt nog {kwh} kWh" }
+house_left_info: { en: "Until the sun is gone the house is expected to use another {kwh} kWh.", nl: "Tot de zon weg is, verbruikt het huis naar verwachting nog {kwh} kWh." }
+margin_label: { en: "Margin to full: {kwh} kWh, needed {needed} kWh", nl: "Marge tot vol: {kwh} kWh, nodig {needed} kWh" }
+battery_aria: { en: "Home battery {pct} percent", nl: "Thuisbatterij {pct} procent" }
+grid_word: { en: "grid", nl: "net" }
+solar_word: { en: "solar", nl: "zon" }
+house_word: { en: "house", nl: "huis" }
+from_grid_kw: { en: "From the grid {kw}", nl: "Van het net {kw}" }
+to_grid_kw: { en: "To the grid {kw}", nl: "Naar het net {kw}" }
+grid_rest: { en: "Grid idle", nl: "Net in rust" }
+solar_kw: { en: "Solar {kw}", nl: "Zon {kw}" }
+house_kw: { en: "House {kw}", nl: "Huis {kw}" }
+battery_tile_charges: { en: "Home battery {pct} %, charging {kw}", nl: "Thuisbatterij {pct} %, laadt {kw}" }
+battery_tile_gives: { en: "Home battery {pct} %, giving {kw}", nl: "Thuisbatterij {pct} %, geeft {kw}" }
+battery_tile_rest: { en: "Home battery {pct} %, idle", nl: "Thuisbatterij {pct} %, in rust" }
+one_phase: { en: "1 phase", nl: "1 fase" }
+three_phases: { en: "3 phases", nl: "3 fasen" }
+charging_kw: { en: "Charging {kw}", nl: "Laadt {kw}" }
+charged_full: { en: "Fully charged", nl: "Vol geladen" }
+fault: { en: "fault", nl: "storing" }
+charger_fault: { en: "The charger reports a fault", nl: "De laadpaal meldt een storing" }
+free: { en: "free", nl: "vrij" }
+no_car: { en: "No car on the charger", nl: "Geen auto aan de laadpaal" }
+no_car_info: { en: "No car is plugged into the charger.", nl: "Er hangt geen auto aan de laadpaal." }
+paused: { en: "pause", nl: "pauze" }
+paused_battery: { en: "Paused: the battery comes first", nl: "Gepauzeerd: de batterij krijgt voorrang" }
+paused_battery_info: { en: "Charging is paused so the home battery gets full first.", nl: "Laden is gepauzeerd zodat de thuisbatterij eerst vol raakt." }
+stopped: { en: "Stopped (charge mode stop)", nl: "Gestopt (laadmodus stop)" }
+stopped_info: { en: "The charger is set to stop: nothing is charged.", nl: "De laadpaal staat op stop: er wordt niet geladen." }
+waiting: { en: "waiting", nl: "wacht" }
+waiting_sun: { en: "Waiting for sun", nl: "Wacht op zon" }
+waiting_sun_info: { en: "The charger is on solar charging and waits for enough surplus.", nl: "De laadpaal staat op zonneladen en wacht op genoeg overschot." }
+paused_plain: { en: "Paused", nl: "Gepauzeerd" }
+paused_info: { en: "Charging is paused.", nl: "Laden is gepauzeerd." }
+mode_solar_only: { en: "solar", nl: "zon" }
+mode_solar_min: { en: "eco", nl: "eco" }
+mode_fast: { en: "fast", nl: "snel" }
+mode_stop: { en: "stop", nl: "stop" }
+mode_unknown: { en: "unknown", nl: "onbekend" }
+mode_reason: { en: "manual (energy screen)", nl: "handmatig (energiescherm)" }
+charge_mode: { en: "Charge mode", nl: "Laadmodus" }
+smart_charging: { en: "smart charging", nl: "slim laden" }
+amps_auto: { en: "amps auto", nl: "ampère auto" }
+phases_auto: { en: "phases auto", nl: "fasen auto" }
+charger_line: { en: "charger {status} · today {today} kWh, solar {solar} kWh", nl: "laadpaal {status} · vandaag {today} kWh, zon {solar} kWh" }
+charger_disconnected: { en: "no car", nl: "geen auto" }
+charger_connected: { en: "car plugged in", nl: "auto ingeplugd" }
+charger_charging: { en: "charging", nl: "laadt" }
+charger_waiting: { en: "waiting", nl: "wacht" }
+charger_complete: { en: "done", nl: "klaar" }
+charger_unknown: { en: "unknown", nl: "onbekend" }
+charging: { en: "Charging", nl: "Laden" }
+car_bar_aria: { en: "Charge level {pct} percent, limit {limit} percent", nl: "Laadstand {pct} procent, limiet {limit} procent" }
+limit_pct: { en: "limit {pct} %", nl: "limiet {pct} %" }
+tomorrow_word: { en: "tomorrow", nl: "morgen" }
+cheapest_2h: { en: "Cheapest 2 hours: {span}{mean}", nl: "Goedkoopste 2 uur: {span}{mean}" }
+cheapest_2h_info: { en: "The cheapest 2-hour block is {span}. Run large consumers then.", nl: "Het goedkoopste blok van 2 uur is {span}. Grote verbruikers draai je best dan." }
+month_peak_label: { en: "Month peak {kw} kW", nl: "Maandpiek {kw} kW" }
+quarter_label: { en: "This quarter (expected) {kw} kW", nl: "Dit kwartier (verwacht) {kw} kW" }
+price_aria: { en: "Power price", nl: "Stroomprijs" }
+import_word: { en: "import", nl: "afname" }
+export_word: { en: "export", nl: "injectie" }
+import_cap: { en: "Import", nl: "Afname" }
+export_cap: { en: "Export", nl: "Injectie" }
+price_level_label: { en: "Price level {level}", nl: "Prijsniveau {level}" }
+price_level_info: { en: "Power costs {cents} c per kWh now: that is {level} compared with the coming hours.", nl: "Stroom kost nu {cents} c per kWh: dat is {level} vergeleken met de komende uren." }
+negative: { en: "negative", nl: "negatief" }
+export_costs: { en: "Exporting costs money now", nl: "Injecteren kost nu geld" }
+export_costs_info: { en: "The export price is negative: sending power to the grid costs money now. Better use it yourself.", nl: "De injectieprijs is negatief: stroom naar het net sturen kost nu geld. Verbruik liever zelf." }
+coming_hours: { en: "coming hours", nl: "komende uren" }
+cheap_power: { en: "Cheap power", nl: "Goedkope stroom" }
+cheap_off_title: { en: "Cheap power: off", nl: "Goedkope stroom: uit" }
+cheap_now: { en: "Cheap power now", nl: "Goedkope stroom nu" }
+cheap_off_line: { en: "nothing extra is used", nl: "er wordt niets extra benut" }
+cheap_waits: { en: "waiting for a cheap moment", nl: "wacht op een goedkoop moment" }
+cheap_adv: { en: "status {status} · peak headroom {kw} kW", nl: "status {status} · piekruimte {kw} kW" }
+word_off: { en: "off", nl: "uit" }
+now_word: { en: "now", nl: "nu" }
+cheap_off_info: { en: "Using cheap power is off: nothing extra is taken from the grid.", nl: "Goedkope stroom benutten staat uit: er wordt niets extra van het net gehaald." }
+cheap_waits_info: { en: "Cheap power is on and waits for a cheap moment. Status: {status}.", nl: "Goedkope stroom staat aan en wacht op een goedkoop moment. Status: {status}." }
+cheap_use: { en: "use it", nl: "benutten" }
+cheap_use_aria: { en: "Use cheap power", nl: "Goedkope stroom benutten" }
+# states of sensor.ev_charging_cheap_status (ev-charging), shown as the reason on the cheap power card
+cheapst_off: { en: "cheap power is off", nl: "goedkope stroom staat uit" }
+cheapst_no_cheap_power: { en: "no cheap power now", nl: "nu geen goedkope stroom" }
+cheapst_no_sun: { en: "no sun", nl: "geen zon" }
+cheapst_no_car: { en: "no car on the charger", nl: "geen auto aan de laadpaal" }
+cheapst_car_full: { en: "the car is at its limit", nl: "de auto zit aan zijn limiet" }
+cheapst_battery_behind: { en: "the home battery is behind", nl: "de thuisbatterij loopt achter" }
+cheapst_battery_not_full: { en: "the home battery is not full yet", nl: "de thuisbatterij is nog niet vol" }
+cheapst_battery_discharging: { en: "the home battery is discharging", nl: "de thuisbatterij ontlaadt" }
+cheapst_month_peak: { en: "the month peak is close", nl: "de maandpiek komt dichtbij" }
+cheapst_grid_import_high: { en: "the house takes too much from the grid", nl: "het huis haalt te veel van het net" }
+cheapst_too_little_surplus: { en: "too little surplus", nl: "te weinig overschot" }
+cheapst_commands_used_up: { en: "car commands used up for today", nl: "auto-commando's voor vandaag op" }
+cheapst_charger_busy: { en: "the charger is busy (charge plan or by hand)", nl: "de laadpaal is bezet (laadplan of met de hand)" }
+cheapst_grid_assist: { en: "the grid helps the car", nl: "het net helpt de auto" }
+status_off: { en: "smart charging is off", nl: "slim laden staat uit" }
+status_no_car: { en: "no car on the charger", nl: "geen auto aan de laadpaal" }
+status_car_full: { en: "the car is at its limit", nl: "de auto zit aan zijn limiet" }
+status_solar: { en: "charging on solar surplus", nl: "laadt op zonne-overschot" }
+status_paused_battery: { en: "the battery charges first", nl: "de batterij laadt eerst" }
+status_grid_assist: { en: "the grid helps in the cheap window", nl: "het net helpt in het goedkope venster" }
+status_plan: { en: "charging to the charge plan", nl: "laadt volgens het laadplan" }
+status_manual: { en: "set by hand", nl: "handmatig ingesteld" }
+status_peak_limited: { en: "held back by the month peak", nl: "beperkt door de maandpiek" }
+hw_target: { en: "Target tomorrow morning {t} °C", nl: "Doel morgenvroeg {t} °C" }
+hw_target_met: { en: "Target tomorrow morning {t} °C, reached", nl: "Doel morgenvroeg {t} °C, gehaald" }
+hw_target_info: { en: "By the morning the water must be {t} °C. Now {now} °C.", nl: "Tegen de ochtend moet het water {t} °C zijn. Nu {now} °C." }
+hw_target_info_shower: { en: "By the morning the water must be {t} °C (shower on). Now {now} °C.", nl: "Tegen de ochtend moet het water {t} °C zijn (douche aan). Nu {now} °C." }
+hw_heat_at: { en: "Heating at {time}", nl: "Bijwarmen om {time}" }
+hw_heat_at_info: { en: "The tank heats at {time}, the cheapest hour before sunrise.", nl: "De boiler warmt bij om {time}, het goedkoopste uur voor zonsopgang." }
+shower: { en: "shower tomorrow morning", nl: "douche morgenvroeg" }
+shower_on: { en: "shower tomorrow morning: on", nl: "douche morgenvroeg: aan" }
+shower_word: { en: "shower", nl: "douche" }
+heating_word: { en: "heating", nl: "warmt op" }
+hw_heating: { en: "The tank is heating", nl: "De boiler warmt op" }
+solar_today_kwh: { en: "solar today · {kwh} kWh", nl: "zon vandaag · {kwh} kWh" }
+now_cap: { en: "Now", nl: "Nu" }
+generated_today: { en: "Generated today", nl: "Vandaag opgewekt" }
+sun_leaves: { en: "Sun leaves the panels", nl: "Zon weg van de panelen" }
+sunset_at: { en: "sunset {time}", nl: "ondergang {time}" }
+now_from_grid: { en: "Now from the grid", nl: "Nu van het net" }
+now_to_grid: { en: "Now to the grid", nl: "Nu naar het net" }
+phase_row: { en: "Phase {n}", nl: "Fase {n}" }
+today_from_grid: { en: "Today from the grid", nl: "Vandaag van het net" }
+today_to_grid: { en: "Today to the grid", nl: "Vandaag naar het net" }
+price_import: { en: "Import price", nl: "Prijs afname" }
+price_export: { en: "Export price", nl: "Prijs injectie" }
+price_level: { en: "Price level", nl: "Prijsniveau" }
+month_peak: { en: "Month peak", nl: "Maandpiek" }
+quarter_now: { en: "This quarter (expected)", nl: "Dit kwartier (verwacht)" }
+headroom: { en: "Peak headroom", nl: "Piekruimte" }
+house_power_sensor: { en: "House power (sensor)", nl: "Verbruik huis (sensor)" }
+now_from_sun: { en: "Now from the sun", nl: "Nu van de zon" }
+now_from_battery: { en: "Now from the battery", nl: "Nu van de batterij" }
+used_today: { en: "Used today (car included)", nl: "Vandaag verbruikt (auto inbegrepen)" }
+autarky_today: { en: "Self-sufficient today", nl: "Zelfvoorzienend vandaag" }
+use_word: { en: "use", nl: "verbruik" }
+charge_level: { en: "Charge level", nl: "Laadstand" }
+charge_level_pct: { en: "charge level %", nl: "laadstand %" }
+charging_now: { en: "Charging now", nl: "Laadt nu" }
+giving_now: { en: "Giving now", nl: "Geeft nu" }
+charged_today: { en: "Charged today", nl: "Vandaag geladen" }
+discharged_today: { en: "Discharged today", nl: "Vandaag ontladen" }
+source_forecast: { en: "forecast", nl: "voorspelling" }
+source_history: { en: "history", nl: "historiek" }
+forecast_vs_history: { en: "By the forecast · by history", nl: "Volgens de voorspelling · volgens de historiek" }
+battery_first: { en: "Battery comes first", nl: "Batterij krijgt voorrang" }
+word_yes: { en: "yes", nl: "ja" }
+word_no: { en: "no", nl: "nee" }
+charger: { en: "Charger", nl: "Laadpaal" }
+now_to_car: { en: "Now to the car", nl: "Nu naar de auto" }
+phases: { en: "Phases", nl: "Fasen" }
+charged_today_car: { en: "Charged today · of it solar", nl: "Vandaag geladen · waarvan zon" }
+smart_status: { en: "Smart charging", nl: "Slim laden" }
+battery_feeds_car: { en: "Battery feeds the car too much", nl: "Batterij voedt de auto te veel" }
+car_needs: { en: "Car needs to its limit", nl: "Auto nodig tot limiet" }
+car_commands: { en: "Car commands today", nl: "Auto-commando's vandaag" }
+today_cap: { en: "Today", nl: "Vandaag" }
+generated: { en: "Generated", nl: "Opgewekt" }
+to_house: { en: "… to the house", nl: "… naar het huis" }
+to_car: { en: "… to the car", nl: "… naar de auto" }
+to_battery: { en: "… to the battery", nl: "… naar de batterij" }
+to_grid_dots: { en: "… to the grid", nl: "… naar het net" }
+water_temperature: { en: "Water temperature", nl: "Watertemperatuur" }
+estimated: { en: "estimated", nl: "geschat" }
+busy: { en: "busy", nl: "bezig" }
+hw_on_surplus: { en: "Heating on solar surplus", nl: "Opwarmen op zonne-overschot" }
+hw_pays: { en: "Heating instead of exporting pays", nl: "Opwarmen i.p.v. injecteren loont" }
+hw_pays_no: { en: "no, exporting pays more", nl: "nee, injecteren brengt meer op" }
+hw_by_sunrise: { en: "By sunrise {t} °C · cheapest hour", nl: "Tegen zonsopgang {t} °C · goedkoopste uur" }
+hw_bath_hour: { en: "Cheapest hour before the bath", nl: "Goedkoopste uur voor het bad" }
+plan_until: { en: "Plan until the sun leaves ({time})", nl: "Plan tot de zon weg is ({time})" }
+plan_battery: { en: "1 · Battery to full", nl: "1 · Batterij tot vol" }
+plan_car: { en: "2 · Car to its limit", nl: "2 · Auto tot limiet" }
+plan_tank: { en: "3 · Tank to its maximum", nl: "3 · Boiler tot maximum" }
+plan_left_export: { en: "Left over (export)", nl: "Blijft over (injectie)" }
+plan_note_enough: { en: "Enough sun for battery, car and tank: the tank may heat at the first export.", nl: "Er is genoeg zon voor batterij, auto én boiler: de boiler mag al bij de eerste injectie." }
+plan_note_wait: { en: "Battery and car come first: the tank waits until the battery is full or more sun is forecast.", nl: "Batterij en auto gaan voor: de boiler wacht tot de batterij vol is of er meer zon voorspeld wordt." }
+water_c: { en: "water temperature °C", nl: "watertemperatuur °C" }
+hp_idle: { en: "idle", nl: "rust" }
+hp_hot_water: { en: "hot water", nl: "warm water" }
+hp_heating: { en: "heating", nl: "verwarmen" }
+hp_cooling: { en: "cooling", nl: "koelen" }
+hp_unknown: { en: "unknown", nl: "onbekend" }
+limit_word: { en: "limit", nl: "limiet" }
+charge_power: { en: "Charge power", nl: "Laadvermogen" }
+charge_current_set: { en: "Charge current set", nl: "Laadstroom ingesteld" }
+car_state: { en: "State", nl: "Toestand" }
+graph_loading: { en: "loading graph…", nl: "grafiek laden…" }
+graph_unavailable: { en: "graph not available", nl: "grafiek niet beschikbaar" }
+graph_today: { en: "Today so far", nl: "Verloop vandaag" }
+tap_row_hint: { en: "tap a row for the history of that sensor", nl: "tik op een regel voor de historiek van die sensor" }
+settings_energy_plan: { en: "Energy plan", nl: "Energieplan" }
+settings_ev_charging: { en: "Smart charging", nl: "Slim laden" }
+settings_charger: { en: "Charger", nl: "Laadpaal" }
+settings_hot_water: { en: "Hot water", nl: "Warm water" }
+hw_setpoint: { en: "Heater set point {t} °C", nl: "Doel boiler {t} °C" }
+
+# --- analysis and flows dashboards (dashboard/views.py, analysis config) ---
+an_dashboard_title: { en: "Energy analysis", nl: "Energie-analyse" }
+an_screen_title: { en: "Energy", nl: "Energie" }
+an_view_period: { en: "Period", nl: "Periode" }
+an_view_power: { en: "Power", nl: "Vermogen" }
+an_view_tariff: { en: "Tariff", nl: "Tarief" }
+an_view_consumers: { en: "Consumers", nl: "Verbruikers" }
+an_view_trends: { en: "Trends", nl: "Trends" }
+an_view_battery: { en: "Battery", nl: "Batterij" }
+an_view_flows: { en: "Energy flows", nl: "Energiestromen" }
+an_flows: { en: "Flows", nl: "Stromen" }
+an_course: { en: "Over time", nl: "Verloop" }
+an_self_sufficient: { en: "Self-sufficient", nl: "Zelfvoorzienend" }
+an_solar: { en: "Solar", nl: "Zon" }
+an_costs: { en: "Costs", nl: "Kosten" }
+an_per_device: { en: "Per device", nl: "Per toestel" }
+an_total: { en: "Total", nl: "Totaal" }
+an_night: { en: "night", nl: "nacht" }
+an_per_year: { en: "per year", nl: "per jaar" }
+an_year_short: { en: "year", nl: "jaar" }
+an_per_night: { en: "Per night", nl: "Per nacht" }
+an_median_30: { en: "Median", nl: "Mediaan" }
+an_per_month: { en: "Per month", nl: "Per maand" }
+an_house: { en: "House", nl: "Huis" }
+an_house_without_car: { en: "House without the car", nl: "Huis zonder wagen" }
+an_average: { en: "Average", nl: "Gemiddeld" }
+an_base_load: { en: "Base load at night", nl: "Nachtbodem" }
+an_per_phase: { en: "Per phase", nl: "Per fase" }
+an_ventilation: { en: "Ventilation", nl: "Ventilatie" }
+an_rest: { en: "Rest", nl: "Rest" }
+an_chip_month_peak: { en: "month peak", nl: "maandpiek" }
+an_month_peak: { en: "Month peak", nl: "Maandpiek" }
+an_month_peak_info: { en: "Highest quarter-hour average of this month.", nl: "Hoogste kwartiergemiddelde van deze maand." }
+an_chip_quarter: { en: "quarter", nl: "kwartier" }
+an_quarter: { en: "This quarter", nl: "Dit kwartier" }
+an_quarter_info: { en: "Expected average of the running quarter hour.", nl: "Verwacht gemiddelde van het lopende kwartier." }
+an_chip_average_peak: { en: "avg. peak", nl: "gem. piek" }
+an_average_peak: { en: "Average peak", nl: "Gemiddelde piek" }
+an_average_peak_info: { en: "Average month peak over 12 months, at least the floor: the base of the capacity tariff.", nl: "Gemiddelde maandpiek over 12 maanden, minstens de ondergrens: de basis van het capaciteitstarief." }
+an_target: { en: "target {kw} kW", nl: "doel {kw} kW" }
+an_floor: { en: "floor {kw} kW", nl: "ondergrens {kw} kW" }
+an_lower_bound: { en: "Lower bound", nl: "Ondergrens" }
+an_meter: { en: "Meter", nl: "Meter" }
+an_capacity_tariff: { en: "Tariff", nl: "Tarief" }
+an_target_limit: { en: "Target limit", nl: "Doellimiet" }
+an_per_day: { en: "per day", nl: "per dag" }
+an_per_day_cap: { en: "Per day", nl: "Per dag" }
+an_kwh_to_shift: { en: "kWh to shift", nl: "kWh te verschuiven" }
+an_quarters_above: { en: "Quarters", nl: "Kwartieren" }
+an_above: { en: "Above {kw} kW", nl: "Boven {kw} kW" }
+an_highest: { en: "Highest", nl: "Hoogste" }
+an_per_hour: { en: "Per hour", nl: "Per uur" }
+an_per_quarter: { en: "Per quarter", nl: "Per kwartier" }
+an_one_quarter: { en: "One quarter", nl: "Eén kwartier" }
+an_longer: { en: "Longer", nl: "Langer" }
+an_quarters: { en: "quarters", nl: "kwartieren" }
+an_netted: { en: "Netted", nl: "Verrekend" }
+an_net_quarter: { en: "Meter", nl: "Meter" }
+an_cause: { en: "Cause", nl: "Oorzaak" }
+an_day_peak: { en: "Day peak", nl: "Dagpiek" }
+an_peak_source_meter: { en: "meter", nl: "meter" }
+an_peak_source_hourly: { en: "hourly data only", nl: "alleen uurdata" }
+an_peak_source_none: { en: "no data", nl: "geen data" }
+an_peak_cut: { en: "(measured from {time})", nl: "(pas gemeten vanaf {time})" }
+an_peak_register_hour: { en: "{hour}:00 (meter)", nl: "{hour}u (meter)" }
+an_dynamic: { en: "Dynamic", nl: "Dynamisch" }
+an_variable: { en: "Variable", nl: "Variabel" }
+an_fixed: { en: "Fixed", nl: "Vast" }
+an_comparison: { en: "Comparison", nl: "Vergelijking" }
+an_cost_per_day: { en: "Cost per day", nl: "Kost per dag" }
+an_advantage: { en: "Advantage", nl: "Voordeel" }
+an_vs_variable: { en: "Variable", nl: "Variabel" }
+an_vs_fixed: { en: "Fixed", nl: "Vast" }
+an_you_paid: { en: "You", nl: "Jij" }
+an_day_average: { en: "Average", nl: "Gemiddeld" }
+an_your_export: { en: "You", nl: "Jij" }
+an_variable_fixed: { en: "Fixed", nl: "Vast" }
+an_per_kwh: { en: "Per kWh", nl: "Per kWh" }
+an_import_price: { en: "Import", nl: "Afname" }
+an_export_price: { en: "Export", nl: "Injectie" }
+an_import_per_hour: { en: "Import per hour", nl: "Net per uur" }
+an_export_per_hour: { en: "Export per hour", nl: "Injectie per uur" }
+an_import_price_short: { en: "Price", nl: "Prijs" }
+an_export_price_short: { en: "Price", nl: "Prijs" }
+an_your_import: { en: "Import", nl: "Net" }
+an_your_export_short: { en: "Export", nl: "Injectie" }
+an_grid_fee_day: { en: "Grid day", nl: "Net dag" }
+an_grid_fee_night: { en: "Grid night", nl: "Net nacht" }
+an_levies: { en: "Levies", nl: "Toeslagen" }
+an_capacity_price: { en: "Capacity", nl: "Capaciteit" }
+an_fixed_fee: { en: "Fixed fee", nl: "Vaste vergoeding" }
+an_parameters: { en: "Parameters", nl: "Parameters" }
+an_price_now_line: { en: "Now a kWh from the grid costs {import_c} c€ and a kWh of export brings {export_c} c€.", nl: "Nu kost een kWh uit het net {import_c} c€ en brengt een kWh injectie {export_c} c€ op." }
+an_split: { en: "Split", nl: "Verdeling" }
+an_last_30_days: { en: "Last 30 days", nl: "Laatste 30 dagen" }
+an_not_explained: { en: "Rest", nl: "Rest" }
+an_starts: { en: "Starts per hour", nl: "Startmomenten per uur" }
+an_sun_window: { en: "09-17", nl: "09-17u" }
+an_car: { en: "Car", nl: "Wagen" }
+an_heat_pump: { en: "Heat pump", nl: "Warmtepomp" }
+an_car_source: { en: "Source (kWh)", nl: "Bron (kWh)" }
+an_from_sun_or_battery: { en: "Sun", nl: "Zon" }
+an_at_most_grid: { en: "Grid", nl: "Net" }
+an_car_profile: { en: "Day (kW)", nl: "Dag (kW)" }
+an_car_charging: { en: "Car", nl: "Wagen" }
+an_export: { en: "Export", nl: "Injectie" }
+an_import: { en: "Import", nl: "Afname" }
+an_import_day: { en: "Day", nl: "Dag" }
+an_import_night: { en: "Night", nl: "Nacht" }
+an_export_day: { en: "Export day", nl: "Injectie dag" }
+an_export_night: { en: "Export night", nl: "Injectie nacht" }
+an_now: { en: "now", nl: "nu" }
+an_ventilation_now: { en: "Ventilation now", nl: "Ventilatie nu" }
+an_seasons: { en: "Seasons", nl: "Seizoenen" }
+an_season_winter: { en: "Winter", nl: "Winter" }
+an_season_spring: { en: "Spring", nl: "Lente" }
+an_season_summer: { en: "Summer", nl: "Zomer" }
+an_season_autumn: { en: "Autumn", nl: "Herfst" }
+an_months_short: { en: "Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec", nl: "jan,feb,mrt,apr,mei,jun,jul,aug,sep,okt,nov,dec" }
+an_months_long: { en: "January,February,March,April,May,June,July,August,September,October,November,December", nl: "januari,februari,maart,april,mei,juni,juli,augustus,september,oktober,november,december" }
+an_weekdays_long: { en: "Monday,Tuesday,Wednesday,Thursday,Friday,Saturday,Sunday", nl: "maandag,dinsdag,woensdag,donderdag,vrijdag,zaterdag,zondag" }
+an_running: { en: "still running", nl: "loopt nog" }
+an_rest_of_house: { en: "House", nl: "Huis" }
+an_from_grid: { en: "From the grid", nl: "Uit het net" }
+an_house_per_day: { en: "House/day", nl: "Huis/dag" }
+an_grid_per_day: { en: "Grid/day", nl: "Net/dag" }
+an_measured: { en: "Measured", nl: "Gemeten" }
+an_days: { en: "days", nl: "dagen" }
+an_period_30_days: { en: "Last 30 days", nl: "Laatste 30 dagen" }
+an_battery_charges: { en: "Battery charges", nl: "Batterij laadt" }
+an_battery_discharges: { en: "Battery discharges", nl: "Batterij ontlaadt" }
+an_of_the_day: { en: "of the day", nl: "van de dag" }
+an_day_profile: { en: "Day profile", nl: "Dagprofiel" }
+an_sun_window_short: { en: "09-15", nl: "09u-15u" }
+an_30_days: { en: "30 days", nl: "30 dagen" }
+an_grid_kwh: { en: "Grid (kWh)", nl: "Net (kWh)" }
+an_solar_export_kwh: { en: "Solar and export (kWh)", nl: "Zon en injectie (kWh)" }
+an_solar_and_grid: { en: "Solar and grid", nl: "Zon en net" }
+an_charger: { en: "Charger", nl: "Laadpaal" }
+an_charge: { en: "charge", nl: "lading" }
+an_charge_level: { en: "Charge level", nl: "Lading" }
+an_charged_kwh: { en: "Per day (kWh)", nl: "Per dag (kWh)" }
+an_charged: { en: "Charged", nl: "Geladen" }
+an_discharged: { en: "Discharged", nl: "Ontladen" }
+an_saving_per_day: { en: "Per day", nl: "Per dag" }
+an_saving_total: { en: "Total", nl: "Opgeteld" }
+an_investment: { en: "Investment", nl: "Investering" }
+an_return: { en: "Return", nl: "Opbrengst" }
+an_saving: { en: "Saving", nl: "Besparing" }
+an_not_empty: { en: "not empty before 09:00", nl: "niet leeg voor 09:00" }
+an_evening: { en: "Evening", nl: "Avond" }
+an_soc_over_day: { en: "Charge level", nl: "Laadtoestand" }
+an_today: { en: "today", nl: "vandaag" }
+an_average_30: { en: "Average", nl: "Gemiddeld" }
+an_reserve: { en: "reserve {pct} %", nl: "reserve {pct} %" }
+an_empty_at: { en: "Empty at", nl: "Leeg om" }
+an_midnight: { en: "midnight", nl: "middernacht" }
+an_days_full: { en: "Fully charged", nl: "Vol geladen" }
+an_full: { en: "Full", nl: "Vol" }
+an_not_full: { en: "Not full", nl: "Niet vol" }
+an_module_shift: { en: "1 module", nl: "1 module" }
+an_module_total_1: { en: "Sum 1", nl: "Som 1" }
+an_module_total_2: { en: "Sum 2", nl: "Som 2" }
+an_extra_module: { en: "Extra module", nl: "Extra module" }
+an_module_potential: { en: "Potential", nl: "Potentieel" }
+an_without_battery: { en: "Without battery", nl: "Zonder batterij" }
+an_last_year: { en: "Last year", nl: "Vorig jaar" }
+an_effect: { en: "Effect", nl: "Effect" }
+an_direct_sun: { en: "Direct from the sun", nl: "Direct van de zon" }
+an_from_battery: { en: "From the battery", nl: "Uit de batterij" }
+an_to_house: { en: "To the house", nl: "Naar het huis" }
+an_to_car: { en: "To the car", nl: "Naar de wagen" }
+an_to_battery: { en: "To the battery", nl: "Naar de batterij" }
+an_to_grid: { en: "To the grid", nl: "Naar het net" }
+an_of_which_car: { en: "Of which the car", nl: "Waarvan de wagen" }
+an_flows_title: { en: "Energy flows", nl: "Energiestromen" }
+an_pick_date: { en: "Pick a date", nl: "Kies een datum" }
+an_previous: { en: "Previous", nl: "Vorige" }
+an_today_cap: { en: "Today", nl: "Vandaag" }
+an_next: { en: "Next", nl: "Volgende" }
+an_where_energy_went: { en: "Where the energy went", nl: "Waar ging de energie naartoe" }
+an_average_week: { en: "Average day, 7 days", nl: "Gemiddelde dag, 7 dagen" }
+an_average_per_day: { en: "Average per day", nl: "Gemiddeld per dag" }
+an_week_text: { en: "Average from {start} up to and including {end}.", nl: "Gemiddelde van {start} tot en met {end}." }
+an_where_use_came_from: { en: "Where your use came from", nl: "Waar je verbruik vandaan komt" }
+an_where_sun_went: { en: "Where your sun went", nl: "Waar je zon naartoe gaat" }
+
+# --- helpers, scripts, automation ---
+helper_flows_date: { en: "Energy flows: date", nl: "Energiestromen: datum" }
+helper_flows_unit: { en: "Energy flows: show in", nl: "Energiestromen: toon in" }
+helper_profiles_period: { en: "Day profile: period", nl: "Dagprofiel: periode" }
+script_day_back: { en: "Energy flows: previous day", nl: "Energiestromen: vorige dag" }
+script_day_forward: { en: "Energy flows: next day", nl: "Energiestromen: volgende dag" }
+script_today: { en: "Energy flows: today", nl: "Energiestromen: vandaag" }
+automation_follow_today: { en: "Energy flows: follow today", nl: "Energiestromen: volg vandaag" }
+automation_follow_today_description: { en: "At midnight the energy-flows view moves on to the new day, unless you picked an older date (ha-kit module energy).", nl: "Om middernacht schuift de energiestromen-weergave door naar de nieuwe dag, behalve als je een oudere datum koos (ha-kit module energy)." }

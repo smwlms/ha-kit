@@ -1,0 +1,6 @@
+<# Helpers of the module. Uploaded by _template/deploy.py to /config/packages/ha_kit_template.yaml. #>
+# Template module: helpers (ha-kit module _template). No `initial`: deploy.py sets the default once.
+input_boolean:
+  ha_kit_template_enabled:
+    name: <@ t('helper_name') @>
+    icon: mdi:puzzle-outline

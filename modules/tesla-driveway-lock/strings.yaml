@@ -1,0 +1,118 @@
+# User-facing texts of the module tesla-driveway-lock, one key per text: {en: ..., nl: ...}. Used in the module's
+# files as <@ t('key') @> (tools/fill.py picks house.language, default en; a missing language falls back to en).
+# Rules for these texts:
+# - no double quotes or backslashes: they are inserted between double quotes in YAML;
+# - {car}, {minutes}, {reason}, ... without a value at fill time stay in the text and are filled in by Home Assistant
+#   at run time (replace('{car}', ...)); keep them when you translate;
+# - no emoji: the templates add them;
+# - the verdicts of the garage photo are fixed English values (occupied, empty, unsure): Gemini answers with them and
+#   they are stored in input_text.tesla_garage_photo. The verdict_* texts are only how they are shown.
+
+# --- helper names (package.yaml), zone and sensor names; {car} is filled in at fill time ---
+helper_enabled: { en: "Tesla on driveway: lock automatically", nl: "Tesla op oprit automatisch op slot" }
+helper_minutes: { en: "Tesla on driveway: lock after", nl: "Tesla op oprit slot na" }
+helper_photo: { en: "Tesla garage photo", nl: "Tesla garagefoto" }
+zone_name: { en: "Driveway", nl: "Oprit" }
+sensor_home_unlocked: { en: "Tesla driveway {car} home unlocked", nl: "Tesla oprit {car} thuis open" }
+
+# --- verdicts of the garage photo (display only) ---
+verdict_occupied: { en: "occupied", nl: "bezet" }
+verdict_empty: { en: "empty", nl: "leeg" }
+verdict_unsure: { en: "unsure", nl: "onzeker" }
+
+# --- automation tesla_driveway_lock ---
+lock_alias: { en: "Tesla on the driveway: lock automatically", nl: "Tesla op de oprit automatisch op slot" }
+lock_description:
+  en: >-
+    A Tesla that has been in P at home and unlocked for input_number.tesla_driveway_lock_minutes
+    (binary_sensor.tesla_driveway_<car>_home_unlocked). When it is outside, one lock command (wakes the car),
+    counted in counter.tesla_commands_today. Outside =
+  nl: >-
+    Een Tesla die thuis input_number.tesla_driveway_lock_minutes in P staat en niet op slot is
+    (binary_sensor.tesla_driveway_<auto>_home_unlocked). Staat hij buiten, dan één slotcommando (wekt de auto),
+    geteld in counter.tesla_commands_today. Buiten =
+lock_description_photo:
+  en: >-
+    its own spot is empty on the garage photo on arrival (input_text.tesla_garage_photo, taken after this car went
+    into P); no usable photo: GPS within the radius of zone.driveway.
+  nl: >-
+    de eigen plaats is leeg op de garagefoto bij aankomst (input_text.tesla_garage_photo, genomen nadat deze auto in
+    P ging); geen bruikbare foto: GPS binnen de straal van zone.driveway.
+lock_description_gps:
+  en: GPS within the radius of zone.driveway.
+  nl: GPS binnen de straal van zone.driveway.
+lock_description_tail:
+  en: One attempt per parking. Master switch input_boolean.tesla_driveway_lock_enabled.
+  nl: Eén poging per parkeerbeurt. Hoofdschakelaar input_boolean.tesla_driveway_lock_enabled.
+logbook_lock: { en: "Tesla driveway lock", nl: "Tesla oprit-slot" }
+camera_sentence: { en: "garage photo {time}: {spots}", nl: "garagefoto {time}: {spots}" }
+camera_no_spot: { en: "no fixed spot in the garage", nl: "geen vaste plaats in de garage" }
+camera_no_photo: { en: "no garage photo after parking", nl: "geen garagefoto na het parkeren" }
+reason_photo_empty: { en: "garage photo: spot {spot} empty", nl: "garagefoto: plaats {spot} leeg" }
+reason_photo_occupied: { en: "garage photo: spot {spot} occupied", nl: "garagefoto: plaats {spot} bezet" }
+reason_gps:
+  en: "GPS {m} m from the middle of zone.driveway (radius {radius} m)"
+  nl: "GPS {m} m van het midden van zone.driveway (straal {radius} m)"
+log_stays_unlocked:
+  en: "{car} stays unlocked: it is in the garage ({reason}). {camera}"
+  nl: "{car} blijft open: staat in de garage ({reason}). {camera}"
+title_locked: { en: "{car} locked", nl: "{car} op slot" }
+title_not_locked: { en: "{car} not locked", nl: "{car} niet op slot" }
+message_locked:
+  en: "Was unlocked on the driveway for {minutes} min. Locked automatically."
+  nl: "Stond {minutes} min open op de oprit. Automatisch vergrendeld."
+message_not_locked:
+  en: >-
+    Was unlocked on the driveway for {minutes} min, but the lock command failed (lock: {state}).
+    There will be no new attempt; lock it in the Tesla app.
+  nl: >-
+    Stond {minutes} min open op de oprit, maar het slotcommando lukte niet (slot: {state}).
+    Er komt geen nieuwe poging; vergrendel hem in de Tesla-app.
+log_locked:
+  en: "{car} locked: was unlocked outside for {minutes} min ({reason}){woken}."
+  nl: "{car} op slot gedaan: stond {minutes} min open buiten ({reason}){woken}."
+log_woken: { en: ", woken", nl: ", gewekt" }
+log_not_locked:
+  en: "{car} NOT locked: no confirmation within 90 s (lock {state}, asleep {asleep}, {reason}). No new attempt."
+  nl: "{car} NIET op slot: geen bevestiging binnen 90 s (slot {state}, sliep {asleep}, {reason}). Geen nieuwe poging."
+
+# --- automation tesla_garage_arrival_photo; {camera}, {spots}, {dark} are filled in at fill time ---
+photo_alias: { en: "Tesla garage photo on arrival", nl: "Tesla garagefoto bij aankomst" }
+photo_description:
+  en: >-
+    A Tesla with a fixed spot in the garage (cars[].garage_spot) shifts into P at home. After 5 s a snapshot of
+    {camera}; Gemini says per spot occupied, empty or unsure ({spots}). The result with its time goes into
+    input_text.tesla_garage_photo and is used by automation.tesla_driveway_lock.
+  nl: >-
+    Een Tesla met een vaste plaats in de garage (cars[].garage_spot) schakelt thuis naar P. Na 5 s een snapshot van
+    {camera}; Gemini zegt per plaats bezet, leeg of onzeker ({spots}). Het resultaat met tijdstip komt in
+    input_text.tesla_garage_photo en wordt gebruikt door automation.tesla_driveway_lock.
+photo_description_dark:
+  en: No photo while it is dark in the garage ({dark} on).
+  nl: Geen foto als het donker is in de garage ({dark} aan).
+logbook_photo: { en: "Tesla garage photo", nl: "Tesla garagefoto" }
+log_dark:
+  en: "{car} in P, but the garage is dark: no photo (the lock decides later with the GPS)"
+  nl: "{car} in P, maar de garage is donker: geen foto (het slot beslist later met de GPS)"
+log_photo: { en: "{car} in P: {result}. {description} ({file})", nl: "{car} in P: {result}. {description} ({file})" }
+log_no_answer:
+  en: "{car} in P: no answer from Gemini, photo not judged ({file})"
+  nl: "{car} in P: geen antwoord van Gemini, foto niet beoordeeld ({file})"
+ai_task_name: { en: "Garage photo on arrival", nl: "Garagefoto bij aankomst" }
+ai_intro_one:
+  en: "This is a photo of the security camera in a garage. There is one parking spot: {spots}, seen from the camera."
+  nl: "Dit is een foto van de bewakingscamera in een garage. Er is één parkeerplaats: {spots}, gezien vanuit de camera."
+ai_intro_many:
+  en: "This is a photo of the security camera in a garage. There are {count} parking spots: {spots}, seen from the camera."
+  nl: "Dit is een foto van de bewakingscamera in een garage. Er zijn {count} parkeerplaatsen: {spots}, gezien vanuit de camera."
+ai_rules:
+  en: >-
+    Say per spot whether a car is parked there: occupied, empty or unsure. When the image is (almost) black or
+    unclear, answer 'unsure'. Only say 'empty' when you clearly see the empty spot.
+  nl: >-
+    Zeg per plaats of er een auto staat: occupied (bezet), empty (leeg) of unsure (onzeker). Is het beeld (bijna)
+    zwart of onduidelijk, antwoord dan 'unsure'. Zeg enkel 'empty' als je de lege plaats duidelijk ziet.
+ai_spot_question:
+  en: "Is a car parked on spot {spot}? occupied, empty or unsure"
+  nl: "Staat er een auto op de plaats {spot}? occupied (bezet), empty (leeg) of unsure (onzeker)"
+ai_description: { en: "One short English sentence about what you see", nl: "Eén korte Nederlandse zin over wat je ziet" }

@@ -1,0 +1,18 @@
+# Module metadata, read by tools/fill.py (--list shows it as a table), tools/choose.py (ask:) and tools/check.py.
+name: Base
+description: Configuration skeleton (packages, templates, command_line), five themes (Organic, Garden, Coast, Heath, Graphite) and the shared cw-* components
+status: built
+depends_on: []
+requires:
+  integrations: []
+  hardware: []
+optional: false
+# generate: render one source file per item of a list in house.yaml (see CONTRIBUTING.md, "module.yaml").
+generate: []
+# house.yaml fields this module reads (all optional: without base: every theme is installed, Organic is the default).
+house_fields:
+  - house.language
+  - base.themes (optional), base.default_theme (optional)
+# The other side of the optional theme fields for tools/check.py: a subset of the themes and one id for both modes.
+check_variant:
+  base: { themes: [organic, graphite], default_theme: graphite }

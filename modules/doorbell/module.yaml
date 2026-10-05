@@ -1,0 +1,31 @@
+# Module metadata, read by tools/fill.py (--list shows it as a table), tools/choose.py (ask:).
+name: Doorbell
+description: Photo notification with buttons when someone rings, description by Gemini, announcement on speakers, Nest Hub and TV, visitor list
+status: built
+# The 'parcel-service' module adds steps to this module's automation doorbell_ring and script doorbell_reply
+# (rendered in when 'parcel-service' is in modules): fill in and deploy doorbell again after adding parcel-service.
+depends_on: []
+requires:
+  integrations:
+    - UniFi Protect
+    - Google Generative AI (ai_task)
+    - Google Translate text-to-speech
+    - Local Calendar (one calendar for the visits, e.g. "Doorbell")
+    - Mobile App (Companion app)
+    - Sonos (optional)
+    - Google Cast (optional, Nest Hub and TV)
+  hardware:
+    - UniFi Protect doorbell with LCD (G4 Doorbell Pro for the package camera)
+    - Sonos speakers (optional)
+    - Google Nest Hub (optional)
+    - Google TV with the TvOverlay app (optional)
+optional: false
+generate: []
+ask:
+  - id: doorbell
+    question: Which video doorbell do you have?
+    options: [UniFi Protect doorbell with LCD, other, none]
+    need: UniFi Protect doorbell with LCD
+# tools/check.py fills the all-modules house with these values too (the example leaves ai_task empty = auto).
+check_variant:
+  doorbell: { ai_task: none }

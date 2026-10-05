@@ -1,0 +1,39 @@
+# Module metadata, read by tools/fill.py (--list shows it as a table), tools/choose.py (ask:) and by shading/deploy.py (defaults).
+name: Shading
+description: Blinds and curtains per room on a schedule, curtains that follow the blinds, blinds closed on sun and heat
+status: built, not tested on HA
+# The planned module climate reads this module's helpers (binary_sensor.shading_warm, input_boolean.shading_closed_*),
+# so climate will depend on shading, not the other way round.
+depends_on: []
+requires:
+  integrations:
+    - cover integration of your blinds and curtains (e.g. Overkiz/Somfy, Shelly)
+    - weather integration with an hourly forecast and cloud coverage (e.g. Met.no), only for sun and heat
+  hardware: [motorised blinds and/or curtains, as cover entities in Home Assistant]
+optional: false
+generate: []
+ask:
+  - id: covers
+    question: Do you have motorised blinds or curtains in Home Assistant (cover entities)?
+# Fields of house.yaml this module reads (example: house.example.yaml).
+house_fields:
+  - rooms[].slug, name, blind, curtain, side, shading (optional)
+  - entities.weather (required for sun and heat), entities.indoor_temperature (optional)
+  - shading.sun_protection (optional)
+# Defaults that deploy.py sets ONCE, when the helper does not exist yet. Afterwards the value is yours: no `initial`.
+# A key ending in * applies to every new helper with that prefix (one angle per facade). Helpers of a part that is
+# not installed (no blind, no curtain, sun_protection false) do not exist and are skipped.
+defaults:
+  input_boolean.shading_automatic: "on"
+  input_boolean.curtains_follow_blinds: "on"
+  input_number.shading_outdoor_warm_from: 24
+  input_number.shading_indoor_warm_from: 22
+  input_number.shading_max_cloud_cover: 50
+  input_number.shading_min_sun_elevation: 5
+  input_number.shading_angle_*: 70
+  input_datetime.blinds_open_workday: "07:30:00"
+  input_datetime.blinds_open_weekend: "09:00:00"
+  input_datetime.blinds_close: "19:00:00"
+  input_datetime.curtains_open_workday: "07:30:00"
+  input_datetime.curtains_open_weekend: "09:00:00"
+  input_datetime.curtains_close: "19:00:00"

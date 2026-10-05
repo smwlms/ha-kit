@@ -1,0 +1,105 @@
+<% from '_shading.jinja' import all_rooms, blinds, sun_on, normal, sun, sides, weather, indoor with context %>
+# Shading: template sensors (ha-kit module shading, see shading/LOGIC.md).
+# Uploaded by shading/deploy.py to /config/templates/shading.yaml (only when a room takes part in sun and heat).
+#   sensor.shading_weather            warmest temperature of today (forecast + current + earlier today), hourly
+#                                     forecast and cloud cover as attributes; refreshed every 30 min
+#   binary_sensor.shading_warm        it is a warm day (outdoor<@ ' or indoor' if indoor else '' @>)
+#   binary_sensor.shading_sun_<z>     warm, and the sun is on facade <z>, high enough, with few clouds coming
+# The automation shading_sun reads these sensors; it does not recompute them.
+<% if sun %>
+
+- trigger:
+    - trigger: time_pattern
+      minutes: "/30"
+      seconds: 30
+    - trigger: homeassistant
+      event: start
+    - trigger: event
+      event_type: event_template_reloaded
+  action:
+    - action: weather.get_forecasts
+      target:
+        entity_id: <@ weather @>
+      data:
+        type: hourly
+      response_variable: fc
+      continue_on_error: true
+  sensor:
+    - name: <@ t('sensor_weather') | tojson @>
+      unique_id: shading_weather
+      default_entity_id: sensor.shading_weather
+      unit_of_measurement: "°C"
+      device_class: temperature
+      icon: mdi:sun-thermometer
+      # Warmest of: the forecast hours left today, the current temperature, and this sensor's value earlier today
+      # (so a warm afternoon still counts in the evening, when the forecast has no warm hours left).
+      state: >
+        {% set l = fc['<@ weather @>'].forecast if fc is defined and fc['<@ weather @>'] is defined else [] %}
+        {% set tomorrow = today_at('00:00') + timedelta(days=1) %}
+        {% set ns = namespace(t=[]) %}
+        {% for f in l if f.temperature is number and as_datetime(f.datetime) is not none and as_datetime(f.datetime) < tomorrow %}
+          {% set ns.t = ns.t + [f.temperature] %}
+        {% endfor %}
+        {% set current = state_attr('<@ weather @>', 'temperature') %}
+        {% set earlier = this.state | float(none) if (this.attributes.date | default('')) == now().date() | string else none %}
+        {% set temps = ns.t + ([current] if current is number else []) + ([earlier] if earlier is number else []) %}
+        {{ (temps | max) if temps else none }}
+      attributes:
+        date: "{{ now().date() | string }}"
+        forecast_times: >
+          {% set l = fc['<@ weather @>'].forecast if fc is defined and fc['<@ weather @>'] is defined else [] %}
+          {{ l[:24] | map(attribute='datetime') | list }}
+        forecast_cloud_cover: >
+          {% set l = fc['<@ weather @>'].forecast if fc is defined and fc['<@ weather @>'] is defined else [] %}
+          {{ l[:24] | map(attribute='cloud_coverage', default=none) | list }}
+
+- binary_sensor:
+    - name: <@ t('sensor_warm') | tojson @>
+      unique_id: shading_warm
+      default_entity_id: binary_sensor.shading_warm
+      icon: mdi:thermometer-high
+      state: >
+        {% set outdoor = states('sensor.shading_weather') | float(none) %}
+<% if indoor %>
+        {% set indoor = states('<@ indoor @>') | float(none) %}
+<% endif %>
+        {{ (outdoor is number and outdoor >= states('input_number.shading_outdoor_warm_from') | float(24))
+<% if indoor %>
+           or (indoor is number and indoor >= states('input_number.shading_indoor_warm_from') | float(22))
+<% endif %>
+        }}
+      attributes:
+        outdoor_warmest_today: "{{ states('sensor.shading_weather') }}"
+<% if indoor %>
+        indoor: "{{ states('<@ indoor @>') }}"
+<% endif %>
+<% for z in sides %>
+<% set zl = z | lower %>
+
+    - name: <@ t('sensor_sun', side=z) | tojson @>
+      unique_id: shading_sun_<@ zl @>
+      default_entity_id: binary_sensor.shading_sun_<@ zl @>
+      icon: mdi:sun-angle
+      # Facade <@ z @> faces <@ normal.get(z, 0) @>°. Rooms: <@ sun | selectattr('side', 'in', [z, zl, z | capitalize]) | map(attribute='slug') | join(', ') @>.
+      state: >
+        {% from 'shading.jinja' import cloud_cover, angle_diff %}
+        {% set az = state_attr('sun.sun', 'azimuth') %}
+        {% set elevation = state_attr('sun.sun', 'elevation') | float(-90) %}
+        {% set clouds = cloud_cover(3) | float(-1) %}
+        {{ is_state('binary_sensor.shading_warm', 'on')
+           and az is number
+           and elevation > states('input_number.shading_min_sun_elevation') | float(5)
+           and angle_diff(az, <@ normal.get(z, 0) @>) | float(180) <= states('input_number.shading_angle_<@ zl @>') | float(70)
+           and (clouds < 0 or clouds < states('input_number.shading_max_cloud_cover') | float(50)) }}
+      attributes:
+        facade_azimuth: <@ normal.get(z, 0) @>
+        angle_to_sun: >
+          {% from 'shading.jinja' import angle_diff %}
+          {% set az = state_attr('sun.sun', 'azimuth') %}
+          {{ angle_diff(az, <@ normal.get(z, 0) @>) | float(none) if az is number else none }}
+        cloud_cover_next_3h: >
+          {% from 'shading.jinja' import cloud_cover %}
+          {% set w = cloud_cover(3) | float(-1) %}
+          {{ w if w >= 0 else <@ t('no_data') | tojson @> }}
+<% endfor %>
+<% endif %>

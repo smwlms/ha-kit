@@ -1,0 +1,81 @@
+<# Shared preamble (who and what this module follows): _presence.jinja in this folder. #>
+<% from '_presence.jinja' import P, tracked, calendar, kind_title with context %>
+<% set names = (tracked | map(attribute='name') | list) or ['Jan'] %>
+<% set and_ = ' ' ~ t('word_and') ~ ' ' %>
+<% set example = '"' ~ names[0] ~ '"' ~ ((' ' ~ t('word_or') ~ ' "' ~ names[0] ~ and_ ~ names[1] ~ '"') if names | length > 1 else '') %>
+# Our week: the one place that writes the log (ha-kit module presence, see presence/LOGIC.md).
+# Written by presence/deploy.py through the config API (same as the script editor).
+# Every arrival, working day, school run and Supercharger session becomes an event in <@ calendar @> plus a
+# logbook line. Title format (read back by the Our week card, so keep it when editing an event by hand):
+#   "<@ kind_title.home @>: <name>" | "<@ kind_title.home_from_work @>: <name>" | "<@ kind_title.drop_off @>: <name>" | "<@ kind_title.pick_up @>: <name><@ and_ @><name>"
+#   "<@ kind_title.work @>: <name>" (start-end) | "<@ kind_title.charge @>: <name>" (Supercharger, start-end)
+# `kind` is the language-independent name (home, home_from_work, drop_off, pick_up, work, charge); a title text
+# is accepted as well.
+
+presence_log:
+  alias: <@ t('script_alias') | tojson @>
+  description: <@ t('script_description', calendar=calendar) | tojson @>
+  icon: mdi:calendar-account
+  mode: queued
+  max: 10
+  fields:
+    kind:
+      name: <@ t('field_kind') | tojson @>
+      required: true
+      selector:
+        select:
+          options:
+<% for k, title in kind_title.items() %>
+            - { value: <@ k @>, label: <@ title | tojson @> }
+<% endfor %>
+    people:
+      name: <@ t('field_people') | tojson @>
+      description: <@ t('field_people_example', example=example) | tojson @>
+      required: true
+      selector:
+        text: {}
+    start:
+      name: <@ t('field_start') | tojson @>
+      required: true
+      selector:
+        datetime: {}
+    end:
+      name: <@ t('field_end') | tojson @>
+      description: <@ t('field_end_description') | tojson @>
+      selector:
+        datetime: {}
+    details:
+      name: <@ t('field_details') | tojson @>
+      description: <@ t('field_details_description') | tojson @>
+      selector:
+        text:
+          multiline: true
+  sequence:
+    # A datetime selector gives local time without offset; automations pass ISO with offset.
+    - variables:
+        titles: <@ kind_title | tojson @>
+        title: "{{ titles.get(kind, kind) }}"
+        t0: >-
+          {% set d = as_datetime(start) %}
+          {% if d.tzinfo is none %}{% set d = d.replace(tzinfo=now().tzinfo) %}{% endif %}
+          {{ (d | as_local).isoformat() }}
+        t1: >-
+          {% set a = as_datetime(t0) %}
+          {% set e = as_datetime(end, none) if end is defined and end else none %}
+          {% if e is not none and e.tzinfo is none %}{% set e = e.replace(tzinfo=now().tzinfo) %}{% endif %}
+          {{ ((e | as_local) if e is not none and e > a else a + timedelta(minutes=1)).isoformat() }}
+        text: "{{ (details | default('', true)) | trim }}"
+    - action: calendar.create_event
+      target:
+        entity_id: <@ calendar @>
+      data:
+        summary: "{{ title }}: {{ people }}"
+        description: "{{ text }}"
+        start_date_time: "{{ t0 }}"
+        end_date_time: "{{ t1 }}"
+    - action: logbook.log
+      data:
+        name: <@ t('logbook_name') | tojson @>
+        entity_id: <@ calendar @>
+        message: >-
+          <@ t('log_line', title='{{ title }}: {{ people }}', time="{{ as_datetime(t0).strftime('%H:%M') }}", details="{{ (' — ' ~ text.split('\\n') | join(', ')) if text else '' }}") @>

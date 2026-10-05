@@ -1,0 +1,68 @@
+<% from '_notifications.jinja' import recipients with context %>
+{#- Notifications (ha-kit module notifications, see notifications/LOGIC.md). Filled in from house.yaml by
+    tools/fill.py and uploaded by notifications/deploy.py to /config/custom_templates/notifications.jinja; edit the
+    kit, not this file in HA.
+
+    recipients()                JSON list of the notify services that get the messages of this module
+                                (notifications.recipients in house.yaml, else everyone with people[].notify)
+    at_home()                   the same list, only the recipients whose person entity is home now
+    price_windows(entity, limit) the coming time slots where the price of `entity` is at most `limit` (EUR/kWh),
+                                merged into windows, e.g. "13:00–15:30, <@ t('word_tomorrow') @> 12:00–14:00". Reads the
+                                attributes `starts` (ISO start times) and `prices` (same length) of the price sensor
+                                (`prijzen` of earlier versions also works); without prices and with limit < 0 it uses
+                                the attribute `negative_upcoming` (or `negatief_komend`): start times of the negative
+                                slots. Slot length = the gap between the first two starts, else 15 min.
+    kw(entity)                  power of `entity` in kW (W or kW sensor, by unit_of_measurement), 2 decimals
+    Use: {% from 'notifications.jinja' import price_windows %}{{ price_windows('sensor.price_import', 0) }} -#}
+
+{% macro recipients() -%}
+[<% for p in recipients %>"notify.<@ p.notify @>"<% if not loop.last %>, <% endif %><% endfor %>]
+{%- endmacro %}
+
+{% macro at_home() -%}
+{%- set ns = namespace(l=[]) -%}
+{%- for notify, person in [<% for p in recipients %>["notify.<@ p.notify @>", "<@ p.get('person') or 'person.' ~ p.key @>"]<% if not loop.last %>, <% endif %><% endfor %>] if is_state(person, 'home') -%}
+{%- set ns.l = ns.l + [notify] -%}
+{%- endfor -%}
+{{ ns.l | to_json }}
+{%- endmacro %}
+
+{% macro price_windows(entity, limit) -%}
+{%- set starts = state_attr(entity, 'starts') or [] -%}
+{%- set prices = state_attr(entity, 'prices') -%}
+{%- set prices = state_attr(entity, 'prijzen') if prices is none else prices -%}
+{%- set sel = namespace(l=[]) -%}
+{%- if prices is none and limit < 0 -%}
+{%- set sel.l = state_attr(entity, 'negative_coming') or state_attr(entity, 'negative_upcoming') or state_attr(entity, 'negatief_komend') or [] -%}
+{%- else -%}
+{%- for i in range([starts | count, (prices or []) | count] | min) if prices[i] is number and prices[i] <= limit -%}
+{%- set sel.l = sel.l + [starts[i]] -%}
+{%- endfor -%}
+{%- endif -%}
+{%- set t0 = as_datetime(starts[0]) if starts | count > 1 else none -%}
+{%- set t1 = as_datetime(starts[1]) if starts | count > 1 else none -%}
+{%- set step = ((t1 - t0).total_seconds() / 60) | int if t0 is not none and t1 is not none else 15 -%}
+{%- set ns = namespace(out=[], s=none, e=none) -%}
+{%- for t in sel.l | map('as_datetime') | reject('none') | map('as_local') | sort -%}
+{%- if ns.e is not none and t == ns.e -%}
+{%- set ns.e = t + timedelta(minutes=step) -%}
+{%- else -%}
+{%- if ns.s is not none -%}
+{%- set ns.out = ns.out + [(<@ (t('word_tomorrow') ~ ' ') | tojson @> if ns.s.date() != now().date() else '') ~ ns.s.strftime('%H:%M') ~ '–' ~ ns.e.strftime('%H:%M')] -%}
+{%- endif -%}
+{%- set ns.s = t -%}
+{%- set ns.e = t + timedelta(minutes=step) -%}
+{%- endif -%}
+{%- endfor -%}
+{%- if ns.s is not none -%}
+{%- set ns.out = ns.out + [(<@ (t('word_tomorrow') ~ ' ') | tojson @> if ns.s.date() != now().date() else '') ~ ns.s.strftime('%H:%M') ~ '–' ~ ns.e.strftime('%H:%M')] -%}
+{%- endif -%}
+{{ ns.out | join(', ') }}
+{%- endmacro %}
+
+{% macro kw(entity) -%}
+{%- set s = states[entity] -%}
+{%- set v = s.state | float(none) if s is not none else none -%}
+{%- set u = (s.attributes.unit_of_measurement | default('W')) if s is not none else 'W' -%}
+{{ ((v / 1000) if u == 'W' else v) | round(2) if v is number else <@ t('word_unknown') | tojson @> }}
+{%- endmacro %}

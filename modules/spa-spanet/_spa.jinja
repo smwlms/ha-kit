@@ -1,0 +1,11 @@
+<# Shared preamble of the module spa-spanet, derived from house.yaml (section spa:, all fields optional). Every
+   templated file imports the names it needs:  <% from '_spa.jinja' import device_name, probes with context %>
+   friendly and entity_prefix (start of the entity ids) come from tools/partials/_esphome.jinja, like for every
+   ESPHome device. #>
+<% from '_esphome.jinja' import title as make_title, prefix as make_prefix %>
+<% set s = spa if spa is defined and spa else {} %>
+<% set device_name = safe_name(s.get('name') or 'jacuzzi', 'spa.name') %>
+<% set friendly = make_title(device_name, s.get('display_name')) %>
+<% set entity_prefix = make_prefix(device_name, s.get('display_name')) %>
+<% set probes = s.get('probes', true) %>
+<% set lid = s.get('lid', true) %>

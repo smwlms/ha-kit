@@ -1,0 +1,62 @@
+<% from '_notifications.jinja' import m with context %>
+# Notifications: scripts (ha-kit module notifications, see notifications/LOGIC.md).
+# Written by notifications/deploy.py through the config API (same as the script editor).
+# script.send_notification is the shared way to notify the household: other modules call it instead of listing
+# notify services themselves.
+send_notification:
+  alias: <@ t('script_alias') | tojson @>
+  description: >-
+    <@ t('script_description') @>
+  mode: parallel
+  max: 20
+  icon: mdi:bell-ring-outline
+  fields:
+    title:
+      name: <@ t('field_title') | tojson @>
+      required: true
+      selector:
+        text:
+    message:
+      name: <@ t('field_message') | tojson @>
+      required: true
+      selector:
+        text:
+          multiline: true
+    extra:
+      name: <@ t('field_extra') | tojson @>
+      description: <@ t('field_extra_description') | tojson @>
+      required: false
+      selector:
+        object:
+    only_home:
+      name: <@ t('field_only_home') | tojson @>
+      description: <@ t('field_only_home_description') | tojson @>
+      required: false
+      default: false
+      selector:
+        boolean:
+  sequence:
+    - variables:
+        # only_home: true = only the recipients whose person entity is home (at_home() in notifications.jinja).
+        recipients: >-
+          {%- from 'notifications.jinja' import recipients, at_home -%}
+          {%- set home = only_home | default(false) | bool(false) -%}
+          {{- (at_home() if home else recipients()) | from_json -}}
+<% if m.get('tap_url') %>
+        # Tap on the notification opens notifications.tap_url, unless the caller gives its own url in extra.
+        app: >-
+          {% set e = extra if extra is defined and extra is mapping else {} %}
+          {{ dict(e, url=e.get('url') or '<@ m.tap_url @>') }}
+<% else %>
+        app: "{{ extra if extra is defined and extra is mapping else {} }}"
+<% endif %>
+    # One notify action per phone; continue_on_error so one offline phone does not block the others.
+    - repeat:
+        for_each: "{{ recipients }}"
+        sequence:
+          - action: "{{ repeat.item }}"
+            continue_on_error: true
+            data:
+              title: "{{ title }}"
+              message: "{{ message }}"
+              data: "{{ app }}"

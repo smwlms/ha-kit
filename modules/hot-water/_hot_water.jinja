@@ -1,0 +1,35 @@
+<#
+  Shared derivations of module hot-water: the house.yaml values and roles it reads, checked once. Imported by
+  package.yaml, templates/hot_water.yaml, custom_templates/hot_water.jinja, automations.yaml, deploy.py and the docs:
+    <% from '_hot_water.jinja' import litres, cop_default, ... with context %>
+  Only names set at the top level can be imported.
+#>
+<% set hw = hot_water if hot_water is defined and hot_water else {} %>
+<% set ent = entities if entities is defined and entities else {} %>
+<% set en = energy if energy is defined and energy else {} %>
+<% set hp = heat_pump if heat_pump is defined and heat_pump is mapping else {} %>
+<% if hw is not mapping %><@ fail('house.yaml: hot_water must be a section (tank_litres, cop, bath, ...) for hot-water') @><% endif %>
+<% set litres = hw.get('tank_litres') if hw.get('tank_litres') is not none else 300 %>
+<% set cop_default = hw.get('cop') if hw.get('cop') is not none else 2.8 %>
+<% set bath = hw.get('bath') is sameas true %>
+<% set bath_from = (hw.get('bath_from') or '10:00') | string %>
+<% set hp_est = hp.get('power_estimate_w') if hp.get('power_estimate_w') is mapping else {} %>
+<% set heater_kw = hw.get('heater_kw') if hw.get('heater_kw') is not none else ((hp_est.get('hot_water') / 1000) if hp_est.get('hot_water') is number else 2.0) %>
+<% set max_sessions = hw.get('max_sessions_per_day') if hw.get('max_sessions_per_day') is not none else 6 %>
+<% set tariff_on = 'tariff' in capabilities %>
+<% set ev = 'ev-charging' in (modules or []) %>
+<% set grid_import = ent.get('grid_import_w') or '' %>
+<% set battery = ent.get('battery_soc') or '' %>
+<% set battery_power = ent.get('battery_power_w') or '' %>
+<% set battery_sign = en.get('battery_power_sign') or '' %>
+<% if not (litres is number and 20 <= litres <= 2000) %><@ fail('house.yaml: hot_water.tank_litres must be a number of litres between 20 and 2000') @><% endif %>
+<% if not (cop_default is number and 0.8 <= cop_default <= 6) %><@ fail('house.yaml: hot_water.cop must be a number between 0.8 and 6 (1 for an electric element)') @><% endif %>
+<% if not (heater_kw is number and 0.3 <= heater_kw <= 15) %><@ fail('house.yaml: hot_water.heater_kw must be the electrical power of the heater in kW, between 0.3 and 15') @><% endif %>
+<% if not (max_sessions is number and 1 <= max_sessions <= 30) %><@ fail('house.yaml: hot_water.max_sessions_per_day must be a whole number between 1 and 30') @><% endif %>
+<% if not (bath_from | regex_search('^([01][0-9]|2[0-3]):[0-5][0-9]$')) %><@ fail('house.yaml: hot_water.bath_from must be a time HH:MM, e.g. "10:00"') @><% endif %>
+<% if not grid_import %><@ fail('house.yaml: entities.grid_import_w is empty (hot-water needs the power taken from the grid)') @><% endif %>
+<% if battery_power and battery_sign not in ['charge_positive', 'discharge_positive'] %><@ fail('house.yaml: energy.battery_power_sign must be charge_positive or discharge_positive (entities.battery_power_w is set)') @><% endif %>
+<#- +1 when a positive battery power means discharging, -1 when it means charging. -#>
+<% set discharge_factor = 1 if battery_sign == 'discharge_positive' else -1 %>
+<#- Electrical kWh per degree with the default COP (the live value uses sensor.hot_water_cop). -#>
+<% set kwh_per_degree_default = (litres * 1.163 / 1000 / cop_default) | round(4) %>

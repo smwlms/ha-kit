@@ -1,0 +1,389 @@
+<% from '_ev_charging.jinja' import ev_cars, plan_cars, amps_cars, has_tariff, battery, battery_soc, battery_power,
+   battery_discharge_w, battery_charge_w, grid_import, grid_export, import_kw, export_kw, solar, voltage, phases,
+   max_amps, efficiency, solar_value with context %>
+<# Template sensors of ev-charging -> /config/templates/ev_charging.yaml. Tables for Home Assistant (car prefix ->
+   entity id) are rendered as Jinja literals; '' = the car has no such role. #>
+<% set car_table = [] %>
+<% for c in ev_cars %>
+<% set _ = car_table.append({'prefix': c.prefix, 'name': c.name, 'battery': c.battery, 'cable': c.cable, 'state': c.state, 'home': c.home, 'limit': c.limit}) %>
+<% endfor %>
+<% set power_map = {} %>
+<% set kwh_map = {} %>
+<% set amps_map = {} %>
+<% set plan_map = {} %>
+<% for c in ev_cars %>
+<% set _ = power_map.update({c.prefix: c.power}) %>
+<% set _ = kwh_map.update({c.prefix: c.battery_kwh}) %>
+<% endfor %>
+<% for c in amps_cars %>
+<% set _ = amps_map.update({c.prefix: c.current}) %>
+<% endfor %>
+<% for c in plan_cars %>
+<% set _ = plan_map.update({c.prefix: 'sensor.ev_plan_' ~ c.prefix}) %>
+<% endfor %>
+<% set car_min_a = 5 if amps_cars else 6 %>
+# EV charging: template sensors (ha-kit module ev-charging, see ev-charging/LOGIC.md).
+# Filled in from house.yaml by tools/fill.py; uploaded by ev-charging/deploy.py to /config/templates/ev_charging.yaml.
+# States are fixed English values. sensor.ev_charging_wanted is the arbiter: automation.ev_charging_apply only
+# carries out what it says. The charge plans per car are in templates/ev_plan.yaml.
+
+# --- The car on the charger --------------------------------------------------------------------------------------
+# A car counts when the charger has a car plugged in, its charge cable is in, its charging state is not
+# disconnected and (when the role exists) it is located at home. Two cars: the one that is charging wins, else the
+# first in house.yaml. A plugged-in car that is not in house.yaml = other. Trigger-based: survives a restart and
+# keeps its state while the charger is unavailable (cloud).
+- trigger:
+    - trigger: state
+      entity_id:
+        - binary_sensor.ev_charger_connected
+<% for c in ev_cars %>
+        - <@ c.cable @>
+        - <@ c.state @>
+        - <@ c.battery @>
+<% if c.home %>
+        - <@ c.home @>
+<% endif %>
+<% if c.limit %>
+        - <@ c.limit @>
+<% endif %>
+<% endfor %>
+    - trigger: time_pattern
+      minutes: "/1"
+    - trigger: homeassistant
+      event: start
+    - trigger: event
+      event_type: event_template_reloaded
+  action:
+    - variables:
+        r: >
+          {% set cars = <@ car_table | tojson @> %}
+          {% set ns = namespace(on=[], charging='') %}
+          {% if not has_value('binary_sensor.ev_charger_connected') %}
+            {% set state = this.state if this is defined and this.state not in ['unknown', 'unavailable'] else 'none' %}
+          {% elif is_state('binary_sensor.ev_charger_connected', 'on') %}
+            {% for c in cars %}
+              {% set st = states(c.state) %}
+              {% if is_state(c.cable, 'on') and st not in ['disconnected', 'unknown', 'unavailable', '']
+                    and (c.home == '' or not is_state(c.home, 'off')) %}
+                {% set ns.on = ns.on + [c.prefix] %}
+                {% if st == 'charging' and ns.charging == '' %}{% set ns.charging = c.prefix %}{% endif %}
+              {% endif %}
+            {% endfor %}
+            {% set state = ns.charging or (ns.on | first if ns.on else 'other') %}
+          {% else %}
+            {% set state = 'none' %}
+          {% endif %}
+          {% set car = (cars | selectattr('prefix', 'eq', state) | list + [none]) | first %}
+          {{ {'state': state,
+              'name': car.name if car else none,
+              'battery': (states(car.battery) | float(none)) if car else none,
+              'limit': (states(car.limit) | float(none)) if car and car.limit else none,
+              'charging_state': states(car.state) if car else none,
+              'plugged_in': ns.on} }}
+  sensor:
+    - name: <@ t('sensor_car') | tojson @>
+      unique_id: ev_charging_car
+      default_entity_id: sensor.ev_charging_car
+      icon: mdi:car-electric
+      state: "{{ r.state if r is defined else this.state }}"
+      attributes:
+        name: "{{ r.name if r is defined else this.attributes.get('name') }}"
+        battery: "{{ r.battery if r is defined else this.attributes.get('battery') }}"
+        limit: "{{ r.limit if r is defined else this.attributes.get('limit') }}"
+        charging_state: "{{ r.charging_state if r is defined else this.attributes.get('charging_state') }}"
+        plugged_in: "{{ r.plugged_in if r is defined else this.attributes.get('plugged_in', []) }}"
+
+- sensor:
+    # W the car may take without the grid and without the home battery: charge power + export - import - battery
+    # discharge. Battery charging does not count: the battery goes first. The 10-minute average
+    # (sensor.ev_charging_available_power_avg) is a statistics sensor in packages/ev_charging.yaml.
+    - name: <@ t('sensor_available_power') | tojson @>
+      unique_id: ev_charging_available_power
+      default_entity_id: sensor.ev_charging_available_power
+      unit_of_measurement: W
+      device_class: power
+      state_class: measurement
+      icon: mdi:solar-power-variant
+      availability: "{{ is_number(states('<@ grid_import @>')) and is_number(states('<@ grid_export @>')) }}"
+      state: >
+        {% set car = [states('sensor.ev_charger_power') | float(0), 0] | max %}
+        {% set pw = <@ power_map | tojson @>.get(states('sensor.ev_charging_car'), '') %}
+        {% if pw and is_number(states(pw)) %}
+          {% set f = 1 if state_attr(pw, 'unit_of_measurement') == 'W' else 1000 %}
+          {% set car = [car, states(pw) | float(0) * f] | max %}
+        {% endif %}
+        {{ (car + (<@ export_kw @>) * 1000 - (<@ import_kw @>) * 1000 - <@ battery_discharge_w @>) | round(0) }}
+
+    # kWh the car on the charger still needs to reach its charge limit (100 % without a limit role), at the charger
+    # (charge efficiency included); 0 without a car of house.yaml, or when it reports complete.
+    - name: <@ t('sensor_energy_needed') | tojson @>
+      unique_id: ev_charging_energy_needed
+      default_entity_id: sensor.ev_charging_energy_needed
+      unit_of_measurement: kWh
+      device_class: energy
+      state_class: measurement
+      icon: mdi:car-battery
+      state: >
+        {% set kwh = <@ kwh_map | tojson @>.get(states('sensor.ev_charging_car')) %}
+        {% set soc = state_attr('sensor.ev_charging_car', 'battery') %}
+        {% set lim = state_attr('sensor.ev_charging_car', 'limit') %}
+        {% if kwh is none or soc is none or state_attr('sensor.ev_charging_car', 'charging_state') == 'complete' %}0
+        {% else %}{{ ([(lim if lim is not none else 100) - soc | float(0), 0] | max / 100 * kwh / <@ efficiency @>) | round(1) }}{% endif %}
+
+    # One reason for the dashboard (fixed values, translated by the screen): what the charging does now and why.
+    - name: <@ t('sensor_status') | tojson @>
+      unique_id: ev_charging_status
+      default_entity_id: sensor.ev_charging_status
+      icon: mdi:ev-station
+      state: >
+        {% set reason = state_attr('sensor.ev_charging_wanted', 'reason') %}
+        {% set st = states('sensor.ev_charger_status') %}
+        {% if reason is none %}unknown
+        {% elif reason not in ['off', 'manual', 'no_car'] and st == 'fault' %}charger_fault
+        {% elif reason == 'solar' %}{{ 'solar' if st == 'charging' else 'waiting_surplus' }}
+        {% elif reason in ['solar', 'car_full', 'paused_battery', 'battery_behind', 'grid_assist', 'plan', 'manual', 'peak_limited', 'no_car', 'off'] %}{{ reason }}
+        {% else %}unknown{% endif %}
+      attributes:
+        owner: "{{ state_attr('sensor.ev_charging_wanted', 'owner') }}"
+        mode: "{{ states('sensor.ev_charging_wanted') }}"
+        charger_mode: "{{ states('sensor.ev_charger_mode') }}"
+        charger_status: "{{ states('sensor.ev_charger_status') }}"
+<% if has_tariff %>
+        cheap: "{{ states('sensor.ev_charging_cheap_status') }}"
+<% endif %>
+
+- binary_sensor:
+    # Battery feeds the car (too much): a latch. On after 3 min when the car takes more than 500 W and the home
+    # battery discharges more than max(300 W, car x (1 - solar share) + 200 W), or more than 300 W below the battery
+    # floor, or more than 150 W while the battery is behind. Once on it stays on (the car is paused, so the car
+    # power is 0) until the battery charges more than 300 W or energy-plan reports a surplus, for 3 min. Off when
+    # the car is unplugged. Always off without a home battery.
+    - name: <@ t('sensor_battery_feeds_car') | tojson @>
+      unique_id: ev_charging_battery_feeds_car
+      default_entity_id: binary_sensor.ev_charging_battery_feeds_car
+      icon: mdi:home-battery-outline
+<% if battery %>
+      delay_on: "00:03:00"
+      delay_off: "00:03:00"
+      state: >
+        {% set car = states('sensor.ev_charger_power') | float(0) %}
+        {% set dis = <@ battery_discharge_w @> %}
+        {% set chg = <@ battery_charge_w @> %}
+        {% set share = states('input_number.ev_charging_solar_share') | float(50) / 100 %}
+        {% set soc = states('<@ battery_soc @>') | float(100) %}
+        {% set floor = states('input_number.ev_charging_battery_floor') | float(50) %}
+        {% set behind = is_state('binary_sensor.energy_plan_battery_behind', 'on') %}
+        {% if not is_state('binary_sensor.ev_charger_connected', 'on') %}false
+        {% elif this.state == 'on' %}{{ not (chg > 300 or is_state('binary_sensor.energy_plan_surplus', 'on')) }}
+        {% else %}{{ car > 500 and (dis > [300, car * (1 - share) + 200] | max or (soc < floor and dis > 300) or (behind and dis > 150)) }}{% endif %}
+      attributes:
+        battery_discharge_w: "{{ (<@ battery_discharge_w @>) | round(0) }}"
+<% else %>
+      # No home battery (entities.battery_soc and battery_power_w): nothing can feed the car.
+      state: "{{ false }}"
+<% endif %>
+<% if has_tariff %>
+
+    # Month-peak guard: the grid import is above the headroom of this quarter (tariff) for 30 s. The arbiter then
+    # stops the cheap assist and moves a charge plan from fast to solar_min when the car current cannot go lower;
+    # automation.ev_charging_car_amps lowers the car current at once. Off when the region has no capacity tariff.
+    - name: <@ t('sensor_peak_risk') | tojson @>
+      unique_id: ev_charging_peak_risk
+      default_entity_id: binary_sensor.ev_charging_peak_risk
+      icon: mdi:chart-bell-curve
+      delay_on: "00:00:30"
+      delay_off: "00:01:00"
+      state: >
+        {% set h = states('sensor.capacity_headroom_kw') %}
+        {{ is_number(h) and (<@ import_kw @>) > h | float }}
+      attributes:
+        import_kw: "{{ (<@ import_kw @>) | round(2) }}"
+        headroom_kw: "{{ states('sensor.capacity_headroom_kw') | float(none) }}"
+
+    # Grid assist allowed (sensor.ev_charging_cheap_status = grid_assist) for 5 min; off after
+    # input_number.ev_charging_cheap_stop_min minutes of "not allowed".
+    - name: <@ t('sensor_cheap_assist') | tojson @>
+      unique_id: ev_charging_cheap_assist
+      default_entity_id: binary_sensor.ev_charging_cheap_assist
+      icon: mdi:cash-lock-open
+      delay_on: "00:05:00"
+      delay_off: "{{ '00:%02d:00' | format(states('input_number.ev_charging_cheap_stop_min') | int(2)) }}"
+      state: "{{ is_state('sensor.ev_charging_cheap_status', 'grid_assist') }}"
+
+- sensor:
+    # Cheap power: may the car take a little from the grid now? Daytime only, the home battery first (full, not
+    # behind, not discharging), at most input_number.ev_charging_cheap_max_grid_kw of total import, within the month
+    # peak, and only while the solar logic (or the assist itself) owns the charger. Exception: while the export price
+    # is negative and the export that the car would take is worth more than the grid power it costs, the battery
+    # conditions "behind" and "not full" are skipped (never pay to export). First match wins.
+    - name: <@ t('sensor_cheap_status') | tojson @>
+      unique_id: ev_charging_cheap_status
+      default_entity_id: sensor.ev_charging_cheap_status
+      icon: mdi:cash-clock
+      state: >
+        {% set owner = states('input_select.ev_charging_owner') %}
+        {% set assisting = owner == 'cheap' %}
+        {% set car = states('sensor.ev_charging_car') %}
+        {% set soc = state_attr('sensor.ev_charging_car', 'battery') %}
+        {% set lim = state_attr('sensor.ev_charging_car', 'limit') %}
+        {% set imp = <@ import_kw @> %}
+        {% set exp = <@ export_kw @> %}
+        {% set car_kw = states('sensor.ev_charger_power') | float(0) / 1000 %}
+        {% set car_min = states('input_number.ev_charging_min_amps') | float(<@ car_min_a @>) * <@ voltage @> / 1000 %}
+        {% set inj = states('sensor.power_price_export') | float(0) %}
+        {% set af = states('sensor.power_price_import') | float(1) %}
+        {% set gain_kw = [car_kw - imp, 0] | max if assisting else exp %}
+        {% set buy_kw = imp if assisting else [car_min - exp, 0] | max %}
+        {% set avoid = inj < 0 and gain_kw > 0.1 and gain_kw * (0 - inj) >= buy_kw * (af - <@ solar_value @>) %}
+        {% set after = state_attr('sensor.energy_plan_margin', 'after_sun') %}
+        {% set sun = is_state('sun.sun', 'above_horizon') and after not in [true, 'true', 'True'] %}
+        {% set pv = (states('<@ solar @>') | float(0)) * (1000 if state_attr('<@ solar @>', 'unit_of_measurement') == 'kW' else 1) %}
+<% if battery %>
+        {% set behind = not is_state('binary_sensor.energy_plan_battery_behind', 'off') %}
+        {% set level = states('<@ battery_soc @>') | float(0) %}
+        {% set full_at = states('input_number.ev_charging_cheap_battery_full') | float(95) %}
+        {% set dis = <@ battery_discharge_w @> if is_number(states('<@ battery_power @>')) else 9999 %}
+<% else %>
+        {% set behind = false %}
+        {% set level = 100 %}
+        {% set full_at = 0 %}
+        {% set dis = 0 %}
+<% endif %>
+        {% set room = 99 if states.sensor.capacity_headroom_kw is none else states('sensor.capacity_headroom_kw') | float(0) %}
+        {% set max_net = states('input_number.ev_charging_cheap_max_grid_kw') | float(1) %}
+        {% set amps = <@ amps_map | tojson @>.get(car, '') %}
+        {% set cmds_ok = amps == '' or not is_state('input_boolean.ev_charging_car_amps_auto', 'on')
+           or states('counter.tesla_commands_today') | int(0) < states('input_number.ev_charging_car_commands_per_day') | int(25) %}
+        {% if not is_state('input_boolean.ev_charging_cheap_enabled', 'on') or not is_state('input_boolean.ev_charging_smart', 'on') %}off
+        {% elif not is_state('binary_sensor.power_price_cheap', 'on') %}no_cheap_power
+        {% elif not sun or pv < 300 %}no_sun
+        {% elif car in ['none', 'other', 'unknown', 'unavailable'] or soc is none %}no_car
+        {% elif lim is not none and soc >= lim %}car_full
+        {% elif behind and not avoid %}battery_behind
+        {% elif level < full_at and not avoid %}battery_not_full
+        {% elif dis > 200 %}battery_discharging
+        {% elif room < max_net %}month_peak
+        {% elif imp > max_net %}grid_import_high
+        {% elif not assisting and imp - exp + [car_min - car_kw, 0] | max > max_net %}too_little_surplus
+        {% elif not cmds_ok %}commands_used_up
+        {% elif not assisting and (owner not in ['none', 'surplus'] or states('sensor.ev_charger_mode') != 'solar_only') %}charger_busy
+        {% else %}grid_assist{% endif %}
+      attributes:
+        assisting: "{{ is_state('input_select.ev_charging_owner', 'cheap') }}"
+        headroom_kw: "{{ states('sensor.capacity_headroom_kw') | float(none) }}"
+        import_kw: "{{ (<@ import_kw @>) | round(2) }}"
+<% endif %>
+
+# --- The arbiter -------------------------------------------------------------------------------------------------
+# The mode the kit wants for the charger and who owns it. Priority: manual > plan > cheap > surplus. First match:
+#   master switch off                                   -> solar_only, owner none, reason off (apply only hands back)
+#   owner manual (someone else changed the charger)    -> the charger's own mode, owner manual
+#   no car plugged in                                    -> solar_only, owner none, reason no_car
+#   plan of this car wants fast, but the month peak leaves too little current -> solar_min, owner plan, peak_limited
+#   plan of this car wants fast or solar_min            -> that mode, owner plan
+#   cheap assist on and no peak risk                    -> solar_min, owner cheap, reason grid_assist
+#   car at its limit                                     -> solar_only, owner surplus, reason car_full
+#   battery feeds the car (latch)                        -> stop, owner surplus, reason paused_battery
+#   battery behind                                       -> solar_only with solar share 100, reason battery_behind
+#   otherwise                                            -> solar_only, owner surplus, reason solar
+# Attribute amps: car current for a plan in fast = (headroom - house without the car) / (V x phases), at most the
+# plan's own amps and the charger maximum; read by automation.ev_charging_car_amps. Full table: LOGIC.md.
+- trigger:
+    - trigger: state
+      entity_id:
+        - input_boolean.ev_charging_smart
+        - input_select.ev_charging_owner
+        - binary_sensor.ev_charger_connected
+        - sensor.ev_charger_mode
+        - sensor.ev_charging_car
+        - binary_sensor.ev_charging_battery_feeds_car
+        - input_number.ev_charging_solar_share
+<% if battery %>
+        - binary_sensor.energy_plan_battery_behind
+<% endif %>
+<% if has_tariff %>
+        - binary_sensor.ev_charging_peak_risk
+        - binary_sensor.ev_charging_cheap_assist
+        - sensor.capacity_headroom_kw
+<% endif %>
+<% if amps_cars %>
+        - input_boolean.ev_charging_car_amps_auto
+        - input_number.ev_charging_min_amps
+<% endif %>
+<% for c in plan_cars %>
+        - sensor.ev_plan_<@ c.prefix @>
+        - input_boolean.ev_plan_<@ c.prefix @>
+<% endfor %>
+    - trigger: time_pattern
+      minutes: "/1"
+    - trigger: homeassistant
+      event: start
+    - trigger: event
+      event_type: event_template_reloaded
+  action:
+    - variables:
+        d: >
+          {% set modes = ['solar_only', 'solar_min', 'fast', 'stop'] %}
+          {% set smart = is_state('input_boolean.ev_charging_smart', 'on') %}
+          {% set owner = states('input_select.ev_charging_owner') %}
+          {% set connected = is_state('binary_sensor.ev_charger_connected', 'on') %}
+          {% set car = states('sensor.ev_charging_car') %}
+          {% set mode_now = states('sensor.ev_charger_mode') %}
+          {% set soc = state_attr('sensor.ev_charging_car', 'battery') %}
+          {% set limit = state_attr('sensor.ev_charging_car', 'limit') %}
+          {% set full = state_attr('sensor.ev_charging_car', 'charging_state') == 'complete'
+             or (soc is number and limit is number and soc >= limit) %}
+          {% set behind = is_state('binary_sensor.energy_plan_battery_behind', 'on') %}
+          {% set share = 100 if behind else states('input_number.ev_charging_solar_share') | int(50) %}
+<% if has_tariff %>
+          {% set peak = is_state('binary_sensor.ev_charging_peak_risk', 'on') %}
+          {% set cheap = is_state('binary_sensor.ev_charging_cheap_assist', 'on') %}
+          {% set room = states('sensor.capacity_headroom_kw') | float(99) %}
+<% else %>
+          {% set peak = false %}
+          {% set cheap = false %}
+          {% set room = 99 %}
+<% endif %>
+          {% set feeds = is_state('binary_sensor.ev_charging_battery_feeds_car', 'on') %}
+          {% set plan = <@ plan_map | tojson @>.get(car) %}
+          {% set p_on = plan is not none and is_state('input_boolean.ev_plan_' ~ car, 'on') %}
+          {% set p_now = (state_attr(plan, 'charge_now') or 'no') if p_on else 'no' %}
+          {% set p_target = (state_attr(plan, 'target_percent') | int(0)) if p_on else 0 %}
+          {% set p_wants = p_now in ['fast', 'solar_min'] and soc is number and soc < p_target %}
+          {% set ph = states('sensor.ev_charger_phases') | int(<@ phases @>) %}
+          {% set ph = ph if ph in [1, 3] else <@ phases @> %}
+          {% set car_kw = [states('sensor.ev_charger_power') | float(0), 0] | max / 1000 %}
+          {% set house_kw = [(<@ import_kw @>) - car_kw, 0] | max %}
+          {% set p_amps = (state_attr(plan, 'amps') | int(<@ max_amps @>)) if plan else <@ max_amps @> %}
+          {% set amps = [((room - house_kw) * 1000 / (<@ voltage @> * ph)) | round(0, 'floor') | int, p_amps, <@ max_amps @>] | min %}
+          {% set min_a = states('input_number.ev_charging_min_amps') | int(5) %}
+          {% set ctl = <@ amps_map | tojson @>.get(car, '') != '' and is_state('input_boolean.ev_charging_car_amps_auto', 'on') %}
+          {% set sticky = state_attr('sensor.ev_charging_wanted', 'owner') == 'plan'
+             and state_attr('sensor.ev_charging_wanted', 'reason') == 'peak_limited' %}
+          {% set blocked = (amps < min_a + (2 if sticky else 0)) if ctl else (peak or sticky) %}
+          {% if not smart %}{% set r = ['solar_only', 'none', 'off'] %}
+          {% elif owner == 'manual' %}{% set r = [mode_now if mode_now in modes else 'solar_only', 'manual', 'manual'] %}
+          {% elif not connected %}{% set r = ['solar_only', 'none', 'no_car'] %}
+          {% elif p_wants and p_now == 'fast' and blocked %}{% set r = ['solar_min', 'plan', 'peak_limited'] %}
+          {% elif p_wants %}{% set r = [p_now, 'plan', 'plan'] %}
+          {% elif cheap and not peak %}{% set r = ['solar_min', 'cheap', 'grid_assist'] %}
+          {% elif full %}{% set r = ['solar_only', 'surplus', 'car_full'] %}
+          {% elif feeds %}{% set r = ['stop', 'surplus', 'paused_battery'] %}
+          {% elif behind %}{% set r = ['solar_only', 'surplus', 'battery_behind'] %}
+          {% else %}{% set r = ['solar_only', 'surplus', 'solar'] %}{% endif %}
+          {{ {'mode': r[0], 'owner': r[1], 'reason': r[2], 'solar_share': share,
+              'amps': ([amps, 0] | max) if r[1] == 'plan' and r[0] == 'fast' else none,
+              'car': car, 'plan': plan} }}
+  sensor:
+    - name: <@ t('sensor_wanted') | tojson @>
+      unique_id: ev_charging_wanted
+      default_entity_id: sensor.ev_charging_wanted
+      icon: mdi:scale-balance
+      state: "{{ d.mode if d is defined else this.state }}"
+      attributes:
+        owner: "{{ d.owner if d is defined else this.attributes.get('owner') }}"
+        reason: "{{ d.reason if d is defined else this.attributes.get('reason') }}"
+        solar_share: "{{ d.solar_share if d is defined else this.attributes.get('solar_share') }}"
+        amps: "{{ d.amps if d is defined else this.attributes.get('amps') }}"
+        car: "{{ d.car if d is defined else this.attributes.get('car') }}"
+        plan: "{{ d.plan if d is defined else this.attributes.get('plan') }}"

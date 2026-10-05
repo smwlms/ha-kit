@@ -1,0 +1,28 @@
+{#- Shading (ha-kit module shading, see shading/LOGIC.md). Uploaded by shading/deploy.py to
+    /config/custom_templates/shading.jinja; do not edit it in Home Assistant, edit the kit and deploy again.
+
+    cloud_cover(hours)         average forecast cloud cover (%) over the coming `hours` hours, from the attributes
+                               forecast_times / forecast_cloud_cover of sensor.shading_weather (hourly forecast of
+                               entities.weather). -1 when there is no cloud data (the weather integration gives no
+                               cloud_coverage): the sensors then ignore clouds instead of blocking the sun.
+    angle_diff(azimuth, facade) angle in degrees (0-180) between the sun's azimuth and the facade normal.
+    Use: {% from 'shading.jinja' import cloud_cover %}{{ cloud_cover(3) }} -#}
+
+{% macro cloud_cover(hours) -%}
+{%- set t = state_attr('sensor.shading_weather', 'forecast_times') or [] -%}
+{%- set c = state_attr('sensor.shading_weather', 'forecast_cloud_cover') or [] -%}
+{%- set since = now() - timedelta(hours=1) -%}
+{%- set until = now() + timedelta(hours=hours | float(3)) -%}
+{%- set ns = namespace(s=0, n=0) -%}
+{%- for i in range([t | count, c | count] | min) -%}
+{%- set d = as_datetime(t[i]) -%}
+{%- if d is not none and since < d <= until and c[i] is number -%}
+{%- set ns.s = ns.s + c[i] -%}{%- set ns.n = ns.n + 1 -%}
+{%- endif -%}
+{%- endfor -%}
+{{ (ns.s / ns.n) | round(0) if ns.n else -1 }}
+{%- endmacro %}
+
+{% macro angle_diff(azimuth, facade) -%}
+{{ (((azimuth | float(0)) - (facade | float(0)) + 540) % 360 - 180) | abs | round(0) }}
+{%- endmacro %}

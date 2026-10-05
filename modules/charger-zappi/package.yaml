@@ -1,0 +1,33 @@
+<% from '_zappi.jinja' import phase_switching with context %>
+# Charger (myenergi Zappi): helpers (ha-kit module charger-zappi, see charger-zappi/LOGIC.md "Settings").
+# Uploaded by charger-zappi/deploy.py to /config/packages/charger_zappi.yaml (module base: packages/).
+# No `initial`: deploy.py sets the defaults of module.yaml (defaults:) once, when a helper is new; afterwards the
+# value is yours and survives a restart.
+<% if phase_switching %>
+input_boolean:
+  charger_zappi_phase_auto:          # automation.charger_zappi_phases acts only while on (default on)
+    name: "<@ t('helper_phase_auto') @>"
+    icon: mdi:numeric-3-circle-outline
+
+input_number:
+  charger_zappi_three_phase_from_w:  # 3 phases from this available power, 10 min long (default 4600)
+    name: "<@ t('helper_three_phase_from') @>"
+    icon: mdi:numeric-3-circle-outline
+    min: 3000
+    max: 10000
+    step: 100
+    mode: box
+    unit_of_measurement: W
+  charger_zappi_one_phase_below_w:   # back to 1 phase below this available power (default 3800)
+    name: "<@ t('helper_one_phase_below') @>"
+    icon: mdi:numeric-1-circle-outline
+    min: 2000
+    max: 8000
+    step: 100
+    mode: box
+    unit_of_measurement: W
+<% else %>
+# No phase switching (needs ev-charging in modules:, a phase select and ev_charging.phases 3): no helpers. The empty
+# mapping keeps the package valid and removes the helpers of an earlier install.
+{}
+<% endif %>

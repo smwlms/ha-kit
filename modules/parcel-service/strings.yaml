@@ -1,0 +1,181 @@
+# User-facing texts of the module parcel-service, one key per text: {en: ..., nl: ...}. Used in the module's files as
+# <@ t('key') @> (tools/fill.py picks house.language, default en; a missing language falls back to en with a warning).
+# {name} in a text is replaced at fill time when t() gets that keyword argument; otherwise Home Assistant fills it in
+# at run time with | replace('{name}', value). Texts are inserted with | tojson: any character is allowed.
+# The texts the doorbell automation and script doorbell_reply show for the parcel service live in
+# doorbell/strings.yaml (those files belong to the module doorbell).
+
+# --- Helpers (names shown in the UI and on the example card) ---
+helper_ajar: { en: Parcel service ajar, nl: Pakjesdienst kier }
+helper_open: { en: Parcel service open, nl: Pakjesdienst open }
+helper_ring: { en: Parcel service ring, nl: Pakjesdienst bel }
+helper_expected: { en: Parcel expected, nl: Pakje verwacht }
+
+# --- Automation parcel_service_buttons ---
+buttons_alias: { en: "Parcel service: garage buttons", nl: "Pakjesdienst: knoppen garage" }
+buttons_description:
+  en: >-
+    Buttons from the doorbell notification and the dashboard: 'Parcel in the garage' (DOORBELL_GARAGE, gate fully
+    open, 1 min) and 'Garage ajar' (PARCEL_GARAGE, on the parcel day). Both start script.doorbell_reply: text on the
+    LCD and script.parcel_garage. PARCEL_GARAGE passes the id of the ring (action_data.ring): one ajar per ring, the
+    first press wins.
+  nl: >-
+    Knoppen uit de deurbelmelding en van het dashboard: 'Pakje in de garage' (DOORBELL_GARAGE, poort volledig open,
+    1 min) en 'Garage op een kier' (PARCEL_GARAGE, op de pakjesdag). Beide starten script.doorbell_reply: tekst op
+    het LCD en script.parcel_garage. PARCEL_GARAGE geeft het kenmerk van de aanbelling (action_data.ring) mee: één
+    kier per aanbelling, wie eerst drukt wint.
+
+# --- Automation doorbell_parcel_left ---
+left_alias: { en: "Doorbell: parcel left", nl: "Deurbel: pakje achtergelaten" }
+left_description:
+  en: >-
+    Protect reports a parcel left behind with the downward package camera. First a photo to the archive and Gemini
+    checks whether a parcel is really there (Protect sometimes reports a parcel that is already gone). Only then:
+    notification with photo, announcement, TV with the package camera, calendar and input_text.doorbell_visit. If
+    Gemini sees nothing: only a logbook line. If Gemini fails: notify anyway. OFF after the first install:
+    parcel-service/deploy.py turns it off once when it is new; once you turn it on, it stays on (also after a
+    restart or a new deploy). Why off: see parcel-service/LOGIC.md.
+  nl: >-
+    Protect meldt met de neerwaartse pakjescamera een achtergelaten pakje. Eerst een foto naar het archief en Gemini
+    kijkt of er echt een pakje ligt (Protect meldt soms een pakje dat al weg is). Alleen dan: melding met foto,
+    afroep, tv met de pakjescamera, agenda en input_text.doorbell_visit. Ziet Gemini niets: enkel een logboekregel.
+    Faalt Gemini: toch melden. Staat na de eerste installatie UIT: parcel-service/deploy.py zet hem één keer uit
+    wanneer hij nieuw is; zet je hem aan, dan blijft hij aan (ook na een herstart of een nieuwe deploy). Waarom uit:
+    zie parcel-service/LOGIC.md.
+parcel_left: { en: Parcel left, nl: Pakje achtergelaten }
+left_message: { en: "There is a parcel at the front door ({time}).", nl: "Er ligt een pakje aan de voordeur ({time})." }
+left_spoken: { en: A parcel has been left at the front door, nl: Er is een pakje achtergelaten aan de voordeur }
+left_protect_saw: { en: Protect saw a parcel on the ground., nl: Protect zag een pakje op de grond. }
+left_gemini_no_answer: { en: (Gemini gave no answer.), nl: (Gemini gaf geen antwoord.) }
+logbook_doorbell: { en: Doorbell, nl: Deurbel }
+log_left: { en: "parcel left · Protect package camera ({detail})", nl: "pakje achtergelaten · Protect-pakjescamera ({detail})" }
+log_without_gemini: { en: without Gemini, nl: zonder Gemini }
+log_left_not_seen:
+  en: "parcel reported, not seen · Protect reported a parcel, Gemini sees none ({detail})"
+  nl: "pakje gemeld, niet gezien · Protect meldde een pakje, Gemini ziet er geen ({detail})"
+left_ai_task_name: { en: "Doorbell: parcel left", nl: "Deurbel: pakje achtergelaten" }
+ai_answer_language: { en: Write the description in English., nl: Schrijf de beschrijving in het Nederlands. }
+left_ai_prompt:
+  en: |-
+    This is a photo from the downward package camera of the doorbell: you look from above at the ground in front of the front door. Describe only what lies on the ground. Do not mention names.
+    - parcel_visible: true if a parcel, box, envelope or parcel bag lies on the ground (not if someone is only holding it).
+    - description: one short sentence (max. 12 words), e.g. 'A brown box on the doormat.'
+  nl: |-
+    Dit is een foto van de neerwaartse pakjescamera van de deurbel: je kijkt van boven naar de grond voor de voordeur. Beschrijf alleen wat er op de grond ligt. Noem geen namen.
+    - parcel_visible: true als er een pakje, doos, envelop of pakketzak op de grond ligt (niet als iemand het enkel vasthoudt).
+    - description: één korte Nederlandse zin (max. 12 woorden), bv. 'Een bruine doos op de deurmat.'
+left_ai_field_visible:
+  en: Is a parcel, box, envelope or parcel bag lying on the ground?
+  nl: Ligt er een pakje, doos, envelop of pakketzak op de grond?
+left_ai_field_description: { en: One short sentence about what is lying there, nl: Eén korte Nederlandse zin over wat er ligt }
+
+# --- Script parcel_garage ---
+garage_alias: { en: "Doorbell: parcel in the garage", nl: "Deurbel: pakje in de garage" }
+garage_description:
+  en: >-
+    Button 'Parcel in the garage' from the doorbell notification (open_s 60, fully open) and the parcel service
+    (ajar_s and open_s from the helpers, parcel_service true). Opens the garage door only when
+    binary_sensor.gate_open reports 'closed' (off). Without ajar: about 25 s travel + open_s fully open, then close
+    through script.gate_close_manual. With ajar_s: a STOP pulse ajar_s seconds after leaving the end position
+    (controller OPEN-STOP-CLOSE-STOP), wait open_s, then a CLOSE pulse (force: otherwise gate_pulse refuses within
+    30 s of the previous one). Then wait at most 1 min for the closed end position; if not: notification 'Garage door
+    not closed' with the button Close gate (GATE_CLOSE, module gate). Parcel service: notification with the live
+    garage view, a photo just before closing (archive + calendar). Single: a second press is ignored. See
+    parcel-service/LOGIC.md.
+  nl: >-
+    Knop 'Pakje in de garage' uit de deurbelmelding (open_s 60, volledig open) en de pakjesdienst (ajar_s en open_s
+    uit de helpers, parcel_service true). Opent de garagepoort enkel als binary_sensor.gate_open 'dicht' (off) meldt.
+    Zonder kier: ± 25 s looptijd + open_s volledig open, dan sluiten via script.gate_close_manual. Met ajar_s: ajar_s
+    seconden na het vertrek uit de eindstand een STOP-puls (sturing OPEN-STOP-DICHT-STOP), open_s wachten, dan een
+    DICHT-puls (force: < 30 s na de vorige mag gate_pulse anders niet). Daarna max. 1 min wachten op eindstand dicht;
+    zo niet: melding 'Garagepoort niet dicht' met de knop Sluit poort (GATE_CLOSE, module gate). Pakjesdienst:
+    melding met het live garagebeeld, vlak voor het sluiten een foto (archief + agenda). Single: een tweede druk
+    wordt genegeerd. Zie parcel-service/LOGIC.md.
+field_open_s_name: { en: Seconds open, nl: Seconden open }
+field_open_s_description:
+  en: "How long the gate stays open: fully open (on top of about 25 s travel), or ajar when ajar_s is set. Default 60."
+  nl: "Hoe lang de poort open blijft: volledig open (bovenop ± 25 s looptijd), of op een kier als ajar_s gezet is. Standaard 60."
+field_ajar_s_name: { en: Ajar (seconds of travel), nl: Kier (seconden looptijd) }
+field_ajar_s_description:
+  en: "0 = fully open. Otherwise: a STOP pulse after this many seconds of opening."
+  nl: "0 = volledig open. Anders: na zoveel seconden openen een STOP-puls."
+field_parcel_service_name: { en: Parcel service, nl: Pakjesdienst }
+field_parcel_service_description:
+  en: Garage picture in the notification and a photo just before closing.
+  nl: Garagebeeld in de melding en een foto vlak voor het sluiten.
+logbook_gate: { en: Gate, nl: Poort }
+# Reasons passed to script.gate_pulse / gate_close_manual (module gate): they end up in the gate's logbook.
+reason_parcel: { en: parcel, nl: pakje }
+reason_parcel_ajar_stop: { en: parcel ajar (stop), nl: pakje kier (stop) }
+reason_parcel_close: { en: parcel close, nl: pakje dicht }
+log_not_opened_state: { en: "Garage not opened · parcel (gate {state})", nl: "Garage niet geopend · pakje (poort {state})" }
+log_not_opened_no_movement: { en: Garage not opened · parcel (no movement), nl: Garage niet geopend · pakje (geen beweging) }
+not_opened_title: { en: Garage door not opened, nl: Garagepoort niet geopend }
+not_opened_was_open:
+  en: The gate was already open. It does not close automatically.
+  nl: De poort stond al open. Ze sluit niet automatisch.
+not_opened_unknown:
+  en: Gate position unknown (sensor unavailable). No pulse given.
+  nl: Poortstand onbekend (sensor onbereikbaar). Geen puls gegeven.
+not_opened_no_movement:
+  en: After the pulse the gate reports no movement. Please check.
+  nl: Na de puls meldt de poort geen beweging. Kijk even na.
+log_opened_ajar: { en: Garage ajar · parcel, nl: Garage op een kier · pakje }
+log_opened_open: { en: Garage open · parcel, nl: Garage open · pakje }
+log_opened_service: { en: "(parcel service, {seconds} s)", nl: "(pakjesdienst, {seconds} s)" }
+opening_title_ajar: { en: Garage door ajar, nl: Garagepoort op een kier }
+opening_title_open: { en: Garage door opening, nl: Garagepoort gaat open }
+closes_at: { en: "It closes at {time}.", nl: "Ze sluit om {time}." }
+live_view_hint: { en: Long-press this notification for the live garage view., nl: Druk lang op deze melding voor het live garagebeeld. }
+log_already_closed: { en: Garage closed · parcel (already closed), nl: Garage dicht · pakje (al gesloten) }
+log_closed: { en: Garage closed · parcel, nl: Garage dicht · pakje }
+in_garage_title: { en: Parcel in the garage, nl: Pakje in de garage }
+closed_at: { en: "Gate closed at {time}.", nl: "Poort dicht om {time}." }
+closed_photo_hint: { en: Photo from just before closing., nl: Foto van vlak voor het sluiten. }
+calendar_ajar:
+  en: "Gate ajar ({seconds} s) and closed again (parcel service)."
+  nl: "Poort op een kier ({seconds} s) en weer dicht (pakjesdienst)."
+calendar_open:
+  en: "Gate open ({seconds} s) and closed again (parcel service)."
+  nl: "Poort open ({seconds} s) en weer dicht (pakjesdienst)."
+# Label of the photo line in a calendar event; the doorbell card reads both "photo:" and "foto:".
+photo_label: { en: photo, nl: foto }
+log_not_closed: { en: "Garage not closed · parcel (gate {state})", nl: "Garage niet dicht · pakje (poort {state})" }
+not_closed_title: { en: Garage door not closed, nl: Garagepoort niet dicht }
+not_closed_message:
+  en: After the parcel the gate still reports no closed end position after 1 min. It may still be open.
+  nl: Na het pakje meldt de poort na 1 min nog geen eindstand dicht. Ze staat mogelijk nog open.
+button_close_gate: { en: Close gate, nl: Sluit poort }
+
+# --- Script parcel_expected ---
+day_alias: { en: "Parcel service: choose the day", nl: "Pakjesdienst: dag kiezen" }
+day_description:
+  en: >-
+    Sets input_datetime.parcel_expected to today or tomorrow, or to 'off' (01-01-2000, a day in the past). On the
+    chosen day a ring gives a critical notification with the button 'Garage ajar (N s)' (or 'Garage open' when ajar
+    is 0), and when Gemini sees a parcel or courier the garage opens ajar by itself (automation doorbell_ring). After
+    that day it no longer applies by itself. See parcel-service/LOGIC.md.
+  nl: >-
+    Zet input_datetime.parcel_expected op vandaag of morgen, of op 'uit' (01-01-2000, een dag in het verleden). Op de
+    gekozen dag geeft aanbellen een kritieke melding met de knop 'Garage op een kier (N s)' (of 'Garage open' als de
+    kier op 0 staat), en ziet Gemini een pakje of koerier, dan gaat de garage vanzelf op een kier
+    (automation doorbell_ring). Na die dag geldt het vanzelf niet meer. Zie parcel-service/LOGIC.md.
+field_day_name: { en: Day, nl: Dag }
+field_day_description: { en: "today, tomorrow or off", nl: "vandaag, morgen of uit" }
+day_today: { en: Today, nl: Vandaag }
+day_tomorrow: { en: Tomorrow, nl: Morgen }
+day_off: { en: "Off", nl: Uit }
+log_day_today: { en: "parcel expected today ({date}) · dashboard", nl: "pakje verwacht vandaag ({date}) · dashboard" }
+log_day_tomorrow: { en: "parcel expected tomorrow ({date}) · dashboard", nl: "pakje verwacht morgen ({date}) · dashboard" }
+log_day_off: { en: off · dashboard, nl: uit · dashboard }
+
+# --- Example dashboard card (lovelace/parcel-service.yaml) ---
+card_garage_ajar: { en: Garage ajar, nl: Garage op een kier }
+card_garage_ajar_confirm:
+  en: Set the garage door ajar now for a parcel?
+  nl: Garagepoort nu op een kier zetten voor een pakje?
+card_garage_door: { en: Garage door, nl: Garagepoort }
+card_ajar: { en: "Ajar (travel time, 0 = fully open)", nl: "Kier (looptijd, 0 = volledig open)" }
+card_open: { en: Open (time), nl: Open (tijd) }
+card_gate: { en: Gate, nl: Poort }
+card_parcel_left: { en: Notification parcel left, nl: Melding pakje achtergelaten }

@@ -1,0 +1,758 @@
+# Fill-in file for one house. INVENTED EXAMPLE: every name, address, coordinate and IP is fictitious.
+#
+#   cp house.example.yaml house.yaml      # house.yaml is in .gitignore and stays local
+#   uv run --with-requirements tools/requirements.txt python tools/fill.py house.yaml build/
+#
+# Rules: keys and prefixes in lower case, digits and underscore. Entity ids in full (domain.name).
+# Per field: what it is, (required) or (optional), and for which module. Optional = may stay empty; the part that
+# needs it is left out. A module that misses a required field stops filling in with an error.
+# You may add sections: everything in this file is available in every module as <@ section.field @>.
+# A section of a module that is not in modules: may stay: it is then not read.
+# Values (not keys) stay as they are in your Home Assistant. Fixed values (marked "values:") are English; the example
+# values below are invented, except where a comment says they follow a Dutch-language Home Assistant.
+
+house:
+  timezone: Europe/Brussels # (required) time zone of HA; also for presence (stay.py, workday.py)
+  # (required) language of the texts the modules write (notifications, cards, spoken sentences): en or nl.
+  # Default en. A text without a translation falls back to en (fill.py warns).
+  language: nl
+  # (required for gate, tesla-driveway-lock and energy-plan) Home location as the cars see it: middle of the
+  # driveway, where the cars park. Centre of zone.gate_approach (and of zone.home with gate/deploy.py --home), start
+  # position of zone.driveway (tesla-driveway-lock/deploy.py --setup; move it yourself afterwards) and the place of
+  # the sunset in the day plan of energy-plan.
+  lat: 52.37
+  lon: 5.22
+  # (required for gate) Street + number as the Tesla shows it as destination: a regex, lower case.
+  address_regex: "dorpstraat\\s*12"
+  # (required for gate) Names the Tesla gives the home favourite; depends on the language of the car.
+  home_destinations: [Home, Thuis]
+
+# (optional, base) Themes. The whole section is optional: without it every theme is installed, Organic is the default.
+base:
+  # (optional) Themes to install, by id: organic, garden, coast, heath, graphite. Default: all of them.
+  # The name HA shows follows house.language (en: Organic, Garden, Coast, Heath, Graphite;
+  # nl: Organic, Tuin, Kust, Heide, Grafiet). Every user picks one with the theme button or in Profile > Theme.
+  themes: [organic, garden, coast, heath, graphite]
+  # (optional) Default theme for users without an own choice, set by base/deploy.py --default-theme.
+  # One id for both modes, or one per mode: {light: organic, dark: graphite}. Must be in themes. Default organic.
+  default_theme:
+    light: organic
+    dark: organic
+
+# (required) Which modules you install. 'base' is always added. Overview: python tools/fill.py --list
+# Or answer a few questions: python tools/choose.py (writes this list). Build order: see README.md.
+modules:
+  - base
+  - tesla-route
+  - gate
+  - doorbell
+  - parcel-service # (optional) needs doorbell and gate with a gate sensor
+  - presence
+  - shading
+  - notifications
+  - tesla-driveway-lock # (optional) needs gate
+  - room-sensor
+  - ventilation-zehnder
+  # - spa-spanet   # (optional) only with a SpaNET SV controller; see section spa: at the bottom
+  # Phase 4 (energy, tariff, charging, heat pump, hot water, climate, appliances, results): every module is built
+  # (not tested on HA yet). Contracts: docs/phase4-contracts.md. A brand or region module provides a capability that
+  # a core module needs; the build order is in README.md.
+  - tariff-be # region: Flemish dynamic tariff + capacity tariff (provides tariff); section tariff:
+  - energy-plan # surplus, house power, solar left today, battery behind; needs entities.solar_power_w
+  - energy # energy screen and analysis dashboard; section energy:
+  - charger-zappi # brand adapter myenergi Zappi (provides ev-charger); entities.charger_*
+  - ev-charging # needs a module that provides ev-charger, and energy-plan; section ev_charging:
+  - heat-pump-vaillant # brand adapter myVAILLANT (provides heat-pump and hot-water-heater); section heat_pump:
+  - hot-water # needs hot-water-heater and energy-plan; section hot_water:
+  - climate # section climate:
+  - appliances-home-connect # needs notifications; section appliances:
+  - results # needs tariff; section results:
+  - home-screen # start screen; build it last (its chips follow modules:); section home_screen:
+  - e-ink-display # (optional) touch e-ink wall display; section e_ink_display:
+
+# (required) Who lives here. Used by gate, tesla-route, doorbell/parcel-service, presence, notifications and
+# tesla-driveway-lock.
+people:
+  - key: jan # (required) short, lower case; used in helper names, in doorbell.recipients and notifications.recipients
+    name: Jan # (required) as shown in notifications and on the screens
+    person: person.jan # (optional) person entity; default person.<key>
+    # (optional) device_tracker.<phone> of the Companion app; without a phone: no "who is in the car" (gate) and
+    # the person does not count for presence (e.g. a child)
+    phone: iphone_jan
+    notify: mobile_app_iphone_jan # (optional) notify.<notify>; without: this person gets no notifications
+    admin: true # (optional, gate and tesla-driveway-lock) also gets the notifications meant for the others;
+    # nobody admin = the first person in this list
+    color: "#E8A571" # (optional, presence) colour on "Our week"; default a colour from the palette
+  - key: lien
+    name: Lien
+    person: person.lien
+    phone: iphone_lien
+    notify: mobile_app_iphone_lien
+    # (optional, gate) sensor of the location permission when it is not called sensor.<phone>_location_permission
+    # (e.g. a second registration of the app gets the suffix _2)
+    location_permission: sensor.iphone_lien_location_permission_2
+
+# (required for gate, tesla-route and tesla-driveway-lock; optional for presence) The cars (Tesla via Teslemetry).
+cars:
+  # prefix      (required) start of the Teslemetry entities of that car (device_tracker.<prefix>_locatie, ...)
+  # name        (required) as shown on the cards and in notifications
+  # driver      (optional) key from people of the usual driver: gets the notification after an automatic close when
+  #             no phone left with the car (gate) and when the car locks (tesla-driveway-lock), is shown on the
+  #             arrival card and on a trip in "Our week" when no phone is seen with the car
+  # color       (optional, tesla-route) colour on the cards (hex); default a colour from the palette
+  # badge       (optional, tesla-route) values: lightning | plaid | an own "<svg ...>" (48x48); default a circle with
+  #             the first letter
+  # garage_spot (optional, tesla-driveway-lock with garage photo) fixed spot of the car in the garage, seen from the
+  #             garage camera: one lower-case word (e.g. left, right, middle). Without: the GPS decides
+  # entities    (optional) entity ids that do not follow the pattern of 'teslemetry' below (one key per role)
+  # battery_kwh (optional, ev-charging) usable battery in kWh; needed for the charge plan and the energy a car still
+  #             needs. Empty = no charge plan for this car, and 75 kWh in the energy plan
+  # consumption_kwh_100km (optional, ev-charging charge plan) consumption; default 18
+  # charge_plan (optional, ev-charging) true = charge plan to a departure time for this car (helpers per car); needs
+  #             battery_kwh (fill.py stops without it)
+  # plan_calendar (optional, ev-charging) calendar.* entity whose appointments WITH a location set the target of the
+  #             charge plan (Waze Travel Time gives the distance); empty = only a target you set by hand
+  # A plugged-in car that is not in this list (a guest car, no Teslemetry) counts as "other" for ev-charging: solar
+  # logic only, no plan and no car current.
+  - { prefix: rode_x, name: Rode X, driver: jan, color: "#AEBF92", badge: lightning, garage_spot: left }
+  - prefix: witte_x
+    name: Witte X
+    driver: lien
+    garage_spot: right
+    battery_kwh: 58
+    consumption_kwh_100km: 18
+    charge_plan: true
+    plan_calendar: calendar.lien
+  - prefix: zwarte_x
+    name: Zwarte X
+    driver: jan
+    entities:
+      located_at_home: binary_sensor.garage_zwarte_x_thuis_gelegen
+
+# (required for gate, tesla-route and tesla-driveway-lock) Entity-id pattern per role of the Teslemetry integration;
+# {p} = prefix. These are the Dutch entity names (Teslemetry added while HA was set to Dutch). Was HA in English,
+# take the English column of the table "Entity names" in modules/tesla-route/README.md and check per car. Does one car
+# differ: put that entity under cars[].entities instead of changing the pattern here.
+# ev-charging requires battery, charge_cable and charging_state for every car, and reads located_at_home (a car
+# charging elsewhere is not on this charger) and status (online, to restore the charge limit) when they are set.
+teslemetry:
+  location: "device_tracker.{p}_locatie"
+  route: "device_tracker.{p}_route"
+  destination: "sensor.{p}_bestemming"
+  distance_to_arrival: "sensor.{p}_distance_to_arrival"
+  time_to_arrival: "sensor.{p}_time_to_arrival"
+  traffic_delay: "sensor.{p}_traffic_delay"
+  battery_at_arrival: "sensor.{p}_state_of_charge_at_arrival"
+  shift_state: "sensor.{p}_shift_state"
+  speed: "sensor.{p}_snelheid"
+  status: "binary_sensor.{p}_status"
+  located_at_home: "binary_sensor.{p}_thuis_gelegen"
+  battery: "sensor.{p}_batterijniveau"
+  charging_state: "sensor.{p}_opladen"
+  charge_switch: "switch.{p}_opladen"
+  charge_cable: "binary_sensor.{p}_oplaadkabel"
+  charge_cable_lock: "lock.{p}_oplaadkabelslot"
+  tesla_route: "sensor.{p}_tesla_route"
+  lock: "lock.{p}_slot" # (required for tesla-driveway-lock) lock of the car; in English probably "lock.{p}_lock"
+  # (optional, ev-charging) charge current the car asks for (its max attribute = what the charger offers); empty =
+  # no amps control. Each command counts in counter.tesla_commands_today.
+  charge_current: "number.{p}_charge_current"
+  charge_limit: "number.{p}_charge_limit" # (optional, ev-charging charge plan) charge limit in %
+  charger_power: "sensor.{p}_charger_power" # (optional, ev-charging) power the car takes, in kW
+
+# (required for shading and room-sensor) Rooms. A room may be in the list without every module using it: shading
+# skips a room without blind and curtain, room-sensor a room without sensor: true. climate reads them only through
+# shading (the shading block of its screen).
+#   slug        (required) lower case, digits, _; used in helpers (shading_closed_<slug>) and in the device name
+#               kamersensor-<slug> (with - instead of _; the room-sensor firmware keeps that device name)
+#   name        (required) name in the logbook; for room-sensor also the friendly name of the device, which sets
+#               the start of the entity ids (sensor.bedroom_temperature with language en, _temperatuur with nl)
+#   blind       (optional, shading) cover of the roller blind; empty = no blind schedule and no sun and heat
+#   curtain     (optional, shading) cover of the curtain; empty = no curtain schedule
+#   side        (optional, shading) direction of the window, values: N, NE, E, SE, S, SW, W, NW; empty = no sun
+#               and heat
+#   shading     (optional, shading) false = this room does not take part in sun and heat (the schedule stays);
+#               default true
+#   sensor      (optional, room-sensor) true = this room gets a room sensor (own firmware file);
+#               empty or false = none
+#   temp_offset (optional, room-sensor) start correction of the temperature in °C; default -0.5, tune it later
+#               in HA
+rooms:
+  - slug: living_room
+    name: Living room
+    blind: cover.blind_living_room
+    curtain: cover.curtain_living_room
+    side: SW
+    sensor: false
+  - slug: bedroom
+    name: Bedroom
+    blind: cover.blind_bedroom
+    curtain: null
+    side: E
+    shading: true
+    sensor: true
+    temp_offset: -0.5
+  - slug: office
+    name: Office
+    blind: null
+    curtain: cover.curtain_office
+    side: S
+    sensor: true
+
+# Role -> entity_id. Every module only uses the roles it needs (see the README of the module).
+entities:
+  # --- gate ---
+  # (required) what gets the pulse: switch (impulse relay, default), button or cover.
+  # See "Gate hardware" in modules/gate/README.md.
+  gate_relay: switch.gate_relay
+  # (optional) end-position contact: binary_sensor (on = open) or the cover itself. Empty = no gate sensor: then no
+  # "gate open too long", no "close after leaving" and no parcel-service (that needs the end position).
+  gate_sensor: binary_sensor.gate_contact
+  # (optional) true when your sensor is 'on' while the gate is fully CLOSED (end-position relay "closed").
+  gate_sensor_inverted: false
+  # --- doorbell (UniFi Protect) ---
+  doorbell_camera: camera.front_door # (required) front camera: photo when someone rings
+  doorbell_button: event.front_door_ring # (required) event entity of the bell button (event_type ring)
+  doorbell_text: text.front_door_lcd # (required) text on the LCD of the doorbell (Protect: "Doorbell")
+  # (optional) downward package camera (G4 Doorbell Pro only) and its Protect event "package left".
+  # Empty = no second photo for Gemini and no automation "package left".
+  doorbell_package_camera: camera.front_door_package
+  doorbell_package: event.front_door_package
+  # --- parcel-service and tesla-driveway-lock ---
+  # (optional; required with tesla_driveway_lock.garage_photo) camera that sees the parking spots in the garage.
+  # Empty = no live garage view and no proof photo (parcel-service), no garage photo (tesla-driveway-lock).
+  garage_camera: camera.garage
+  # (optional, tesla-driveway-lock) binary_sensor that is on when the garage is dark: then no photo (the GPS
+  # decides). Empty = always a photo; Gemini answers "unsure" on a black image.
+  garage_dark: binary_sensor.garage_dark
+  # --- shading ---
+  # (required for shading on sun and heat, and for climate) weather entity with an hourly forecast
+  # (weather.get_forecasts, type hourly) and preferably cloud coverage (cloud_coverage), e.g. Met.no; climate also
+  # needs its daily forecast. May be empty only with shading.sun_protection: false and without climate.
+  weather: weather.home
+  # (required for climate; optional for shading and home-screen) indoor temperature in °C: shading also counts it
+  # warm when it is warm inside; home-screen shows it as the indoor chip; climate reads its hourly statistics (indoor
+  # forecast), so it needs state_class: measurement (most temperature sensors have it). Empty = outside only.
+  indoor_temperature: sensor.living_room_temperature
+  # (optional, climate) indoor humidity in %; empty = no humidity chip on the climate screen
+  indoor_humidity: sensor.living_room_humidity
+  # --- notifications ---
+  # (required for notifications.kinds power_price) import price all-in in EUR/kWh (with grid tariff and VAT), with the
+  # attributes starts (start times of the coming time slots) and prices (same length) for the notification ahead.
+  # Empty + a tariff module (tariff-be) in modules: = its sensor.power_price_import. Without a tariff module: a sensor
+  # of your own; without those attributes only the notification "free now".
+  price_import:
+  # (optional, notifications) export price in EUR/kWh, same attributes. Empty + a tariff module = its
+  # sensor.power_price_export; empty without one = no notifications about a negative export price.
+  price_export:
+  # (required for notifications.kinds surplus, energy-plan and energy) power to the grid, in W or kW
+  grid_export_w: sensor.power_produced
+  # (required for notifications.kinds filter) days until the ventilation filters must be replaced.
+  # Empty + module ventilation-zehnder in modules: = sensor.<entity prefix of ventilation>_filter_replacement_remaining_days,
+  # here sensor.ventilatie_filter_replacement_remaining_days. Fill in with ventilation.mac_suffix: true or with
+  # another ventilation unit (e.g. sensor.zehnder_filter_remaining_days).
+  ventilation_filter_days:
+  # --- energy: tariff-be, energy-plan, energy, results (phase 4, see docs/phase4-contracts.md) ---
+  # Power roles may be W or kW: the modules read the unit of the sensor. energy-plan reads their 5-minute recorder
+  # statistics: they need state_class: measurement. Energy roles are total_increasing kWh meters; a list is summed
+  # (e.g. the day and night registers of a Belgian digital meter).
+  grid_import_w: sensor.power_consumed # (required for energy, energy-plan, tariff-be) power taken from the grid
+  # (required for energy, tariff-be, results) energy taken from the grid
+  grid_import_kwh: [sensor.energy_consumed_tariff_1, sensor.energy_consumed_tariff_2]
+  # (required for energy, results) energy sent to the grid
+  grid_export_kwh: [sensor.energy_produced_tariff_1, sensor.energy_produced_tariff_2]
+  # (optional, energy) per phase of the grid connection, L1 to L3; empty = no phase rows and no per-phase peak
+  grid_phases:
+    - { import_w: sensor.power_consumed_phase_1, export_w: sensor.power_produced_phase_1, voltage: sensor.voltage_phase_1, current: sensor.current_phase_1 }
+    - { import_w: sensor.power_consumed_phase_2, export_w: sensor.power_produced_phase_2, voltage: sensor.voltage_phase_2, current: sensor.current_phase_2 }
+    - { import_w: sensor.power_consumed_phase_3, export_w: sensor.power_produced_phase_3, voltage: sensor.voltage_phase_3, current: sensor.current_phase_3 }
+  # (optional, tariff-be) registers of the digital meter (e.g. SlimmeLezer, DSMR): month peak (1.6.0), average of
+  # the month peaks (0-0:98.1.0) and the running quarter-hour average. The quarter register must rise during the
+  # quarter and drop at :00/:15/:30/:45 (energy so far x 4). Empty = tariff-be computes them itself: an empty month
+  # peak or quarter register makes it meter the quarter with a utility_meter (restart HA once after the first deploy).
+  grid_month_peak_kw: sensor.meter_month_peak
+  grid_average_peak_kw: sensor.meter_average_peak_13_months
+  grid_quarter_kw: sensor.meter_quarter_average
+  # (required for tariff-be) any entity of the Nord Pool integration (area tariff.area); the module finds the config
+  # entry from it, so no entry id ends up in a file. Also read by energy (tariff view: the Nord Pool quarter prices
+  # through its config entry, else its statistics).
+  spot_price: sensor.nord_pool_be_current_price
+  # (required for energy-plan; optional for energy, ev-charging, climate, results and appliances-home-connect) solar
+  # power. Prefer the meter closest to the panels (a CT clamp or the inverter). Empty = no solar block.
+  # appliances-home-connect starts a waiting appliance on a full battery while the panels give >= 1 kW.
+  solar_power_w: sensor.solar_power
+  solar_energy_kwh: sensor.solar_energy_total # (optional, energy, results) total solar production
+  # (optional) home battery. Empty battery_soc = no battery: no battery block, no "battery behind", no battery
+  # priority in ev-charging and hot-water, no "start on a full battery" in appliances-home-connect.
+  battery_soc: sensor.home_battery_level # state of charge in %
+  # sign: energy.battery_power_sign. Also read by charger-zappi (phase switching: stays on 1 phase while the battery
+  # discharges more than 300 W)
+  battery_power_w: sensor.home_battery_power
+  battery_charge_kwh: sensor.home_battery_total_charge # (optional, energy, results) total energy into the battery
+  battery_discharge_kwh: sensor.home_battery_total_discharge # (optional, energy, results) total energy out of it
+  # (optional) consumption of the house, the car included (energy-plan leaves sensor.ev_charger_power out for the
+  # plan); empty = computed by energy-plan (sensor.energy_plan_house_power)
+  house_power_w:
+  # (optional, energy-plan, energy, ev-charging, appliances-home-connect, climate) solar forecast in kWh, e.g.
+  # Forecast.Solar. With more than one plane: make a "Combine the state of several sensors" helper (sum) per role and
+  # fill in that helper. appliances-home-connect reads remaining_today and tomorrow (the sun window of a plan made in
+  # the evening; empty tomorrow = no window tomorrow), not today.
+  solar_forecast_today: sensor.solar_forecast_today
+  solar_forecast_remaining_today: sensor.solar_forecast_remaining_today
+  solar_forecast_tomorrow: sensor.solar_forecast_tomorrow
+  # (optional) timestamp of the last forecast refresh (corrects the hourly saw-tooth); empty = the moment
+  # solar_forecast_remaining_today last changed
+  solar_forecast_updated:
+  co2_fossil_percent: # (optional, energy) e.g. Electricity Maps "fossil fuel percentage"; empty = no CO2 gauge
+  # (optional, energy) power of the ventilation unit; empty + ventilation-zehnder = sensor.<entity prefix>_power
+  # (not with ventilation.mac_suffix: true)
+  ventilation_power_w:
+  heat_pump_energy_kwh: # (optional, energy) electrical energy of the heat pump (trends); empty = none
+  # --- charging: charger-zappi (myenergi integration). The real ids contain the serial number of your Zappi:
+  # replace 0000000 by yours. Required for charger-zappi unless charger_zappi.prefix is set (then every role left
+  # empty is derived from it); a role written out here wins over the prefix. ---
+  # (required for charger-zappi without charger_zappi.prefix) status
+  charger_status: sensor.myenergi_zappi_0000000_status
+  # (required for charger-zappi without charger_zappi.prefix) charge mode: Eco+, Eco, Fast, Stopped
+  charger_mode: select.myenergi_zappi_0000000_charge_mode
+  # (required for charger-zappi without charger_zappi.prefix) plug status
+  charger_plug: sensor.myenergi_zappi_0000000_plug_status
+  # (required for charger-zappi without charger_zappi.prefix) power to the car
+  charger_power_w: sensor.myenergi_zappi_0000000_power_ct_internal_load
+  # (required for charger-zappi without charger_zappi.prefix) Minimum Green Level
+  charger_min_green: number.myenergi_zappi_0000000_minimum_green_level
+  # (optional) 1, 3, auto; phase switching only with ev-charging and ev_charging.phases: 3; empty = none
+  charger_phase: select.myenergi_zappi_0000000_phase_setting
+  charger_energy_today: sensor.myenergi_zappi_0000000_energy_used_today # (optional) kWh today; empty = from the power
+  charger_solar_energy_today: sensor.myenergi_zappi_0000000_green_energy_today # (optional, results) solar kWh today
+  # --- climate (phase 4) ---
+  # (optional, climate) climate entity of the main zone (the first of heat_pump.zones); empty + heat-pump-vaillant =
+  # derived from heat_pump.system and heat_pump.zones (here climate.huis_zone_woning_circuit_0_climate)
+  heat_pump:
+  # (optional) water_heater entity; empty + heat-pump-vaillant = derived from heat_pump.system. The boost switch is
+  # switch.<its object id>_boost
+  water_heater:
+  # (optional, climate, home-screen outdoor chip) empty = from entities.weather
+  outdoor_temperature: sensor.outdoor_temperature
+  # (optional) fan entity of the ventilation (with the module ventilation-zehnder: fan.ventilatie_fan).
+  ventilation:
+  # (optional) ventilation roles of climate. Empty + module ventilation-zehnder (without ventilation.mac_suffix) =
+  # derived from ventilation.name / display_name, e.g. select.ventilatie_fan_speed. For another unit, or with
+  # mac_suffix: true, fill them in; a role left empty hides the part that needs it.
+  #   free cooling (all four needed): ventilation_speed (select with the speeds, see climate.ventilation_values),
+  #     ventilation_bypass_on (button: bypass open 1 h), ventilation_bypass_off (button: closed 1 h),
+  #     ventilation_bypass_auto (button: bypass back to automatic)
+  #   ventilation_outdoor_temperature (sensor; empty = entities.outdoor_temperature)
+  #   ventilation_auto (switch: the unit chooses its speed itself; empty = speed "low" instead)
+  #   ventilation_away (switch: away mode; while on, the cooling leaves the unit alone)
+  #   season profile (all three needed): ventilation_profile (select), ventilation_season_heating and
+  #     ventilation_season_cooling (binary_sensor, the unit's own season detection)
+  #   screen only: ventilation_bypass_on_12h, ventilation_boost_15, ventilation_boost_60, ventilation_boost_180,
+  #     ventilation_boost_720, ventilation_boost_off (buttons), ventilation_bypass_state (%),
+  #     ventilation_supply_temperature, ventilation_extract_temperature, ventilation_outdoor_humidity,
+  #     ventilation_extract_humidity (sensors); ventilation_power_w and ventilation_filter_days as above
+  ventilation_speed:
+  ventilation_bypass_on:
+  ventilation_bypass_off:
+  ventilation_bypass_auto:
+  # (optional, climate) climate entity of a ComfoClime through its own integration; empty + ventilation.comfoclime =
+  # the entity of the ventilation firmware (climate.<prefix>_comfoclime; written over the bus only while its switch
+  # "ComfoClime: allow writes" is on)
+  comfoclime:
+  # (optional, climate) heat-pump power of that ComfoClime in W; empty + ventilation.comfoclime = derived
+  comfoclime_power_w:
+
+# (required for doorbell and parcel-service) Announcement, notifications and visitor list when someone rings.
+doorbell:
+  # (required) Local Calendar for the visits (e.g. named "Doorbell" -> calendar.doorbell): one event per visit, read
+  # by the visitor list
+  calendar: calendar.doorbell
+  # (optional) which AI looks at the doorbell photos. Empty or auto = the first ai_task entity: when an AI
+  # integration exists (e.g. Google Generative AI), the photos ARE sent to it (Google Gemini). An ai_task entity id =
+  # that one. none = no photo leaves the house (no description, parcel-service never opens the gate by itself).
+  # Also the default for tesla_driveway_lock.ai_task.
+  ai_task:
+  # (required with speakers or Nest Hub) TTS entity of Google Translate; the language comes from house.language
+  tts: tts.google_translate_en_com
+  volume: 50 # (optional) volume of the announcement in %; afterwards the music plays on at the old volume
+  # (optional) Sonos speakers for the announcement (announce); empty list = no announcement
+  speakers:
+    - media_player.living_room
+    - media_player.kitchen
+  nest_hub: media_player.kitchen_display # (optional) Nest Hub that says it and shows the photo; empty = none
+  tv: media_player.living_room_tv # (optional) Google TV with TvOverlay (on/off check); empty = no picture on the TV
+  # (required when tv is filled in) IP of the Google TV where TvOverlay listens; give the TV a fixed IP in your router
+  tv_ip: 192.0.2.40
+  recipients: # (optional) list of keys from people, e.g. [jan]; empty = everyone with notify
+  tap_url: # (optional) where a tap on the notification goes, e.g. /lovelace/camera; empty = the camera view
+  # (optional) text that comes back on the LCD when the previous text was unknown; empty = "Welcome" (en) / "Welkom" (nl)
+  lcd_default: Welkom
+
+# (required for parcel-service) Start values: deploy.py sets them once on the first install, afterwards you tune
+# them on the dashboard (parcel service ajar / open).
+parcel_service:
+  # (required) seconds of travel until the STOP pulse. 0 = not ajar: the gate opens fully. Only set this above 0
+  # when your gate controller STOPS on a pulse while moving (modules/parcel-service/LOGIC.md, edge cases).
+  ajar_s: 0
+  open_s: 30 # (required) seconds the gate stays open or ajar
+
+# (required for presence) "Our week": arrivals, work days and school runs in a calendar.
+# Who takes part: every person in people: with a phone. The cars come from cars: (Teslemetry); without cars: no
+# school run with the Tesla and no Superchargers.
+presence:
+  calendar: calendar.presence # (required) Local Calendar "Presence": one event per arrival, work day, trip
+  stay_calendar: calendar.stays # (required) Local Calendar "Stays": time per place per day
+  # (optional) in sentences on the card, in house.language: "Jan bracht de kinderen naar school"; default from
+  # house.language ("the children" / "de kinderen")
+  children: de kinderen
+  # (optional) Places. Every place becomes a zone: entity zone.<key>, with name <name>.
+  #   key      (required) lower case, digits, underscore; the zone must be called zone.<key>
+  #   name     (required) name of the zone. Counts literally: a person or car in that zone has that name as state
+  #   kind     (required) values: work | school | drop_off (drop-off point) | family
+  #   person   (required with work) key from people: whose work this is (one work place per person)
+  #   label    (optional) short name in the calendar and on the card (drop_off: the street; family: "opa en oma")
+  #   lat, lon (optional) centre of the zone; only needed when deploy.py --setup creates the zone for you
+  #   radius   (optional) metres; default work 150, school 150, drop_off 30, family 75
+  # At most one school. Drop-off points (passive zones of 30 m) tell where at school you stopped; without a drop-off
+  # point every 2 min stop in the school zone counts. family = picking up the children elsewhere than school (e.g.
+  # at the grandparents). No school or family: leave those places out, then the school runs drop out. No work place
+  # for someone: then no work day for that person (arrivals still are).
+  places:
+    - { key: work_jan, name: Werk Jan, kind: work, person: jan, lat: 52.412, lon: 5.268 }
+    - { key: work_lien, name: Werk Lien, kind: work, person: lien, lat: 52.351, lon: 5.174 }
+    - { key: school, name: School, kind: school, lat: 52.374, lon: 5.226 }
+    - { key: drop_off_kerkstraat, name: Afzetpunt Kerkstraat, label: Kerkstraat, kind: drop_off, lat: 52.374, lon: 5.225 }
+    - { key: drop_off_schoolstraat, name: Afzetpunt Schoolstraat, label: Schoolstraat, kind: drop_off, lat: 52.375, lon: 5.227 }
+    - { key: grandparents, name: Grootouders, label: opa en oma, kind: family, lat: 52.381, lon: 5.233 }
+  # (optional) Start values of the windows (schedule helpers). deploy.py creates the helper once with these values;
+  # afterwards you change it in Settings > Helpers. A trip outside a window is not logged.
+  # Per day (mon tue wed thu fri sat sun) "from-to" or a list of those. Left out = the default from module.yaml.
+  school_windows:
+    drop_off: { mon: "07:45-09:15", tue: "07:45-09:15", wed: "07:45-09:15", thu: "07:45-09:15", fri: "07:45-09:15" }
+    pick_up: { mon: "15:30-18:30", tue: "15:30-18:30", wed: "11:45-14:00", thu: "15:30-18:30", fri: "15:30-18:30" }
+    family: { wed: "12:00-19:00", fri: "12:00-19:00" } # picking up at family
+  # (optional) Sleeping window: at home between these hours counts as sleeping (stay.py and the card). Change it
+  # later: run backfill.py --stays --write --update for the days the recorder still has.
+  sleep_window: { start: "23:00", end: "07:30" }
+  # (optional) Start value of input_datetime.arrival_<day> until the module has learned 3 arrivals on that day.
+  # Times always in quotes ("17:00"), otherwise YAML reads them as a number.
+  arrival_defaults: { mon: "17:00", tue: "17:00", wed: "13:30", thu: "17:00", fri: "16:30", sat: "12:00", sun: "12:00" }
+  # (optional) A replaced phone: the old tracker counts until 'until' for stay.py and backfill.py (then the new).
+  # Leave empty when nobody changed phones.
+  previous_phones:
+    # - { person: lien, phone: iphone_lien_oud, until: "2026-01-15 17:00" }
+
+# (optional, shading) Start values of times and thresholds are in modules/shading/module.yaml (defaults:) and you
+# tune them afterwards in Home Assistant. The rooms and covers are in rooms:, the weather entity in entities.weather.
+shading:
+  sun_protection: true # (optional) false = only the schedules of blinds and curtains, no sun and heat
+
+# (optional, notifications) Who gets what. The recipients come from people[].notify.
+notifications:
+  recipients: [jan] # (optional) keys from people that get the notifications; empty = everyone with notify
+  # (optional) which notifications, values: power_price (free/negative power price, ahead and now), surplus (solar
+  # power to the grid), filter (ventilation filter). Empty = [power_price, surplus]. A chosen kind without its
+  # sensor = error (filter: see entities.ventilation_filter_days). The Dutch values of earlier versions
+  # (stroomprijs, overschot) still work.
+  kinds: [power_price, surplus, filter]
+  tap_url: /lovelace/energy # (optional) where a tap on the notification goes; empty = the app just opens
+
+# (optional, tesla-driveway-lock) Car on the driveway gets locked. The waiting time and the radius of zone.driveway are
+# start values in modules/tesla-driveway-lock/module.yaml (defaults:) and you tune them afterwards in Home Assistant.
+tesla_driveway_lock:
+  # (optional) true = garage photo on arrival: Gemini says whether the fixed spot of the car is empty or taken, and
+  # that decides first. Needs entities.garage_camera and cars[].garage_spot. Default false: GPS only (zone.driveway).
+  garage_photo: false
+  ai_task: # (optional) ai_task entity or auto; empty = doorbell.ai_task; none = no garage photo to an AI service
+  garage_hint: # (optional) one extra sentence for Gemini about the garage, e.g. "Bikes are parked on the left too."
+
+# (required for ventilation-zehnder) ESPHome firmware for a Zehnder ComfoAir Q over the ComfoNet bus.
+ventilation:
+  # (required) device name in ESPHome: lower case, digits and hyphens. Also the file name in
+  # /config/esphome/ (<name>.yaml).
+  name: ventilatie
+  # (optional) name in Home Assistant; sets the entity ids (fan.ventilatie_fan, sensor.ventilatie_...).
+  # Empty = name with a capital.
+  display_name: Ventilatie
+  # (optional) true = like the stock firmware of yoziru: the last 6 characters of the MAC address after the
+  # name (entity ids sensor.<name>_<6 characters>_...). Only needed when your device is already like that in HA;
+  # default false. Then fill in entities.ventilation_filter_days yourself.
+  mac_suffix: false
+  # (optional) true = a ComfoClime (24/36) hangs on the same bus: read + set through the bus.
+  # Default false. Not sure: leave false, the rest works without.
+  comfoclime: false
+  # (optional) true = logs unknown CAN frames (diagnosis with a new device on the bus). Default false.
+  sniffer: false
+  # (optional) true = the device's own web page on port 80, with ventilation_web_username / ventilation_web_password
+  # from secrets.yaml. Default false: Home Assistant (API with encryption key) is the only way in.
+  web_server: false
+
+# (optional, only for spa-spanet) ESP32 on the EXP1 port of a SpaNET SV3 controller. Everything is optional.
+spa:
+  name: jacuzzi # (optional) device name in ESPHome: lower case, digits, hyphens; default jacuzzi
+  display_name: Jacuzzi # (optional) name in Home Assistant, sets the entity ids; default name with a capital
+  probes: true # (optional) two DS18B20 probes (water GPIO4, air GPIO18); false = none; default true
+  lid: true # (optional) reed contact on the lid (GPIO19); false = none; default true
+
+# (required for tariff-be) Belgian dynamic tariff: one source for Jinja (templates) and JS (energy screens).
+# Public coefficients of a dynamic contract; adapt to your own contract. Spot price (Belpex) in c€/kWh:
+#   import = (factor x spot + markup) x vat + levies + grid fee (day or night)      [c€/kWh]
+#   export = factor x spot - deduction                                              [c€/kWh, may be negative]
+tariff:
+  area: BE # (required) Nord Pool area
+  import: { factor: 1.02, markup: 0.49, vat: 1.06 } # (required)
+  export: { factor: 1.01, deduction: 0.98 } # (required)
+  night: { start: 22, end: 7, weekend: true } # (required) weekend: true = the whole weekend at night tariff
+  # (required) capacity tariff (monthly peak): EUR per kW per year (start value of the helper), the floor of every
+  # month peak, and (optional) connection_kw: the power of your grid connection in kW (e.g. 9.2 for 1 x 40 A at
+  # 230 V, 17.3 for 3 x 25 A at 400 V). It is the headroom while the import price is negative and
+  # input_boolean.capacity_peak_may_rise is on. Default 9.2.
+  capacity: { eur_per_kw_year: 60.53, minimum_kw: 2.5, connection_kw: 9.2 }
+  # (required) start values of the helpers (they change every year: tune them in HA afterwards): grid fee day and
+  # night, and the levies (excise, green power and CHP certificates), all in c€/kWh incl. VAT
+  grid: { day: 6.7, night: 5.99, levies: 6.436 }
+  fixed_eur_per_year: 30 # (optional) supplier fee + data management per year; default 0
+  cheap_below: 0.15 # (optional) EUR/kWh all-in: binary_sensor.power_price_cheap at or below this; default 0.15
+  # (optional, energy tariff view, results, ev-charging) your alternatives to compare the dynamic contract with:
+  # energy price in c€/kWh incl. VAT without grid fee and levies (variable, fixed), the export compensation (export)
+  # and their fixed fee per year (fee_eur_per_year; default tariff.fixed_eur_per_year). results uses them as start
+  # values of input_number.results_compare_* (0 = not compared); ev-charging reads export as the value of own solar
+  # used later ("never pay to export"; default 0). Empty = only the dynamic contract. Invented values below: keep
+  # your real contract prices in your own house.yaml.
+  compare: { variable: 15.0, fixed: 18.0, export: 4.0, fee_eur_per_year: 30 }
+
+# (optional, energy and energy-plan) How your energy roles behave, and what the energy screens show.
+energy:
+  # (required with entities.battery_power_w) values: charge_positive | discharge_positive (what a positive value means)
+  battery_power_sign: discharge_positive
+  battery_usable_kwh: 4.9 # (required for energy-plan with a battery) usable capacity in kWh
+  # (optional, energy) first day with reliable statistics (YYYY-MM-DD): the analysis ignores everything before it
+  # and the long charts start there; empty = every statistic Home Assistant has
+  analysis_from: "2026-01-01"
+  # (optional, energy) measured consumers, any number: on the energy screen (flow diagram, house sheet) and in the
+  # analysis (who uses what, start moments). Per item:
+  #   name        (required) as shown
+  #   power_w     (optional) power sensor in W or kW (state_class: measurement); needed for the diagram and starts
+  #   energy_kwh  (optional) energy meter in kWh (total_increasing); used for the kWh when set
+  #   icon        (optional) mdi icon; default mdi:power-plug-outline
+  #   flow        (optional) false = not in the flow diagram (it shows at most 4 consumers, charger and heat pump
+  #               first); default true when power_w is set
+  #   start_w     (optional) a start is counted when the power rises above this; default 100
+  # At least one of power_w and energy_kwh. Empty = only the charger, heat pump and ventilation of their modules.
+  consumers:
+    - { name: Spa, power_w: sensor.spa_heater_power, icon: mdi:hot-tub, start_w: 2000 }
+    - { name: Washing machine, energy_kwh: sensor.washing_machine_energy, icon: mdi:washing-machine }
+  # (optional, energy) url paths of the two dashboards energy/deploy.py writes (they need a hyphen);
+  # defaults energy-screen and energy-analysis
+  dashboards: { screen: energy-screen, analysis: energy-analysis }
+  # (optional, energy) where buttons of the energy screen go: results (with the module results), cars (a view of your
+  # cars). Empty = no button.
+  paths: { results: /lovelace/results, cars: /lovelace/cars }
+  peak_target_kw: 3 # (optional, energy) target for the quarter-hour peak in the analysis (power view); default 3
+  # (optional, energy) phase (1-3) the battery inverter feeds: its discharge counts on that phase in the base load per
+  # phase; empty = not split
+  battery_phase:
+  # (optional, energy) days with a house use without the car below this (kWh) are left out of the average-day
+  # profiles (nobody home); default 0 = keep every day
+  away_below_kwh: 0
+  battery_module_kwh: # (optional, energy) usable kWh of one extra battery module: chart "extra module"; empty = no chart
+  battery_efficiency: 0.9 # (optional, energy) round-trip efficiency of the battery; default 0.9
+  battery_reserve_percent: 20 # (optional, energy) charge level at which the battery counts as empty; default 20
+  battery_investment_eur: # (optional, energy) price of the battery: a line in the savings chart; empty = no line
+
+# (optional, energy-plan) Tuning of the solar day plan (sensor.energy_plan_margin). Everything may stay empty.
+energy_plan:
+  sun_end_w: 150 # (optional) below this solar power (W) the sun counts as gone from the panels; default 150
+  charge_efficiency: 0.95 # (optional) of the home battery while charging, 0.5-1; default 0.95
+  # (optional) days of 5-minute statistics the plan learns from; default 10. The recorder keeps them as long as
+  # recorder: purge_keep_days (default 10): a higher value here needs a higher purge_keep_days.
+  history_days: 10
+
+# (optional, ev-charging) The charger connection. The cars are in cars:, the charger in entities.charger_*.
+ev_charging:
+  voltage: 230 # (optional) V; default 230
+  phases: 3 # (optional) phases of the charger connection: 1 or 3; default 3; charger-zappi switches phases only with 3
+  max_power_kw: 11 # (optional) highest charge power; default 11
+  house_reserve_kw: 1.0 # (optional) kept free under the month peak for the house while charging from the grid
+  efficiency: 0.9 # (optional) charge efficiency used by the plan; default 0.9
+  # (optional, charge plan from a calendar) Waze region of the trips, values: eu, us, na, il, au; default eu
+  waze_region: eu
+
+# (optional, charger-zappi) The myenergi integration names its entities <domain>.<prefix>_<name>, with a prefix like
+# myenergi_zappi_<serial> (the device name of your Zappi). Set the prefix once and every entities.charger_* role left
+# empty is derived from it (status, charge_mode, plug_status, power_ct_internal_load, minimum_green_level,
+# phase_setting, energy_used_today, green_energy_today). A role written out under entities: wins. Replace 0000000
+# by the serial of your Zappi; it stays in your own house.yaml.
+charger_zappi:
+  prefix: myenergi_zappi_0000000 # (optional) without domain; empty = write every entities.charger_* out
+
+# (required for heat-pump-vaillant) myVAILLANT (mypyllant). The entity ids contain the system and zone names as you
+# named them in the myVAILLANT app, in lower case with underscores: water_heater.<system>_domestic_hot_water_0,
+# climate.<system>_zone_<zone>_circuit_<circuit>_climate. Look them up in Settings > Entities, search "zone_".
+heat_pump:
+  system: huis # (required) system name in the entity ids
+  # (required) one item per myVAILLANT zone, any number. Replaces the older single `zone:` (still read when zones:
+  # is missing).
+  #   name     (required) zone name in the entity ids
+  #   circuit  (optional) heating circuit number in the entity ids; default 0
+  #   key      (optional) short name in logbook lines and in the zone field of the scripts; default name
+  #   cooling  (optional) this zone may cool; default heat_pump.cooling (e.g. false for a bathroom circuit)
+  #   band     (optional) script.heat_pump_set_floor_band writes this zone when called without a zone; default true
+  #   climate  (optional) climate entity when it is not called as above (the first zone: entities.heat_pump)
+  zones:
+    - { name: woning, circuit: 0, key: living }
+    # - { name: badkamer, circuit: 1, key: bathroom, cooling: false }
+  cooling: true # (optional) the heat pump can cool the floor; default false
+  # (optional) estimated electrical power per state in W (myVAILLANT gives no live power); defaults
+  # hot_water 2000, heating 1800, cooling 800, idle 0
+  power_estimate_w: { hot_water: 2000, heating: 1800, cooling: 800 }
+  # (optional) operation modes of the water heater when yours has other names. Default: the first of
+  # Auto / Time Controlled (normal) and Day / Manual (heat) that the water heater offers (Developer tools > States,
+  # attribute operation_list)
+  hot_water_modes: { normal: Auto, heat: Day }
+  # (optional, both or neither) daily energy sensors of the heat-pump device for hot water, for sensor.hot_water_cop:
+  # heat into the tank and electrical energy, kWh today. The device name is part of the id; empty = hot_water.cop
+  hot_water_heat_kwh: sensor.huis_device_1_heat_generated_domestic_hot_water
+  hot_water_electric_kwh: sensor.huis_device_1_consumed_electrical_energy_domestic_hot_water
+
+# (optional, hot-water) The tank. The start values of the temperatures are in modules/hot-water/module.yaml.
+hot_water:
+  tank_litres: 300 # (optional) default 300
+  # (optional) COP for hot water when the heat pump gives none (sensor.hot_water_cop); 1 for an element; default 2.8
+  cop: 2.8
+  bath: true # (optional) daily bath check (input_datetime.hot_water_bath_check); default false
+  # (optional) electrical power of the heater while it heats the tank, kW: for "does it fit in the surplus" (a session
+  # starts at an export average of about heater_kw - 0.3 kW) and the month-peak check. Default
+  # heat_pump.power_estimate_w.hot_water / 1000 when set, else 2.0
+  heater_kw: 2.0
+  # (optional, with bath: true) the cheapest hour before the bath is looked for from this time on; default "10:00"
+  bath_from: "10:00"
+  # (optional) at most this many surplus or cheap-power sessions per day: every session costs about 4 commands of a
+  # cloud heat pump (myVAILLANT allows few); default 6
+  max_sessions_per_day: 6
+
+# (optional, climate) Targets and the parts that take part. Thresholds and bands are helpers you tune in HA
+# (start values in modules/climate/module.yaml).
+climate:
+  target: 21 # (optional) °C; default 21
+  comfort: { low: 20.5, high: 22.5 } # (optional) comfort band (screen, kind of day); default 20.5-22.5
+  # (optional, needs a module that provides heat-pump) heating/neutral/cooling over several days; default true
+  floor_mode: true
+  # (optional) the floor may cool (the 06:00 decision may pick cooling); default heat_pump.cooling when that section
+  # exists, else true. The heat-pump module still only cools the zones that may cool.
+  floor_cooling: true
+  ventilation_cooling: true # (optional, needs the four free-cooling roles) free cooling with outside air; default true
+  season_profile: true # (optional, needs the three season roles) temperature profile follows the season; default true
+  loud_hours: { start: "23:00", end: "06:00" } # (optional) only then may the ventilation run on high; times in quotes
+  # (optional, needs a ComfoClime) short heat boost below this indoor temperature, for this many hours; false = off.
+  # Default { below: 19.5, hours: 2 }
+  comfoclime_boost: { below: 19.5, hours: 2 }
+  # (optional) option values of the ventilation selects when yours differ from the Zehnder ones; defaults
+  # away Away, low Low, medium Medium, high High, profile_heating Normal, profile_cooling Cool, profile_warm Warm
+  ventilation_values: { medium: Medium, high: High }
+  forecast_days: 30 # (optional) days of hourly statistics the indoor forecast learns from; default 30
+  view_path: climate # (optional) path of the view climate/deploy.py --view writes; default climate
+
+# (required for appliances-home-connect) One item per Home Connect appliance (any number).
+#   key           (required) lower case letters, digits and _: helper names (appliance_<key>_*) and notification
+#                 buttons (APPLIANCE_SMART_{KEY}, APPLIANCE_NOW_{KEY})
+#   kind          (required) values: dishwasher | washer | dryer
+#   prefix        (required) start of its entity ids in HA = the device name Home Connect gave it, in lower case
+#                 (in a Dutch-language HA e.g. vaatwasser, wasmachine)
+#   name          (optional) as shown in notifications and on the dashboard; default from kind in house.language
+#   smart_start   (optional) values: auto (plans the start by itself once it is switched on with the door closed and
+#                 remote start on) | ask (a notification with the buttons Smart start / Start now when remote start is
+#                 switched on); default ask
+#   duration_h    (optional) start value of the program duration the plan uses, in hours; default 3
+#   auto_time     (optional) ready-by time of "auto" without the module presence (or before it learned an arrival);
+#                 default 17:00
+#   delay_option  (optional) how the appliance takes a delayed start: start (start in, dishwashers) | finish (finish
+#                 in, washers and dryers); default by kind
+#   entities      (optional) {role: entity_id} for an entity of this appliance with another name than the pattern
+#                 (roles: status, door, selected_program, active_program, power, remote_start, stop, finish_time,
+#                 progress, program_aborted)
+#   maintenance   (optional) list of maintenance event sensors (state present = refill); default by kind and
+#                 home_connect.language (modules/appliances-home-connect/README.md, "Entity names")
+appliances:
+  - { key: dishwasher, kind: dishwasher, prefix: vaatwasser, smart_start: auto, duration_h: 2.5 }
+  - { key: washer, kind: washer, prefix: wasmachine, smart_start: ask, duration_h: 3 }
+
+# (optional, appliances-home-connect) Entity names of Home Connect. They follow the language Home Assistant had when
+# the integration was added (sensor.<prefix>_operation_state in English, sensor.<prefix>_status in Dutch).
+home_connect:
+  language: nl # (optional) en | nl; default house.language
+  # (optional) pattern per role for every appliance, {p} = prefix; overrides the built-in table of language
+  entities:
+    # status: "sensor.{p}_operation_state"
+
+# (optional, results)
+results:
+  exact_from: "2025-01" # (optional) first month with a cost at the dynamic price; earlier months show "-"
+  # (optional) cost sensors of the HA energy dashboard (HA creates them for your price entities); empty = no cost
+  cost_sensors:
+    import: [sensor.energy_consumed_tariff_1_cost, sensor.energy_consumed_tariff_2_cost]
+    export: [sensor.energy_produced_tariff_1_compensation, sensor.energy_produced_tariff_2_compensation]
+  # (optional) last year per month from your settlement, to compare with: month, kWh taken, EUR. Keep the real
+  # figures in your own house.yaml only. Empty = no "compared with last year".
+  last_year:
+    - { month: "2024-10", kwh: 300, eur: 90.0 } # invented figures
+  view_path: results # (optional) path of the view results/deploy.py writes; default results
+  # (optional) extra entities whose logbook lines (logbook.log, e.g. of your own automations) show under "What the
+  # house did". The master switches of the installed kit modules are added by themselves. Empty = none.
+  log_entities: []
+
+# (optional, home-screen) What the start screen shows besides the chips of your modules. Every chip and card follows
+# modules: (and the capabilities); these fields only add the parts that are not a module.
+home_screen:
+  toggles: [light.kitchen_island, switch.terrace_sockets] # (optional) quick on/off tiles under Controls
+  # (optional) media chip + "Playing now" card; empty = none
+  media_players: [media_player.living_room, media_player.kitchen]
+  cameras: "^camera\\..+_high$" # (optional) regex of the camera entities for the camera chip; empty = no chip
+  todo: todo.shopping_list # (optional) to-do entity: card "N tasks to do" while it has open tasks; empty = none
+  # (optional) Mapbox public token for the arrival card (tesla-route); empty = OpenStreetMap. Local only, never
+  # commit it.
+  map_token:
+  # (optional) Where a chip or card goes on tap, as a path in your HA (/lovelace/<view>, /<dashboard>/<view>). Keys:
+  # energy, climate, shading, cars, cameras, media, charging, parcel_service, presence, todo. Without a path the
+  # chip only opens its info sheet. Defaults: energy /energy (HA's energy dashboard; with energy-plan or a tariff
+  # module), presence /lovelace/our-week (presence/deploy.py --tab), todo /todo?entity_id=<todo>.
+  paths:
+    climate: /lovelace/climate
+    cameras: /lovelace/camera
+  # (optional, doorbell) web address of your camera app (e.g. the UniFi Protect console), as a button in the doorbell
+  # sheet. Empty = no button.
+  protect_url:
+  view_path: home # (optional) path of the view home-screen/deploy.py writes; default home
+
+# (optional, e-ink-display) Touch e-ink wall display: an Android e-ink tablet that shows one dashboard page full time
+# (HA Companion app or Fully Kiosk Browser). Every block follows modules: and the roles above; these fields only add
+# what is not a module. All optional.
+e_ink_display:
+  # (optional) url_path of the own dashboard the page lives on: lower case, digits, '-' and '_', with a hyphen (Home
+  # Assistant rule); default e-ink
+  dashboard: e-ink
+  view_path: display # (optional) path of the view (same characters); default display. The tablet opens /<dashboard>/<view_path>
+  # (optional) calendar entities for the agenda block (today and tomorrow, at most 6 events); empty = no agenda block
+  calendars: [calendar.family]
+  # (optional; required with charger_relay) battery level of the tablet in %, from the Companion app
+  # (sensor.<device>_battery_level) or Fully Kiosk (sensor.<device>_battery)
+  battery: sensor.wall_tablet_battery_level
+  # (optional) switch (or light, input_boolean) that powers the in-wall USB-C charger of the tablet. Set = smart
+  # charging: on below input_number.e_ink_display_charge_on_below, off above _charge_off_above. Empty = no automation.
+  charger_relay: switch.wall_tablet_charger
+  # (optional) extra tiles in the home block, after the tiles of your modules: entity (required), label (required),
+  # icon (optional, an icon name of cw-thema.js, e.g. bad, druppel, lamp; default info), unit (optional; default the
+  # unit of the entity). A tap opens the entity. Empty = none.
+  tiles:
+    - { entity: sensor.spa_water_temperature, label: Spa, icon: bad }
+  # (optional) energy block, line "Today": kWh meters that reset every day; empty = the part is left out (with
+  # energy-plan the solar part comes from sensor.energy_plan_margin, attribute pv_today_kwh)
+  solar_today_kwh:
+  grid_import_today_kwh: sensor.grid_import_today
+  # (optional) where the top buttons and the blocks go on tap, as a path in your HA. Keys: home, energy, climate,
+  # shading, cars, presence, results. Defaults from your modules: home /lovelace/<home_screen.view_path> (home-screen),
+  # energy /energy-screen/energy (energy; /energy with only energy-plan or a tariff module), climate
+  # /lovelace/<climate.view_path> (climate), presence /lovelace/our-week (presence), results
+  # /lovelace/<results.view_path> (results). An empty value removes the default. At most 6 buttons.
+  paths:
+    shading: /lovelace/shading

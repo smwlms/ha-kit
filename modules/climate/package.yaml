@@ -1,0 +1,112 @@
+<% from '_climate.jinja' import feat with context %>
+# Climate: helpers (ha-kit module climate, see climate/LOGIC.md "Settings").
+# Uploaded by climate/deploy.py to /config/packages/climate.yaml (module base: packages: !include_dir_named packages/).
+# No `initial` anywhere: Home Assistant keeps the last value over a restart. deploy.py sets the start values of
+# module.yaml (defaults:) once, when a helper is created for the first time.
+# Blocks in this house: floor <@ 'on' if feat.floor else 'off (no heat-pump module or climate.floor_mode: false)' @>,
+# ventilation cooling <@ 'on' if feat.ventilation_cooling else 'off' @>, ComfoClime boost <@ 'on' if feat.comfoclime_boost else 'off' @>.
+<% if not (feat.floor or feat.ventilation_cooling or feat.comfoclime_boost) %>
+# Nothing to keep for this house: the weather and forecast sensors need no helpers.
+{}
+<% else %>
+<% if feat.floor or feat.ventilation_cooling %>
+
+input_boolean:
+<% if feat.floor %>
+  climate_floor_mode_auto:              # the 06:00 decision may change the floor mode (default on)
+    name: <@ t('helper_floor_auto') | tojson @>
+    icon: mdi:robot
+<% endif %>
+<% if feat.ventilation_cooling %>
+  climate_ventilation_cooling:          # free cooling with outside air through the bypass (default on)
+    name: <@ t('helper_ventilation_cooling') | tojson @>
+    icon: mdi:snowflake-thermometer
+<% endif %>
+
+input_select:
+<% if feat.floor %>
+  climate_floor_mode:                   # fixed English options; the screen shows them translated (default neutral)
+    name: <@ t('helper_floor_mode') | tojson @>
+    icon: mdi:heating-coil
+    options: [heating, neutral, cooling]
+<% endif %>
+<% if feat.ventilation_cooling %>
+  climate_ventilation_state:            # written by climate_ventilation_cooling only (default auto)
+    name: <@ t('helper_ventilation_state') | tojson @>
+    icon: mdi:fan-auto
+    options: [auto, bypass_closed, cooling_medium, cooling_high]
+<% endif %>
+
+input_datetime:
+<% if feat.floor %>
+  climate_floor_mode_since:             # set by climate_floor_mode_apply on every mode change (also by hand)
+    name: <@ t('helper_floor_since') | tojson @>
+    icon: mdi:calendar-clock
+    has_date: true
+    has_time: true
+<% endif %>
+<% if feat.ventilation_cooling %>
+  climate_bypass_renewed:               # last bypass command (the bypass buttons hold for 1 h; renewed after 50 min)
+    name: <@ t('helper_bypass_renewed') | tojson @>
+    icon: mdi:timer-refresh-outline
+    has_date: true
+    has_time: true
+<% endif %>
+
+input_number:
+<% if feat.floor %>
+<% for mode, lo_min, hi_min in [('heating', 16, 22), ('neutral', 16, 22), ('cooling', 16, 20)] %>
+  climate_floor_<@ mode @>_low:           # floor heats below this in mode <@ mode @>
+    name: <@ t('helper_floor_band_low', mode=t('mode_' ~ mode)) | tojson @>
+    icon: mdi:thermometer-chevron-down
+    min: <@ lo_min @>
+    max: 24
+    step: 0.5
+    unit_of_measurement: °C
+    mode: box
+  climate_floor_<@ mode @>_high:          # floor cools above this in mode <@ mode @> (only where the heat pump may cool)
+    name: <@ t('helper_floor_band_high', mode=t('mode_' ~ mode)) | tojson @>
+    icon: mdi:thermometer-chevron-up
+    min: <@ hi_min @>
+    max: 30
+    step: 0.5
+    unit_of_measurement: °C
+    mode: box
+<% endfor %>
+  climate_floor_cooling_from_outdoor_max: # a day counts warm from this forecast day maximum (default 24)
+    name: <@ t('helper_floor_cooling_from') | tojson @>
+    icon: mdi:thermometer-high
+    min: 18
+    max: 35
+    step: 0.5
+    unit_of_measurement: °C
+    mode: box
+  climate_floor_heating_below_outdoor_max: # a day counts cool below this forecast day maximum (default 17)
+    name: <@ t('helper_floor_heating_below') | tojson @>
+    icon: mdi:thermometer-low
+    min: 5
+    max: 24
+    step: 0.5
+    unit_of_measurement: °C
+    mode: box
+<% endif %>
+<% if feat.ventilation_cooling %>
+  climate_ventilation_cooling_from:     # indoor temperature from which the outside air cools (default 21.5)
+    name: <@ t('helper_ventilation_cooling_from') | tojson @>
+    icon: mdi:thermometer-chevron-up
+    min: 19
+    max: 26
+    step: 0.5
+    unit_of_measurement: °C
+    mode: box
+<% endif %>
+<% endif %>
+<% if feat.comfoclime_boost %>
+
+input_text:
+  climate_comfoclime_previous:          # "<mode>|<preset>|<until ISO>" while a boost runs, empty otherwise
+    name: <@ t('helper_comfoclime_previous') | tojson @>
+    icon: mdi:history
+    max: 255
+<% endif %>
+<% endif %>

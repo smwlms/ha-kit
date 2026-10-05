@@ -1,0 +1,7 @@
+# Direct Python dependencies of the kit's tools and deploy scripts (exact versions).
+# tools/requirements.txt is generated from this file with hashes:
+#   uv pip compile --generate-hashes --python-version 3.11 tools/requirements.in -o tools/requirements.txt
+# and used as: uv run --with-requirements tools/requirements.txt python tools/check.py
+jinja2==3.1.6
+pyyaml==6.0.3
+websockets==17.2

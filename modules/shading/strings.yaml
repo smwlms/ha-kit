@@ -1,0 +1,105 @@
+# User-facing texts of the module shading, one key per text: {en: ..., nl: ...}. Used in the module's files as
+# <@ t('key', room=...) @> (tools/fill.py picks house.language, default en; a missing language falls back to en).
+# Placeholders: {room} room name, {side} facade (N, NE, ...), {rooms} list of room names. In the automations a
+# placeholder may also receive a Home Assistant expression ({{ ... }}) that is filled in at run time.
+
+# --- Logbook --------------------------------------------------------------------------------------------------------
+logbook_name: { en: Shading, nl: Zonwering }
+msg_schedule_kept_closed:
+  en: "Schedule: {rooms} kept closed against the sun"
+  nl: "Schema: {rooms} blijft dicht tegen de zon"
+msg_closed_sun:
+  en: "{room} closed against the sun · {reason}"
+  nl: "{room} dicht tegen de zon · {reason}"
+msg_stays_open_manual:
+  en: "{room} stays open: operated by hand today · {reason}"
+  nl: "{room} blijft open: vandaag met de hand bediend · {reason}"
+msg_sun_gone_open:
+  en: "{room} open · sun gone from facade {side}"
+  nl: "{room} open · zon weg van gevel {side}"
+msg_sun_gone_closed:
+  en: "{room} stays closed until the schedule · sun gone from facade {side}"
+  nl: "{room} blijft dicht tot het schema · zon weg van gevel {side}"
+msg_opened_by_hand:
+  en: "{room} opened by hand: the sun leaves this blind alone today"
+  nl: "{room} met de hand geopend: de zon laat dit rolluik vandaag met rust"
+reason:
+  en: "facade {side}: sun {angle}° from the facade, clouds {clouds}, warmest today {warmest} °C"
+  nl: "gevel {side}: zon {angle}° van de gevel, bewolking {clouds}, warmste vandaag {warmest} °C"
+no_data: { en: no data, nl: geen gegevens }
+
+# --- Helpers, groups and sensors (friendly names) ---------------------------------------------------------------------
+helper_automatic: { en: Shading on sun automatic, nl: Zonwering op zon automatisch }
+helper_closed: { en: "Shading closed {room}", nl: "Zonwering dicht {room}" }
+helper_manual: { en: "Shading manual {room}", nl: "Zonwering handmatig {room}" }
+helper_curtains_follow: { en: Curtains follow blinds, nl: Gordijnen volgen rolluiken }
+helper_outdoor_warm: { en: Shading outdoor warm from, nl: Zonwering buiten warm vanaf }
+helper_indoor_warm: { en: Shading indoor warm from, nl: Zonwering binnen warm vanaf }
+helper_max_cloud: { en: Shading max cloud cover, nl: Zonwering max bewolking }
+helper_min_elevation: { en: Shading min sun elevation, nl: Zonwering min zonhoogte }
+helper_angle: { en: "Shading angle facade {side}", nl: "Zonwering hoek gevel {side}" }
+helper_blinds_open_workday: { en: Blinds open workday, nl: Rolluiken open werkdag }
+helper_blinds_open_weekend: { en: Blinds open weekend, nl: Rolluiken open weekend }
+helper_blinds_close: { en: Blinds close, nl: Rolluiken dicht }
+helper_curtains_open_workday: { en: Curtains open workday, nl: Gordijnen open werkdag }
+helper_curtains_open_weekend: { en: Curtains open weekend, nl: Gordijnen open weekend }
+helper_curtains_close: { en: Curtains close, nl: Gordijnen dicht }
+# The entity id of a cover group follows its name in the install language (cover.all_blinds / cover.alle_rolluiken).
+group_all_blinds: { en: All blinds, nl: Alle rolluiken }
+group_all_curtains: { en: All curtains, nl: Alle gordijnen }
+sensor_weather: { en: Shading warmest today, nl: Zonwering warmste vandaag }
+sensor_warm: { en: Shading warm, nl: Zonwering warm }
+sensor_sun: { en: "Shading sun on facade {side}", nl: "Zonwering zon op gevel {side}" }
+
+# --- Automations: alias, description and step names (shown in the automation editor and in traces) ---------------------
+blinds_schedule_alias: { en: Blinds schedule, nl: Rolluiken schema }
+blinds_schedule_description:
+  en: >-
+    Opens the blinds on workdays and at the weekend and closes them every evening. Times in
+    input_datetime.blinds_open_workday, blinds_open_weekend and blinds_close. A blind that the shading keeps closed
+    against the sun (input_boolean.shading_closed_<room>) stays closed in the morning. Rooms: {rooms}.
+  nl: >-
+    Opent de rolluiken op werkdagen en in het weekend en sluit ze elke avond. Tijden in
+    input_datetime.blinds_open_workday, blinds_open_weekend en blinds_close. Een rolluik dat de zonwering dicht houdt
+    tegen de zon (input_boolean.shading_closed_<kamer>), blijft 's ochtends dicht. Kamers: {rooms}.
+step_morning_open_except_sun: { en: "Morning, open (except what the sun keeps closed)", nl: "Ochtend, open (behalve wat de zon dicht houdt)" }
+step_evening_close_all: { en: "Evening, all closed", nl: "Avond, alles dicht" }
+curtains_schedule_alias: { en: Curtains schedule, nl: Gordijnen schema }
+curtains_schedule_description:
+  en: >-
+    Opens the curtains on workdays and at the weekend and closes them every evening. Times in
+    input_datetime.curtains_open_workday, curtains_open_weekend and curtains_close. Rooms: {rooms}.
+  nl: >-
+    Opent de gordijnen op werkdagen en in het weekend en sluit ze elke avond. Tijden in
+    input_datetime.curtains_open_workday, curtains_open_weekend en curtains_close. Kamers: {rooms}.
+curtains_schedule_follow_note:
+  en: With input_boolean.curtains_follow_blinds on, the automation curtains_sync_times copies the blind times here.
+  nl: Met input_boolean.curtains_follow_blinds aan kopieert de automation curtains_sync_times de rolluiktijden hierheen.
+step_morning_open: { en: "Morning, open", nl: "Ochtend, open" }
+step_evening_close: { en: "Evening, closed", nl: "Avond, dicht" }
+curtains_sync_alias: { en: Curtains follow the blind times, nl: Gordijnen gelijktrekken met rolluiken }
+curtains_sync_description:
+  en: >-
+    While input_boolean.curtains_follow_blinds is on, the curtains get the same opening and closing times as the
+    blinds. Runs on every change of a blind time and as soon as the switch turns on.
+  nl: >-
+    Zolang input_boolean.curtains_follow_blinds aan staat, krijgen de gordijnen dezelfde open- en sluittijden als de
+    rolluiken. Loopt bij elke tijdswijziging van de rolluiken en zodra de schakelaar aangaat.
+shading_sun_alias: { en: Shading on sun and heat, nl: Zonwering op zon en warmte }
+shading_sun_description:
+  en: >-
+    Keeps the sun out on warm days, per facade. A blind closes when binary_sensor.shading_sun_<facade> has been on for
+    10 min (warm, sun on that facade, high enough, few clouds forecast) and opens again during the day when it has
+    been off for 30 min. Sets input_boolean.shading_closed_<room> per room, so the schedule does not open that blind
+    in the morning. Whoever opens it by hand wins for the rest of the day (input_boolean.shading_manual_<room>).
+    Master switch input_boolean.shading_automatic (only for closing). Reset at blinds_close and at 03:00. Rooms: {rooms}.
+  nl: >-
+    Houdt de zon buiten op warme dagen, per gevel. Een rolluik gaat dicht als binary_sensor.shading_sun_<gevel> 10 min
+    aan staat (warm, zon op die gevel, hoog genoeg, weinig bewolking voorspeld) en gaat overdag terug open als die
+    30 min uit staat. Zet per kamer input_boolean.shading_closed_<kamer>, zodat het schema dat rolluik 's ochtends niet
+    opent. Wie zelf opent, wint voor de rest van de dag (input_boolean.shading_manual_<kamer>). Hoofdschakelaar
+    input_boolean.shading_automatic (enkel voor dichtdoen). Reset bij blinds_close en om 03:00. Kamers: {rooms}.
+step_sun_close: { en: "Sun on the facade: blinds closed", nl: "Zon op de gevel: rolluiken dicht" }
+step_sun_gone: { en: "Sun gone from the facade: blinds open again (daytime)", nl: "Zon weg van de gevel: rolluiken terug open (overdag)" }
+step_manual: { en: "Someone opens a blind the sun kept closed: the hand wins today", nl: "Iemand opent een rolluik dat de zon dicht hield: de hand wint vandaag" }
+step_reset: { en: "Evening and night: reset everything", nl: "Avond en nacht: alles terugzetten" }

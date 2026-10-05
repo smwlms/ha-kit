@@ -1,0 +1,44 @@
+# Module metadata, read by tools/fill.py (--list), tools/choose.py (ask:), tools/check.py and results/deploy.py
+# (defaults). Contract: docs/phase4-contracts.md (results). The entity and helper ids below are part of it.
+name: Results
+description: "What the smart logic saved (EUR) and whether the day goals were met; consumption and cost per day, week and month against the invoice, other contracts and last year; what the house did"
+status: built, not tested on HA
+# Layer: core. Listens only to the events ha_kit_result / ha_kit_day_goal and to tariff and energy roles; every
+# result line exists only when the module that produces it is in modules: (see _results.jinja, kind table).
+depends_on: [tariff]
+provides: []
+requires:
+  integrations:
+    - "a module that provides tariff (e.g. tariff-be): prices, capacity tariff"
+    - "HA energy dashboard (cost sensors, optional)"
+  hardware: []
+optional: true
+generate: []
+ask:
+  - id: results
+    question: "Keep track of what the smart logic saves (tab Results)?"
+# Fields of house.yaml this module reads (example: house.example.yaml).
+house_fields:
+  - "entities.grid_import_kwh, grid_export_kwh (required); solar_energy_kwh, battery_charge_kwh, battery_discharge_kwh (optional)"
+  - "entities.solar_power_w (optional: without solar no 'solar missed' and no goal 'solar used')"
+  - "rooms[] (with shading: the rooms whose blinds close on sun), hot_water.bath (with hot-water)"
+  - "tariff.compare (optional: start values of the comparison helpers), tariff.capacity.minimum_kw (optional)"
+  - "results.exact_from, cost_sensors, last_year, view_path, log_entities (all optional)"
+# Start values that deploy.py sets ONCE, when the helper is new. After that the value is yours (Settings > Helpers).
+# The comparison prices start from house.yaml tariff.compare (c€/kWh, energy price incl. VAT without grid fee and
+# levies); 0 = that contract is not compared.
+defaults:
+  input_number.results_invoice_last_month: 0
+  input_number.results_solar_missed_max_kwh: 1
+  input_number.results_compare_variable: <@ ((tariff.get('compare') if tariff is defined and tariff else none) or {}).get('variable') or 0 @>
+  input_number.results_compare_fixed: <@ ((tariff.get('compare') if tariff is defined and tariff else none) or {}).get('fixed') or 0 @>
+  input_number.results_compare_export: <@ ((tariff.get('compare') if tariff is defined and tariff else none) or {}).get('export') or 0 @>
+# The other side of the optional switches for tools/check.py (all-modules house): no cost sensors (cost estimated from
+# the price statistics), no last year, a single import/export register, no comparison prices.
+check_variant:
+  results:
+    exact_from: ""
+    cost_sensors: {}
+    last_year: []
+    view_path: savings
+    log_entities: [input_boolean.kitchen_lights_auto]

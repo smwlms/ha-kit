@@ -1,0 +1,31 @@
+# Module metadata, read by tools/fill.py (--list shows it as a table), tools/choose.py (ask:) and by notifications/deploy.py (defaults).
+name: Notifications
+description: Shared notifications to the Companion app (free or negative power price, solar surplus, ventilation filter) and script.send_notification for other modules
+status: built, not tested on HA
+# No hard dependency on a tariff module: with one in modules: (capability tariff, e.g. tariff-be) empty
+# entities.price_import / price_export default to its sensor.power_price_import / _export (attributes starts and
+# prices); without one the user fills in sensors of their own.
+depends_on: []
+requires:
+  integrations:
+    - Home Assistant Companion app (iPhone or Android)
+    - dynamic tariff with quarter-hour or hourly prices (the module tariff-be, or Nord Pool + own tariff sensor), only for power_price
+    - P1 meter, inverter or energy meter with the power exported to the grid, only for surplus
+  hardware: []
+optional: false
+generate: []
+ask:
+  - id: notifications
+    question: Send shared notifications (free or negative power price, solar surplus, ventilation filter) to the Companion app?
+# Fields of house.yaml this module reads (example: house.example.yaml).
+house_fields:
+  - people[].key, notify
+  - notifications.recipients (optional), notifications.kinds (optional), notifications.tap_url (optional)
+  - entities.price_import, entities.price_export (optional) (kind power_price; empty + tariff capability = sensor.power_price_import / _export)
+  - entities.grid_export_w (kind surplus)
+  - entities.ventilation_filter_days (kind filter; empty + module ventilation-zehnder = derived from ventilation.name)
+# Defaults that deploy.py sets ONCE, when the helper does not exist yet. Afterwards the value is yours: no `initial`.
+defaults:
+  input_number.notification_surplus_kw: 1.8
+  input_number.notification_surplus_minutes: 10
+  input_number.notification_surplus_pause_h: 3

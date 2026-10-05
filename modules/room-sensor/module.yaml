@@ -1,0 +1,24 @@
+# Module metadata, read by tools/fill.py (--list shows it as a table), tools/choose.py (ask:) and by room-sensor/deploy.py.
+name: Room sensor
+description: ESPHome room sensor (presence by radar, light, temperature, humidity), one firmware file per room
+status: built, never flashed
+depends_on: []
+requires:
+  integrations: [ESPHome, ESPHome Device Builder app (or esphome on a computer)]
+  hardware: [ESP32 DevKit (CP2102), HLK-LD2450, BH1750, GY-SHT31-D, USB power supply 5 V]
+optional: false
+# One firmware file per room with sensor: true (if: rooms without a sensor get no file). The device name stays
+# kamersensor-<slug>: kamersensor.yaml is the name the wiring drawing refers to.
+generate:
+  - source: esphome/room.yaml
+    per: rooms
+    if: item.sensor
+    name: "esphome/kamersensor-<@ item.slug | replace('_', '-') @>.yaml"
+ask:
+  - id: room_sensor
+    question: Build ESPHome room sensors (ESP32 + LD2450 radar + BH1750 + SHT31) for some rooms?
+# Fields of house.yaml this module reads (example: section rooms: in house.example.yaml).
+house_fields:
+  - rooms[].slug, name, sensor (optional), temp_offset (optional)
+# Secrets the firmware needs in /config/esphome/secrets.yaml (example: secrets.example.yaml).
+secrets: [wifi_ssid, wifi_password, wifi_hotspot_password, ota_password, room_sensor_api_encryption_key]

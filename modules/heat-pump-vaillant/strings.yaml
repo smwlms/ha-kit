@@ -1,0 +1,122 @@
+# User-facing texts of heat-pump-vaillant: one key per text, {en: ..., nl: ...}. In the module's files: <@ t('key') @>.
+# No double quotes in the texts (they end up inside double-quoted YAML strings).
+
+# --- helpers and automation ---
+helper_writes_today: { en: Heat pump cloud writes today, nl: Warmtepomp cloudopdrachten vandaag }
+helper_max_writes: { en: Heat pump max cloud writes per day, nl: Warmtepomp max cloudopdrachten per dag }
+automation_writes_reset_alias: { en: "Heat pump: reset cloud writes at midnight", nl: "Warmtepomp: cloudopdrachten resetten om middernacht" }
+automation_writes_reset_description:
+  en: Sets counter.heat_pump_vaillant_writes_today back to 0 at midnight (ha-kit heat-pump-vaillant).
+  nl: Zet counter.heat_pump_vaillant_writes_today om middernacht terug op 0 (ha-kit heat-pump-vaillant).
+
+# --- sensors ---
+sensor_state: { en: Heat pump state, nl: Warmtepomp status }
+sensor_power_estimated: { en: Heat pump power (estimated), nl: Warmtepomp vermogen (geschat) }
+sensor_flow_temperature: { en: Heat pump flow temperature, nl: Warmtepomp aanvoertemperatuur }
+sensor_water_pressure: { en: Heat pump water pressure, nl: Warmtepomp waterdruk }
+sensor_fault: { en: Heat pump fault, nl: Warmtepomp storing }
+sensor_hot_water_temperature: { en: Hot water temperature, nl: Warmwatertemperatuur }
+sensor_hot_water_heating: { en: Hot water heating, nl: Warm water wordt opgewarmd }
+sensor_hot_water_cop: { en: Hot water COP today, nl: Warm water COP vandaag }
+
+# --- scripts ---
+script_band_alias: { en: "Heat pump: set floor band", nl: "Warmtepomp: vloerband instellen" }
+script_band_description:
+  en: >-
+    Writes the heating setpoint (low) and the cooling setpoint (high) of the floor zones to myVAILLANT. Only values
+    that differ are written. Heating goes through the setpoints of the heating time program, cooling through the
+    time-controlled cooling setpoint. Called by the climate module; do not call it from your own automations as well.
+  nl: >-
+    Schrijft het verwarmingssetpoint (laag) en het koelsetpoint (hoog) van de vloerzones naar myVAILLANT. Alleen
+    waarden die verschillen worden geschreven. Verwarmen gaat via de setpoints van het tijdprogramma verwarmen, koelen
+    via het tijdgestuurde koelsetpoint. Wordt aangeroepen door de module klimaat; roep het niet ook vanuit eigen
+    automatiseringen aan.
+script_veto_alias: { en: "Heat pump: quick veto", nl: "Warmtepomp: quick veto" }
+script_veto_description:
+  en: >-
+    Temporary target temperature for the floor zones (myVAILLANT quick veto) for a number of hours. 0 hours cancels
+    a running quick veto.
+  nl: >-
+    Tijdelijke doeltemperatuur voor de vloerzones (quick veto van myVAILLANT) voor een aantal uren. 0 uur annuleert
+    een lopende quick veto.
+script_heat_alias: { en: "Hot water: heat", nl: "Warm water: opwarmen" }
+script_heat_description:
+  en: >-
+    Heats the hot-water tank to the target. Without boost the tank is kept at the target all day (mode outside the
+    time program) until Hot water: back to normal; with boost the tank is charged once, right now. Called by the
+    hot-water module.
+  nl: >-
+    Warmt het warmwatervat op tot het doel. Zonder boost blijft het vat de hele dag op het doel (stand buiten het
+    tijdprogramma) tot Warm water: terug naar normaal; met boost wordt het vat nu meteen één keer opgewarmd. Wordt
+    aangeroepen door de module warm water.
+script_normal_alias: { en: "Hot water: back to normal", nl: "Warm water: terug naar normaal" }
+script_normal_description:
+  en: >-
+    Back to the automatic mode of the heat pump (time program) at the target; a running boost is switched off.
+    Always allowed, also above the daily write limit.
+  nl: >-
+    Terug naar de automatische stand van de warmtepomp (tijdprogramma) op het doel; een lopende boost wordt
+    uitgezet. Altijd toegelaten, ook boven de dagelijkse limiet van cloudopdrachten.
+script_write_alias: { en: "Hot water: write to the heat pump (internal)", nl: "Warm water: naar de warmtepomp schrijven (intern)" }
+script_write_description:
+  en: Internal script of heat-pump-vaillant. Use Hot water heat or Hot water back to normal.
+  nl: Intern script van heat-pump-vaillant. Gebruik Warm water opwarmen of Warm water terug naar normaal.
+
+# --- script fields ---
+field_low_name: { en: Heating setpoint (low), nl: Verwarmingssetpoint (laag) }
+field_low_description:
+  en: The floor heats below this temperature. Empty = heating setpoint unchanged.
+  nl: Onder deze temperatuur verwarmt de vloer. Leeg = verwarmingssetpoint ongewijzigd.
+field_high_name: { en: Cooling setpoint (high), nl: Koelsetpoint (hoog) }
+field_high_description:
+  en: The floor cools above this temperature (only zones that may cool). Empty = cooling setpoint unchanged.
+  nl: Boven deze temperatuur koelt de vloer (alleen zones die mogen koelen). Leeg = koelsetpoint ongewijzigd.
+field_reason_name: { en: Reason, nl: Reden }
+field_reason_description: { en: Shown in the logbook., nl: Komt in het logboek. }
+field_reason_example: { en: floor mode heating, nl: vloerstand verwarmen }
+field_zone_name: { en: Zone, nl: Zone }
+field_zone_description:
+  en: Key of one zone (heat_pump.zones in house.yaml). Empty = every zone with band on.
+  nl: Sleutel van één zone (heat_pump.zones in house.yaml). Leeg = elke zone met band aan.
+field_veto_temperature_name: { en: Temperature, nl: Temperatuur }
+field_veto_temperature_description: { en: Temporary target temperature of the zone., nl: Tijdelijke doeltemperatuur van de zone. }
+field_veto_hours_name: { en: Hours, nl: Uren }
+field_veto_hours_description: { en: How long; 0 cancels the quick veto. Default 3., nl: Hoe lang; 0 annuleert de quick veto. Standaard 3. }
+field_target_name: { en: Target, nl: Doel }
+field_target_description: { en: Tank temperature to reach., nl: Te bereiken temperatuur van het vat. }
+field_normal_target_description:
+  en: Target of the tank in the automatic mode (usually your minimum).
+  nl: Doel van het vat in de automatische stand (meestal je minimum).
+field_boost_name: { en: Boost, nl: Boost }
+field_boost_description:
+  en: On = heat once right now (boost switch). Off = keep the tank at the target all day.
+  nl: Aan = nu meteen één keer opwarmen (boostschakelaar). Uit = het vat de hele dag op het doel houden.
+field_kind_description: { en: heat or normal, nl: heat (opwarmen) of normal (normaal) }
+
+# --- logbook ---
+logbook_floor: { en: Floor, nl: Vloer }
+logbook_hot_water: { en: Hot water, nl: Warm water }
+log_heating: { en: heating, nl: verwarmen }
+log_cooling: { en: cooling, nl: koelen }
+log_written: { en: written, nl: geschreven }
+log_unchanged: { en: unchanged, nl: ongewijzigd }
+log_no_slots: { en: "no slots in the heating time program, not written", nl: "geen tijdvakken in het tijdprogramma verwarmen, niet geschreven" }
+log_no_cooling: { en: this zone does not cool, nl: deze zone koelt niet }
+log_unreachable: { en: heat pump not reachable (myVAILLANT), nl: warmtepomp niet bereikbaar (myVAILLANT) }
+log_band_invalid: { en: "invalid band, nothing written", nl: "ongeldige band, niets geschreven" }
+log_over_limit:
+  en: write limit of today reached, nothing written (input_number.heat_pump_vaillant_max_writes_per_day)
+  nl: limiet van cloudopdrachten voor vandaag bereikt, niets geschreven (input_number.heat_pump_vaillant_max_writes_per_day)
+log_veto: { en: quick veto, nl: quick veto }
+log_veto_cancelled: { en: quick veto cancelled, nl: quick veto geannuleerd }
+log_veto_invalid: { en: "invalid quick veto (temperature or zone), nothing written", nl: "ongeldige quick veto (temperatuur of zone), niets geschreven" }
+log_hot_water_heat: { en: heat to, nl: opwarmen tot }
+log_hot_water_normal: { en: normal at, nl: normaal op }
+log_target_written: { en: target written, nl: doel geschreven }
+log_mode_written: { en: mode, nl: stand }
+log_boost_on: { en: boost on, nl: boost aan }
+log_boost_off: { en: boost off, nl: boost uit }
+log_no_mode:
+  en: the water heater offers no mode to hold the target (heat_pump.hot_water_modes)
+  nl: de boiler biedt geen stand om het doel vast te houden (heat_pump.hot_water_modes)
+log_no_boost: { en: no boost switch found, nl: geen boostschakelaar gevonden }

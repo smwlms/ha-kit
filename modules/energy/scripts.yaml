@@ -1,0 +1,37 @@
+# Energy screens: day navigation of the energy-flows view (ha-kit module energy, see energy/LOGIC.md).
+# Written by energy/deploy.py through the config API (script editor). The date never goes past today.
+energy_flows_day_back:
+  alias: <@ t('script_day_back') | tojson @>
+  icon: mdi:chevron-left
+  mode: queued
+  sequence:
+    - action: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.energy_flows_date
+      data:
+        date: >
+          {% set d = strptime(states('input_datetime.energy_flows_date'), '%Y-%m-%d', none) %}
+          {{ ((d.date() if d else now().date()) - timedelta(days=1)).isoformat() }}
+energy_flows_day_forward:
+  alias: <@ t('script_day_forward') | tojson @>
+  icon: mdi:chevron-right
+  mode: queued
+  sequence:
+    - action: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.energy_flows_date
+      data:
+        date: >
+          {% set d = strptime(states('input_datetime.energy_flows_date'), '%Y-%m-%d', none) %}
+          {% set next = (d.date() if d else now().date()) + timedelta(days=1) %}
+          {{ ([next, now().date()] | min).isoformat() }}
+energy_flows_today:
+  alias: <@ t('script_today') | tojson @>
+  icon: mdi:calendar-today
+  mode: single
+  sequence:
+    - action: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.energy_flows_date
+      data:
+        date: "{{ now().date().isoformat() }}"

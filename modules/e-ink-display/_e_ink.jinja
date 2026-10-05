@@ -1,0 +1,114 @@
+<# Shared preamble of the module e-ink-display: the whole card config, derived from house.yaml, modules: and the
+   capabilities at fill time. Imported by lovelace/view.yaml, package.yaml, automations.yaml and deploy.py:
+     <% from '_e_ink.jinja' import card, view, dashboard, relay, battery with context %>
+   Rule: the JavaScript has no entity id of its own. Every id below is either a house.yaml role or a contract id of an
+   installed module (docs/phase4-contracts.md, README "Contracts between modules"). A block whose module or role is
+   missing gets no role here, so the card does not draw it. #>
+<% set E = entities if entities is defined and entities else {} %>
+<% set X = e_ink_display if e_ink_display is defined and e_ink_display else {} %>
+<% set ppl = people if people is defined and people else [] %>
+<% set car_list = cars if cars is defined and cars else [] %>
+<% set room_list = rooms if rooms is defined and rooms else [] %>
+<% set caps = capabilities %>
+<% set HS = home_screen if home_screen is defined and home_screen else {} %>
+<% set CL = climate if climate is defined and climate else {} %>
+<% set RS = results if results is defined and results else {} %>
+<% set dashboard = safe_name((X.get('dashboard') or 'e-ink') | string, 'e_ink_display.dashboard') %>
+<% if '-' not in dashboard %><@ fail('e_ink_display.dashboard: the url_path of a dashboard needs a hyphen (Home Assistant rule), e.g. e-ink') @><% endif %>
+<% set view_path = safe_name((X.get('view_path') or 'display') | string, 'e_ink_display.view_path') %>
+<% set relay = X.get('charger_relay') or none %>
+<% set battery = X.get('battery') or none %>
+<% if relay and not battery %><@ fail('e_ink_display.charger_relay is set but e_ink_display.battery is empty (smart charging needs the battery level of the tablet)') @><% endif %>
+<# --- roles: role -> entity id, only the ones that exist in this house --- #>
+<% set roles = {'refresh': 'input_number.e_ink_display_refresh', 'sun': 'sun.sun'} %>
+<% for key in ['weather', 'outdoor_temperature', 'indoor_temperature'] %>
+<% if E.get(key) %><% set _ = roles.update({key: E[key]}) %><% endif %>
+<% endfor %>
+<# energy: the tiles follow the roles (a P1 meter alone gives the grid tile) #>
+<% for key, role in [('solar_power', 'solar_power_w'), ('grid_import', 'grid_import_w'), ('grid_export', 'grid_export_w'),
+   ('battery_soc', 'battery_soc'), ('battery_power', 'battery_power_w'), ('solar_forecast_today', 'solar_forecast_today')] %>
+<% if E.get(role) %><% set _ = roles.update({key: E[role]}) %><% endif %>
+<% endfor %>
+<% if E.get('house_power_w') %>
+<% set _ = roles.update({'house_power': E.house_power_w}) %>
+<% elif 'energy-plan' in modules %>
+<% set _ = roles.update({'house_power': 'sensor.energy_plan_house_power'}) %>
+<% endif %>
+<% if X.get('solar_today_kwh') %>
+<% set _ = roles.update({'solar_today': X.solar_today_kwh}) %>
+<% elif 'energy-plan' in modules %>
+<% set _ = roles.update({'solar_today_margin': 'sensor.energy_plan_margin'}) %>
+<% endif %>
+<% if X.get('grid_import_today_kwh') %><% set _ = roles.update({'grid_import_today': X.grid_import_today_kwh}) %><% endif %>
+<% if E.get('price_import') %>
+<% set _ = roles.update({'price': E.price_import}) %>
+<% elif 'tariff' in caps %>
+<% set _ = roles.update({'price': 'sensor.power_price_import'}) %>
+<% endif %>
+<# home block #>
+<% if 'gate' in modules and E.get('gate_sensor') %>
+<% set _ = roles.update({'gate_open': 'binary_sensor.gate_open', 'gate_open_script': 'script.gate_open_manual',
+   'gate_close_script': 'script.gate_close_manual'}) %>
+<% endif %>
+<% if 'doorbell' in modules and E.get('doorbell_button') %>
+<% set _ = roles.update({'doorbell_button': E.doorbell_button}) %>
+<% if E.get('doorbell_camera') %><% set _ = roles.update({'doorbell_camera': E.doorbell_camera}) %><% endif %>
+<% endif %>
+<% if 'hot-water-heater' in caps %><% set _ = roles.update({'hot_water': 'sensor.hot_water_temperature'}) %><% endif %>
+<% set blinds = [] %>
+<% if 'shading' in modules %>
+<% for r in room_list if r.get('blind') %><% set _ = blinds.append(r.blind) %><% endfor %>
+<% endif %>
+<% set person_list = [] %>
+<% for x in ppl %>
+<% set _ = person_list.append({'name': x.name, 'person': x.get('person') or 'person.' ~ x.key}) %>
+<% endfor %>
+<% set car_rows = [] %>
+<% if 'tesla-route' in modules %>
+<% for a in car_list %>
+<% set _ = car_rows.append({'name': a.name, 'battery': car_entity(a, 'battery'), 'charging': car_entity(a, 'charging_state')}) %>
+<% endfor %>
+<% endif %>
+<% set tile_list = [] %>
+<% for x in X.get('tiles') or [] %>
+<% if not x.get('entity') or not x.get('label') %><@ fail('e_ink_display.tiles: every tile needs entity and label') @><% endif %>
+<% set tile = {'entity': x.entity, 'label': x.label, 'icon': x.get('icon') or 'info'} %>
+<% if x.get('unit') %><% set _ = tile.update({'unit': x.unit}) %><% endif %>
+<% set _ = tile_list.append(tile) %>
+<% endfor %>
+<% set calendar_list = X.get('calendars') or [] %>
+<# --- paths: where a button or block goes on tap; defaults from the installed modules, house.yaml wins --- #>
+<% set paths = {} %>
+<% if 'home-screen' in modules %><% set _ = paths.update({'home': '/lovelace/' ~ (HS.get('view_path') or 'home')}) %><% endif %>
+<% if 'energy' in modules %>
+<% set _ = paths.update({'energy': '/energy-screen/energy'}) %>
+<% elif 'energy-plan' in modules or 'tariff' in caps %>
+<% set _ = paths.update({'energy': '/energy'}) %>
+<% endif %>
+<% if 'climate' in modules %><% set _ = paths.update({'climate': '/lovelace/' ~ (CL.get('view_path') or 'climate')}) %><% endif %>
+<% if 'presence' in modules %><% set _ = paths.update({'presence': '/lovelace/our-week'}) %><% endif %>
+<% if 'results' in modules %><% set _ = paths.update({'results': '/lovelace/' ~ (RS.get('view_path') or 'results')}) %><% endif %>
+<% for k, v in (X.get('paths') or {}).items() %>
+<% if v %><% set _ = paths.update({k: v}) %><% else %><% set _ = paths.pop(k, none) %><% endif %>
+<% endfor %>
+<% set nav_icons = {'home': 'huisje', 'energy': 'bliksem', 'climate': 'thermo', 'shading': 'rolluik', 'cars': 'auto',
+   'presence': 'kalender', 'results': 'grafiek'} %>
+<% set nav = [] %>
+<% for k in ['home', 'energy', 'climate', 'shading', 'cars', 'presence', 'results'] if paths.get(k) %>
+<% if nav | length < 6 %><% set _ = nav.append({'label': t('nav_' ~ k), 'icon': nav_icons[k], 'path': paths[k]}) %><% endif %>
+<% endfor %>
+<# --- user-facing texts (strings.yaml, house.language); {placeholders} are filled in by the card (fmt) --- #>
+<% set string_keys = ['locale', 'week', 'hour_short', 'temp_range',
+  'agenda', 'agenda_none', 'all_day', 'tomorrow',
+  'home', 'person_home', 'person_away', 'gate', 'gate_open', 'gate_closed', 'gate_tap_again', 'gate_open_q', 'gate_close_q',
+  'gate_close_reason', 'blinds', 'blinds_open', 'blinds_closed', 'blinds_n_closed', 'indoor', 'hot_water', 'doorbell',
+  'doorbell_rings', 'doorbell_quiet', 'car_charging',
+  'energy', 'solar', 'house', 'from_grid', 'to_grid', 'battery', 'battery_charging', 'battery_discharging',
+  'today', 'today_solar', 'today_solar_of', 'today_grid', 'price_now', 'price_cheapest'] %>
+<% set strings = {} %>
+<% for k in string_keys %><% set _ = strings.update({k: t(k)}) %><% endfor %>
+<% set card = {'type': 'custom:e-ink-screen-card', 'roles': roles,
+   'battery_sign': ((energy if energy is defined and energy else {}).get('battery_power_sign') or 'discharge_positive'),
+   'people': person_list, 'cars': car_rows, 'blinds': blinds, 'tiles': tile_list, 'calendars': calendar_list,
+   'paths': paths, 'nav': nav, 'strings': strings} %>
+<% set view = {'title': t('view_title'), 'path': view_path, 'icon': 'mdi:tablet', 'type': 'panel', 'cards': [card]} %>

@@ -1,0 +1,23 @@
+# Heat pump (Vaillant): helpers (ha-kit module heat-pump-vaillant, see heat-pump-vaillant/LOGIC.md "Settings").
+# Uploaded by heat-pump-vaillant/deploy.py to /config/packages/heat_pump_vaillant.yaml.
+# No `initial`: deploy.py sets the default from module.yaml (defaults:) once, when the helper is new; after that the
+# value is yours and survives a restart.
+
+counter:
+  # Writes to the myVAILLANT cloud today (every set_temperature, mode, boost, time program, cooling setpoint and
+  # quick veto call of this module's scripts). Reset at midnight by automation.heat_pump_vaillant_writes_reset.
+  heat_pump_vaillant_writes_today:
+    name: "<@ t('helper_writes_today') @>"
+    icon: mdi:cloud-upload-outline
+    restore: true
+
+input_number:
+  # Safety net against a runaway caller: above this number of writes today the scripts stop writing (except
+  # script.hot_water_normal, which always may bring the tank back to normal). Default 40.
+  heat_pump_vaillant_max_writes_per_day:
+    name: "<@ t('helper_max_writes') @>"
+    icon: mdi:cloud-lock-outline
+    min: 5
+    max: 200
+    step: 5
+    mode: box

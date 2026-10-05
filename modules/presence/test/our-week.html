@@ -1,0 +1,79 @@
+<% from '_presence.jinja' import kind_title with context %>
+<% set det = {'place': t('det_place'), 'car': t('det_car'), 'source': t('det_source'), 'battery': t('det_battery'), 'duration': t('det_duration'), 'work_trips': t('det_work_trips'), 'away': t('det_away'), 'left_work': t('det_left_work')} %>
+<!doctype html>
+<!-- Test page for presence-card.js ("Our week") with synthetic calendar events and made-up names (ha-kit module
+     presence). Open it from the FILLED-IN folder (the card in the module folder still has fill-in markers): run
+     `python3 -m http.server` in build/presence -> http://localhost:8000/test/our-week.html
+     The events are written in the install language; a few use the texts of every other language in strings.yaml
+     ("older events"), to show that the card still reads them. -->
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title><@ t('view_title') @> test</title><style>body{margin:0;background:#1d1a17}</style></head>
+<body>
+<div style="background:#E36B5A;color:#1d1a17;font:700 15px system-ui,sans-serif;padding:10px 16px;text-align:center">TEST PAGE with fake data</div>
+<script src="../www/presence-card.js"></script>
+<script>
+const TITLE = <@ kind_title | tojson @>;
+const DET = <@ det | tojson @>;
+const AND = <@ (' ' ~ t('word_and') ~ ' ') | tojson @>;
+const lines = (o) => Object.entries(o).map(([k, v]) => `${DET[k]}: ${v}`).join("\n");
+const dur = (h, m) => <@ t('dur_hm') | tojson @>.replace("{h}", h).replace("{m}", m);
+const away = (h, m, since) => <@ t('away_value') | tojson @>.replace("{duration}", dur(h, m)).replace("{since}", since);
+const now = new Date();
+const at = (daysAgo, h, m) => { const d = new Date(now); d.setDate(d.getDate() - daysAgo); d.setHours(h, m, 0, 0); return d; };
+const ev = (t, summary, description, end) => ({ start: { dateTime: t.toISOString() }, end: { dateTime: (end || new Date(+t + 60e3)).toISOString() }, summary, description, uid: String(+t) + summary });
+const two = (v) => String(v).padStart(2, "0");
+const events = [];
+let seed = 7;
+const rnd = (n) => { seed = (seed * 9301 + 49297) % 233280; return Math.floor((seed / 233280) * n); };
+for (let d = 1; d < 56; d++) {
+  const day = at(d, 12, 0).getDay();
+  if (day === 0 || day === 6) {
+    if (rnd(4) === 0) { const t = at(d, 11 + rnd(4), rnd(60)); events.push(ev(t, `${TITLE.charge}: Person A`, lines({ place: "Supercharger Example Town", car: "Red X", battery: "20 → 80 %", duration: dur(0, 35) }), new Date(+t + 35 * 60e3))); }
+    continue;
+  }
+  events.push(ev(at(d, 8, 18 + rnd(12)), day === 3 && rnd(3) === 0 ? `${TITLE.drop_off}: Person B` : `${TITLE.drop_off}: Person A`, lines({ place: "Church Street (12 m)", car: "Red X", source: <@ t('src_phone_with_car') | tojson @> })));
+  if (day === 3) events.push(ev(at(d, 13, 5 + rnd(50)), `${TITLE.pick_up}: Person A`, lines({ place: <@ t('place_at_family', zone='Grandparents') | tojson @> + " (21 m)", car: "Red X", source: <@ t('src_usual_driver') | tojson @> })));
+  else events.push(ev(at(d, 16, 10 + rnd(50)), rnd(4) === 0 ? `${TITLE.pick_up}: Person A${AND}Person B` : `${TITLE.pick_up}: Person B`, lines({ place: "School Street (9 m)", car: "White X", source: <@ t('src_usual_driver') | tojson @> })));
+  events.push(ev(at(d, 9, 10 + rnd(20)), `${TITLE.work}: Person A`, lines({ duration: "…", work_trips: "12:05-13:10" }), at(d, 16, 20 + rnd(40))));
+  if (day !== 3) events.push(ev(at(d, 8, 40 + rnd(10)), `${TITLE.work}: Person B`, lines({ duration: "…" }), at(d, 14, 50 + rnd(20))));
+  const dep = at(d, 8, 0);
+  events.push(ev(at(d, 17 + rnd(2), rnd(60)), `${TITLE.home_from_work}: Person A`, lines({ away: away(9, 40, `${two(dep.getDate())}/${two(dep.getMonth() + 1)} 08:${10 + rnd(15)}`), left_work: "17:02", car: "Red X" })));
+  if (day !== 3 && rnd(3)) events.push(ev(at(d, 15, 30 + rnd(25)), `${TITLE.home_from_work}: Person B`, lines({ away: away(7, 5, `${two(dep.getDate())}/${two(dep.getMonth() + 1)} 08:2${rnd(9)}`), car: "White X" })));
+}
+events.push(ev(at(0, 8, 24), `${TITLE.drop_off}: Person A`, lines({ place: "Church Street (8 m)", car: "Red X", source: <@ t('src_phone_with_car') | tojson @> })));
+<# Older events in the other languages of strings.yaml: the card must read them too. #>
+<% set S = t.table if t.table is defined else {} %>
+<% for lang in ((S.get('kind_work') or {}).keys() | list) if lang != house.get('language', 'en') %>
+events.push(ev(at(8, 9, 5), <@ (S.kind_work[lang] ~ ': Person A') | tojson @>, <@ (S.det_work_trips[lang] ~ ': 11:00-11:30') | tojson @>, at(8, 17, 5)));
+events.push(ev(at(8, 17, 40), <@ (S.kind_home_from_work[lang] ~ ': Person A') | tojson @>, <@ (S.det_away[lang] ~ ': 9 · (08/08 08:10)') | tojson @>));
+events.push(ev(at(8, 8, 15), <@ (S.kind_drop_off[lang] ~ ': Person A ' ~ S.word_and[lang] ~ ' Person B') | tojson @>, <@ (S.det_place[lang] ~ ': Church Street (5 m)') | tojson @>));
+<% endfor %>
+const st = (state, attributes = {}) => ({ state: String(state), attributes, last_updated: now.toISOString(), last_changed: now.toISOString() });
+const states = {
+  "calendar.presence": st("off"),
+  "person.a": st("Work Person A"),
+  "zone.work_a": st("0", { friendly_name: "Work Person A" }),
+  "person.b": st("home"),
+  "input_datetime.presence_a_arrived_at_work": st("x", { timestamp: (Date.now() - 3.2 * 3600e3) / 1000 }),
+};
+const hass = { states, callService: (...a) => console.log("callService", a),
+  callApi: async (m, path) => { console.log("callApi", m, path); return path.startsWith("calendars/calendar.presence") ? events : []; } };
+const c = document.createElement("presence-card");
+document.body.appendChild(c);
+c.setConfig({
+  calendar: "calendar.presence",
+  stay_calendar: "calendar.stays",
+  children: <@ t('children_default') | tojson @>,
+  school: true,
+  family: [{ name: "Grandparents", label: "grandma and grandpa" }],
+  cars: [{ name: "Red X" }, { name: "White X" }],
+  sleep_window: { start: "23:00", end: "07:30" },
+  people: [
+    { name: "Person A", key: "a", person: "person.a", tracker: "device_tracker.phone_a", work_zone: "zone.work_a" },
+    { name: "Person B", key: "b", person: "person.b", tracker: "device_tracker.phone_b", work_zone: "zone.work_b" },
+  ],
+});
+c.hass = hass;
+window.__hass = hass;
+window.__events = events;
+</script></body></html>

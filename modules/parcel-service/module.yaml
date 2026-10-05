@@ -1,0 +1,30 @@
+# Module metadata, read by tools/fill.py (--list shows it as a table), tools/choose.py (ask:).
+name: Parcel service
+description: On an expected parcel day the garage door opens (or opens ajar) by itself when Gemini sees a parcel or courier
+status: built
+# Adds steps to the doorbell automation doorbell_ring and script doorbell_reply (rendered there); uses
+# script.gate_pulse, script.gate_close_manual and binary_sensor.gate_open from the module gate. The module gate reads
+# script.parcel_garage (automation gate_open_too_long stays silent while it runs).
+depends_on: [doorbell, gate]
+requires:
+  integrations:
+    - UniFi Protect
+    - Google Generative AI (ai_task)
+    - Mobile App (Companion app, critical notifications on iOS)
+  hardware:
+    - electric garage door with end-position contact (module gate)
+    - garage camera (optional, live view and proof photo)
+    - "for ajar: a gate controller that stops on a pulse while moving (OPEN-STOP-CLOSE-STOP)"
+optional: true
+generate: []
+ask:
+  - id: doorbell
+    question: Which video doorbell do you have?
+    options: [UniFi Protect doorbell with LCD, other, none]
+    need: UniFi Protect doorbell with LCD
+  - id: gate
+    question: Do you have an electric gate or garage door that a relay (e.g. a Shelly) can pulse?
+  - id: gate_sensor
+    question: Does that gate or garage door have an end-position contact (a sensor that knows when it is open)?
+  - id: parcel_service
+    question: Open the garage door for couriers on days you expect a parcel?

@@ -1,0 +1,195 @@
+<% from '_results.jinja' import kinds, sun_rooms, goals, solar_missed with context %>
+# Results: what the smart logic saved and whether the day goals were met (ha-kit module results, see results/LOGIC.md).
+# Filled in from house.yaml by tools/fill.py; uploaded by results/deploy.py to /config/templates/results.yaml.
+# Only listens: the producers fire ha_kit_result {kind, kwh, eur, export_missed} and ha_kit_day_goal {goal, status,
+# detail} (docs/phase4-contracts.md, section 5); no producer depends on results. Entity ids, states and attributes
+# are the contract: they stay English. Week and month come from the long-term statistics (state_class total).
+<% for k in kinds %>
+<% if k.source == 'counter' %>
+
+# --- Saving <@ k.kind @>: every step of the charger's solar counter (sensor.ev_charger_solar_energy_today, kWh today)
+# x the import price of that moment (what that kWh would have cost from the grid); the export it could have earned
+# in export_missed. An ha_kit_result event with kind <@ k.kind @> adds a correction (e.g. a day before the tracking).
+# A price that is unknown at that moment counts the kWh in kwh_unpriced and adds 0 EUR.
+- trigger:
+    - trigger: state
+      entity_id: <@ k.today_kwh @>
+      not_to: [unknown, unavailable]
+    - trigger: event
+      event_type: ha_kit_result
+      event_data:
+        kind: <@ k.kind @>
+  sensor:
+    - name: "<@ t('sensor_saving_' ~ k.kind) @>"
+      unique_id: results_saving_<@ k.kind @>
+      default_entity_id: sensor.results_saving_<@ k.kind @>
+      unit_of_measurement: EUR
+      device_class: monetary
+      state_class: total
+      icon: <@ k.icon @>
+      state: >
+        {% from 'results.jinja' import counter_step %}
+        {% set ev = trigger.platform == 'event' %}
+        {% set d = 0 if ev else counter_step(this.attributes.get('counter'), this.attributes.get('day'), trigger.to_state.state, true) | float(0) %}
+        {% set price = states('sensor.power_price_import') | float(none) %}
+        {% set add = (trigger.event.data.get('eur') | float(0)) if ev else (d * price if price is not none else 0) %}
+        {{ (this.state | float(0) + add) | round(3) }}
+      attributes:
+        kwh: >
+          {% from 'results.jinja' import counter_step %}
+          {% set ev = trigger.platform == 'event' %}
+          {% set d = (trigger.event.data.get('kwh') | float(0)) if ev else counter_step(this.attributes.get('counter'), this.attributes.get('day'), trigger.to_state.state, true) | float(0) %}
+          {{ ((this.attributes.get('kwh') | float(0)) + d) | round(3) }}
+        export_missed: >
+          {% from 'results.jinja' import counter_step %}
+          {% set ev = trigger.platform == 'event' %}
+          {% set d = 0 if ev else counter_step(this.attributes.get('counter'), this.attributes.get('day'), trigger.to_state.state, true) | float(0) %}
+          {% set price = states('sensor.power_price_export') | float(0) %}
+          {% set add = (trigger.event.data.get('export_missed') | float(0)) if ev else d * price %}
+          {{ ((this.attributes.get('export_missed') | float(0)) + add) | round(3) }}
+        kwh_unpriced: >
+          {% from 'results.jinja' import counter_step %}
+          {% set ev = trigger.platform == 'event' %}
+          {% set d = 0 if ev else counter_step(this.attributes.get('counter'), this.attributes.get('day'), trigger.to_state.state, true) | float(0) %}
+          {% set unpriced = not ev and states('sensor.power_price_import') | float(none) is none %}
+          {{ ((this.attributes.get('kwh_unpriced') | float(0)) + (d if unpriced else 0)) | round(3) }}
+        actions: >
+          {% from 'results.jinja' import counter_step %}
+          {% set ev = trigger.platform == 'event' %}
+          {% set d = 0 if ev else counter_step(this.attributes.get('counter'), this.attributes.get('day'), trigger.to_state.state, true) | float(0) %}
+          {{ (this.attributes.get('actions') | int(0)) + (1 if ev or d > 0 else 0) }}
+        counter: "{{ this.attributes.get('counter') if trigger.platform == 'event' else trigger.to_state.state | float(none) }}"
+        day: "{{ this.attributes.get('day') if trigger.platform == 'event' else now().date().isoformat() }}"
+<% else %>
+
+# --- Saving <@ k.kind @> (producer: <@ k.producer @>): the sum of the eur of every ha_kit_result with this kind;
+# kwh, export_missed<@ ', kw' if k.kind == 'peak_avoided' else '' @> and the number of actions as attributes. A missing or non-numeric value counts as 0.
+- trigger:
+    - trigger: event
+      event_type: ha_kit_result
+      event_data:
+        kind: <@ k.kind @>
+  sensor:
+    - name: "<@ t('sensor_saving_' ~ k.kind) @>"
+      unique_id: results_saving_<@ k.kind @>
+      default_entity_id: sensor.results_saving_<@ k.kind @>
+      unit_of_measurement: EUR
+      device_class: monetary
+      state_class: total
+      icon: <@ k.icon @>
+      state: "{{ (this.state | float(0) + trigger.event.data.get('eur') | float(0)) | round(3) }}"
+      attributes:
+        kwh: "{{ ((this.attributes.get('kwh') | float(0)) + trigger.event.data.get('kwh') | float(0)) | round(3) }}"
+        export_missed: "{{ ((this.attributes.get('export_missed') | float(0)) + trigger.event.data.get('export_missed') | float(0)) | round(3) }}"
+<% if k.kind == 'peak_avoided' %>
+        kw: "{{ ((this.attributes.get('kw') | float(0)) + trigger.event.data.get('kw') | float(0)) | round(3) }}"
+<% endif %>
+        actions: "{{ (this.attributes.get('actions') | int(0)) + 1 }}"
+        last: "{{ now().isoformat() }}"
+<% endif %>
+<% endfor %>
+<% if sun_rooms %>
+
+# --- Shading: how often a blind closed against the sun (input_boolean.shading_closed_<room> of the module shading
+# turns on). Only counted, no amount. Rooms: <@ sun_rooms | map(attribute='slug') | join(', ') @>.
+- trigger:
+    - trigger: state
+      entity_id:
+<% for r in sun_rooms %>
+        - input_boolean.shading_closed_<@ r.slug @>
+<% endfor %>
+      from: "off"
+      to: "on"
+  sensor:
+    - name: "<@ t('sensor_shading_count') @>"
+      unique_id: results_shading_closed_count
+      default_entity_id: sensor.results_shading_closed_count
+      state_class: total_increasing
+      icon: mdi:blinds
+      state: "{{ this.state | int(0) + 1 }}"
+      attributes:
+        last_room: "{{ trigger.entity_id.split('shading_closed_')[1] }}"
+<% endif %>
+<% if solar_missed %>
+
+# --- Solar missed today (kWh): every 5 minutes the energy exported since the last look (entities.grid_export_kwh)
+# counts when the export could have gone somewhere at that moment (room_now() in custom_templates/results.jinja:
+# the tank or a connected car still had room). Back to 0 at the first look of a new day.
+- trigger:
+    - trigger: time_pattern
+      minutes: "/5"
+  sensor:
+    - name: "<@ t('sensor_solar_missed') @>"
+      unique_id: results_solar_missed_today
+      default_entity_id: sensor.results_solar_missed_today
+      unit_of_measurement: kWh
+      device_class: energy
+      state_class: total_increasing
+      icon: mdi:solar-power-variant-outline
+      state: >
+        {% from 'results.jinja' import counter_step, export_total, room_now %}
+        {% set same = this.attributes.get('day') == now().date().isoformat() %}
+        {% set base = this.state | float(0) if same else 0 %}
+        {% set d = counter_step(this.attributes.get('export_total'), none, export_total(), false) | float(0) %}
+        {% set room = (room_now() | trim) == 'True' %}
+        {{ (base + (d if room else 0)) | round(3) }}
+      attributes:
+        day: "{{ now().date().isoformat() }}"
+        export_total: >
+          {% from 'results.jinja' import export_total %}
+          {% set v = export_total() | trim %}
+          {{ (v | float) if v != '' else this.attributes.get('export_total') }}
+        exported_today: >
+          {% from 'results.jinja' import counter_step, export_total %}
+          {% set same = this.attributes.get('day') == now().date().isoformat() %}
+          {% set d = counter_step(this.attributes.get('export_total'), none, export_total(), false) | float(0) %}
+          {{ ((this.attributes.get('exported_today') | float(0) if same else 0) + d) | round(3) }}
+        room: >
+          {% from 'results.jinja' import room_now %}
+          {{ (room_now() | trim) == 'True' }}
+<% endif %>
+<% for g in goals %>
+
+# --- Goal <@ g.goal @>: the last ha_kit_day_goal with goal <@ g.goal @> (met / missed); attribute date = the day it counts for.
+- trigger:
+    - trigger: event
+      event_type: ha_kit_day_goal
+      event_data:
+        goal: <@ g.goal @>
+  sensor:
+    - name: "<@ t('sensor_goal_' ~ g.goal) @>"
+      unique_id: results_goal_<@ g.goal @>
+      default_entity_id: sensor.results_goal_<@ g.goal @>
+      icon: <@ g.icon @>
+      state: >
+        {% set s = trigger.event.data.get('status') %}
+        {{ s if s in ['met', 'missed'] else this.state }}
+      attributes:
+        date: >
+          {% set s = trigger.event.data.get('status') %}
+          {{ now().date().isoformat() if s in ['met', 'missed'] else this.attributes.get('date') }}
+        detail: >
+          {% set s = trigger.event.data.get('status') %}
+          {{ trigger.event.data.get('detail', '') if s in ['met', 'missed'] else this.attributes.get('detail', '') }}
+<% endfor %>
+
+# --- Invoices: the amount entered in input_number.results_invoice_last_month is kept for the previous calendar month
+# (attribute invoices [[YYYY-MM, EUR], ...]), so the screen can put the calculation next to the real invoice. 0 removes
+# that month again.
+- trigger:
+    - trigger: state
+      entity_id: input_number.results_invoice_last_month
+      not_from: [unknown, unavailable]
+      not_to: [unknown, unavailable]
+  sensor:
+    - name: "<@ t('sensor_invoices') @>"
+      unique_id: results_invoices
+      default_entity_id: sensor.results_invoices
+      icon: mdi:receipt-text-outline
+      state: "{{ (now().replace(day=1) - timedelta(days=1)).strftime('%Y-%m') }}"
+      attributes:
+        invoices: >
+          {% set m = (now().replace(day=1) - timedelta(days=1)).strftime('%Y-%m') %}
+          {% set v = trigger.to_state.state | float(0) %}
+          {% set p = (this.attributes.get('invoices') or []) | list | rejectattr(0, 'eq', m) | list %}
+          {{ ((p + [[m, v]]) if v > 0 else p) | sort(attribute=0) }}

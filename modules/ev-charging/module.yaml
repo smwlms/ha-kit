@@ -1,0 +1,54 @@
+# Module metadata, read by tools/fill.py (--list), tools/choose.py (ask:), tools/check.py and ev-charging/deploy.py
+# (defaults). Contract: docs/phase4-contracts.md (ev-charging). The entity and helper ids are part of it.
+name: EV charging
+description: "Smart EV charging: solar surplus with battery priority, grid assist in a cheap window, month-peak guard, charge plan per car to a departure time (by hand or from a calendar), car charge current on surplus"
+status: built, not tested on HA
+# Layer: core. Optional: tariff (cheap assist, prices for the plan, month-peak guard), gate (owns the Tesla command
+# counter), notifications (script.send_notification), Teslemetry roles charge_current / charge_limit / charger_power.
+depends_on: [ev-charger, energy-plan]
+provides: []
+requires:
+  integrations:
+    - "a charger adapter module (provides ev-charger), e.g. charger-zappi"
+    - "Teslemetry (optional: car charge current and charge limit)"
+    - "Waze Travel Time (optional: charge plan from a calendar)"
+    - "a calendar integration, e.g. Google Calendar or Local Calendar (optional: charge plan from a calendar)"
+  hardware:
+    - "EV charger"
+optional: true
+generate: []
+ask:
+  - id: ev_smart_charging
+    question: "Steer your EV charger on solar surplus and cheap power (needs a supported charger)?"
+# Fields of house.yaml this module reads (every field is explained in house.example.yaml).
+house_fields:
+  - "cars[].prefix, name, battery_kwh, consumption_kwh_100km, charge_plan, plan_calendar (optional), entities"
+  - "teslemetry.battery, charge_cable, charging_state (required); located_at_home, status, charge_current, charge_limit, charger_power (optional)"
+  - "ev_charging.voltage, phases, max_power_kw, house_reserve_kw, efficiency, waze_region (all optional)"
+  - "entities.grid_import_w, grid_export_w, solar_power_w; battery_soc, battery_power_w, solar_forecast_today, solar_forecast_tomorrow (optional)"
+  - "energy.battery_power_sign, battery_usable_kwh (with a battery); tariff.compare.export (optional, value of own solar)"
+# Start values that deploy.py sets ONCE, when the helper is new. The ids are part of the contract. A '*' anywhere in
+# a key matches every new helper of that pattern (one per plan car; ha_api.set_defaults).
+defaults:
+  input_boolean.ev_charging_smart: "on"
+  input_boolean.ev_charging_cheap_enabled: "off"
+  input_boolean.ev_charging_car_amps_auto: "on"
+  input_number.ev_charging_solar_share: 50
+  input_number.ev_charging_battery_floor: 50
+  input_number.ev_charging_cheap_max_grid_kw: 1.0
+  input_number.ev_charging_cheap_battery_full: 95
+  input_number.ev_charging_cheap_stop_min: 2
+  input_number.ev_charging_min_amps: 5
+  input_number.ev_charging_car_commands_per_day: 25
+  input_select.ev_charging_owner: "none"
+  input_boolean.ev_plan_*: "on"
+  input_number.ev_plan_*_target: 0
+  input_number.ev_plan_*_margin: 15
+  input_number.ev_plan_*_reserve: 20
+  input_number.ev_plan_*_solar_confidence: 70
+  input_number.ev_plan_*_previous_limit: 0
+# The other side of the optional switches for tools/check.py (all-modules house): another Waze
+# region, a smaller charger, no car charge current, no charge limit and no car power (the example house has all three).
+check_variant:
+  ev_charging: { max_power_kw: 7.4, house_reserve_kw: 0.5, waze_region: us }
+  teslemetry: { charge_current: null, charge_limit: null, charger_power: null }

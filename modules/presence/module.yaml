@@ -1,0 +1,42 @@
+# Module metadata, read by tools/fill.py (--list shows it as a table), tools/choose.py (ask:) and by presence/deploy.py (defaults).
+name: Our week
+description: Arrivals, work days, school runs and Superchargers in a calendar, with the tab Our week
+status: built, not tested on HA
+# Not gate: this module reads person.*, the phone trackers and the Teslemetry entities itself; gate provides no
+# sensor it needs. The Supercharger log and the Tesla school run read Teslemetry through car_entity(car, role).
+depends_on: []
+requires:
+  integrations:
+    - Local Calendar (two calendars, one for the log and one for the stays)
+    - Home Assistant Companion app (iPhone or Android), location Always
+    - Teslemetry (optional, school run with the Tesla and Superchargers)
+    - Recorder on SQLite (default; for stay.py and workday.py)
+  hardware: []
+optional: false
+generate: []
+ask:
+  - id: presence
+    question: Log arrivals, work days and school runs in a calendar (needs the Companion app with location Always on every phone)?
+# Fields of house.yaml this module reads (example: section presence: in house.example.yaml).
+house_fields:
+  - house.timezone
+  - people[].key, name, person, phone, color (optional); only people with a phone take part
+  - cars[].prefix, name, driver (optional), entities (optional); teslemetry.location, route, destination,
+    battery, charging_state
+  - presence.calendar, stay_calendar, children, places, school_windows, sleep_window, arrival_defaults,
+    previous_phones
+# Defaults. deploy.py uses them ONCE, when the helper (or schedule, or zone) does not exist yet; afterwards the value
+# is yours. Values in house.yaml (presence.*) win over these.
+defaults:
+  # schedule.school_drop_off, schedule.school_pick_up, schedule.family_pick_up: day -> "HH:MM-HH:MM" (or a list)
+  school_windows:
+    drop_off: { mon: "07:45-09:15", tue: "07:45-09:15", wed: "07:45-09:15", thu: "07:45-09:15", fri: "07:45-09:15" }
+    pick_up: { mon: "15:30-18:30", tue: "15:30-18:30", wed: "11:45-14:00", thu: "15:30-18:30", fri: "15:30-18:30" }
+    family: { mon: "12:00-20:00", tue: "12:00-20:00", wed: "12:00-20:00", thu: "12:00-20:00", fri: "12:00-20:00" }
+  # Sleeping window: at home this counts as sleeping (stay.py and the card). Not a helper: change it in house.yaml.
+  sleep_window: { start: "23:00", end: "07:30" }
+  # input_datetime.arrival_<day>: start value until the automation arrival_learn has 3 measurements for that day.
+  arrival: { mon: "17:00", tue: "17:00", wed: "17:00", thu: "17:00", fri: "17:00", sat: "17:00", sun: "17:00" }
+  # Radius in m of a zone that deploy.py --setup creates (per kind of place); passive = only for distance, no state.
+  radius: { work: 150, school: 150, drop_off: 30, family: 75 }
+  passive: { work: false, school: false, drop_off: true, family: false }

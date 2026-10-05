@@ -1,0 +1,28 @@
+# Answers for tools/choose.py --answers, used by tools/check.py (expected result: EXPECTED_CHOICE in check.py).
+# Key = question id from ask: in module.yaml; value = yes/no or one of the options.
+tesla: yes
+gate: yes
+gate_sensor: no
+doorbell: UniFi Protect doorbell with LCD
+parcel_service: yes
+presence: yes
+covers: yes
+notifications: yes
+driveway_lock: yes
+room_sensor: no
+ventilation: Zehnder ComfoAir Q
+spa: none
+# Phase 4 (docs/phase4-contracts.md): every module is built and chosen here. The brand and region modules come only
+# from these answers (choose.py never picks a provider of a capability itself; see choose.no-brands.answers.yaml).
+tariff_region: Flanders (Fluvius) with a dynamic contract
+solar: yes
+ev_charger: myenergi Zappi
+heat_pump: Vaillant (myVAILLANT)
+home_screen: yes
+energy: yes
+ev_smart_charging: yes
+hot_water_buffer: yes
+climate: yes
+appliances: Home Connect (Bosch, Siemens, Neff, Gaggenau)
+results: yes
+e_ink_display: yes

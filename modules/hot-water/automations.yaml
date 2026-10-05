@@ -1,0 +1,325 @@
+<% from '_hot_water.jinja' import bath, tariff_on, battery, battery_power, discharge_factor, grid_import, heater_kw
+   with context %>
+<% set d = module.defaults %>
+<# The only automation of the module and the only caller of script.hot_water_heat / script.hot_water_normal. Every
+   decision is made by the macro decide(trigger.id) in custom_templates/hot_water.jinja; this file only lists the
+   triggers and carries the decision out (session marker, session record, scripts, events, logbook). #>
+# Hot water buffer: automation (ha-kit module hot-water, see hot-water/LOGIC.md).
+# Written by hot-water/deploy.py through the config API (same as the automation editor).
+- id: hot_water_buffer
+  alias: "<@ t('automation_alias') @>"
+  description: "<@ t('automation_description') @>"
+  mode: queued
+  max: 10
+  trace:
+    stored_traces: 30
+  triggers:
+    # --- start: the start condition as a whole turns true (surplus, battery, plan, price, rest, tank, ...) ---
+    - trigger: template
+      value_template: >
+        {% from 'hot_water.jinja' import decide %}
+        {{ (decide('start') | from_json).action == 'start' }}
+      id: start
+    - trigger: homeassistant
+      event: start
+      id: start
+    - trigger: event
+      event_type: automation_reloaded
+      id: start
+    # --- end of a session ---
+    - trigger: state
+      entity_id: input_boolean.hot_water_on_surplus
+      to: "off"
+      id: master_off
+    - trigger: sun
+      event: sunset
+      id: sunset
+    - trigger: template
+      value_template: >
+        {{ is_state('input_boolean.hot_water_surplus_active', 'on')
+           and states('sensor.hot_water_temperature') | float(0)
+               >= states('input_number.hot_water_surplus_max') | float(<@ d['input_number.hot_water_surplus_max'] @>) - 0.5 }}
+      id: tank_full
+<% if battery_power %>
+    - trigger: template
+      value_template: >
+        {% from 'energy_plan.jinja' import watts %}
+        {{ is_state('input_boolean.hot_water_surplus_active', 'on')
+           and <@ discharge_factor @> * (watts('<@ battery_power @>') | float(0)) > 300 }}
+      for: "00:05:00"
+      id: battery_discharge
+<% endif %>
+    - trigger: template
+      value_template: >
+        {% from 'energy_plan.jinja' import watts %}
+        {{ is_state('input_boolean.hot_water_surplus_active', 'on') and watts('<@ grid_import @>') | float(0) > 300 }}
+      for: "00:05:00"
+      id: grid
+<% if battery %>
+    - trigger: template
+      value_template: >
+        {{ is_state('input_boolean.hot_water_surplus_active', 'on') and states('sensor.hot_water_room') | float(0) < 0 }}
+      for: "00:10:00"
+      id: plan_tight
+<% endif %>
+<% if tariff_on %>
+    - trigger: template
+      value_template: >
+        {% from 'energy_plan.jinja' import watts %}
+        {{ is_state('input_boolean.hot_water_surplus_active', 'on')
+           and watts('<@ grid_import @>') | float(0) / 1000
+               > states('input_number.hot_water_cheap_max_grid_kw') | float(<@ d['input_number.hot_water_cheap_max_grid_kw'] @>) }}
+      for:
+        minutes: "{{ states('input_number.hot_water_cheap_stop_min') | int(<@ d['input_number.hot_water_cheap_stop_min'] @>) }}"
+      id: grid_cheap
+    - trigger: state
+      entity_id: binary_sensor.power_price_cheap
+      from: "on"
+      to: "off"
+      id: cheap_end
+    - trigger: state
+      entity_id: binary_sensor.hot_water_heating_pays
+      to: "off"
+      for: "00:15:00"
+      id: price
+    - trigger: template
+      value_template: >
+        {% from 'energy_plan.jinja' import watts %}
+        {% set h = states('sensor.capacity_headroom_kw') | float(none) %}
+        {{ is_state('input_boolean.hot_water_surplus_active', 'on') and h is not none
+           and watts('<@ grid_import @>') | float(0) / 1000 > h }}
+      for: "00:01:00"
+      id: peak
+    # --- morning: cheapest hour before sunrise ---
+    - trigger: time
+      at: sensor.hot_water_cheapest_hour_before_sunrise
+      id: morning_cheap
+<% endif %>
+    - trigger: sun
+      event: sunrise
+      offset: "-00:45:00"
+      id: morning_safety
+    - trigger: sun
+      event: sunrise
+      id: sunrise
+<% if bath %>
+    # --- bath ---
+<% if tariff_on %>
+    - trigger: time
+      at: sensor.hot_water_cheapest_hour_before_bath
+      id: bath_cheap
+<% endif %>
+    - trigger: time
+      at: input_datetime.hot_water_bath_check
+      id: bath_check
+<% endif %>
+    # --- end of a boost (one charge): goal reached, or not within 3 h ---
+    - trigger: template
+      value_template: >
+        {{ is_state('sensor.hot_water_session', 'boost')
+           and states('sensor.hot_water_temperature') | float(0)
+               >= state_attr('sensor.hot_water_session', 'target') | float(99) - 0.5 }}
+      id: boost_done
+    - trigger: template
+      value_template: >
+        {% set s = as_datetime(state_attr('sensor.hot_water_session', 'started') or '', none) %}
+        {{ is_state('sensor.hot_water_session', 'boost') and s is not none and now() - s >= timedelta(hours=3) }}
+      id: boost_timeout
+  conditions: []
+  actions:
+    - variables:
+        d: >
+          {% from 'hot_water.jinja' import decide %}
+          {{ decide(trigger.id) | from_json }}
+        txt:
+          name: "<@ t('logbook_name') @>"
+          log_start_surplus: "<@ t('log_start_surplus') @>"
+          log_start_cheap_power: "<@ t('log_start_cheap_power') @>"
+          log_stop: "<@ t('log_stop') @>"
+          log_boost: "<@ t('log_boost') @>"
+          log_skip: "<@ t('log_skip') @>"
+          log_skip_solar: "<@ t('log_skip_solar') @>"
+          log_boost_end: "<@ t('log_boost_end') @>"
+          log_goal_morning: "<@ t('log_goal_morning') @>"
+          log_goal_bath: "<@ t('log_goal_bath') @>"
+          status_met: "<@ t('status_met') @>"
+          status_missed: "<@ t('status_missed') @>"
+          detail_morning: "<@ t('detail_morning') @>"
+          detail_shower: "<@ t('detail_shower') @>"
+          detail_bath: "<@ t('detail_bath') @>"
+          why_surplus: "<@ t('why_surplus') @>"
+          why_cheap_power: "<@ t('why_cheap_power') @>"
+          why_morning_cheap: "<@ t('why_morning_cheap') @>"
+          why_morning_safety: "<@ t('why_morning_safety') @>"
+          why_bath_cheap: "<@ t('why_bath_cheap') @>"
+          why_bath_safety: "<@ t('why_bath_safety') @>"
+          why_off: "<@ t('why_off') @>"
+          why_evening: "<@ t('why_evening') @>"
+          why_full: "<@ t('why_full') @>"
+          why_battery: "<@ t('why_battery') @>"
+          why_grid: "<@ t('why_grid') @>"
+          why_cheap_end: "<@ t('why_cheap_end') @>"
+          why_plan: "<@ t('why_plan') @>"
+          why_price: "<@ t('why_price') @>"
+          why_peak: "<@ t('why_peak') @>"
+          why_done: "<@ t('why_done') @>"
+          why_timeout: "<@ t('why_timeout') @>"
+        why: "{{ txt.get('why_' ~ (d.reason or ''), d.reason or '') }}"
+    # Day goal (sunrise, bath check): event for results, line in the logbook.
+    - if:
+        - condition: template
+          value_template: "{{ d.goal is mapping }}"
+      then:
+        - variables:
+            g: "{{ d.goal }}"
+            status_text: "{{ txt['status_' ~ g.status] }}"
+            detail: >
+              {% if g.goal == 'morning' %}
+              {{ txt.detail_morning | replace('{t}', g.t | string) | replace('{goal}', g.target | string) }}{{ txt.detail_shower if g.shower else '' }}
+              {% else %}
+              {{ txt.detail_bath | replace('{t}', g.t | string) | replace('{goal}', g.target | string) | replace('{time}', g.time | string) }}
+              {% endif %}
+        - event: ha_kit_day_goal
+          event_data:
+            goal: "{{ g.goal }}"
+            status: "{{ g.status }}"
+            detail: "{{ detail | trim }}"
+        - action: logbook.log
+          data:
+            name: "{{ txt.name }}"
+            entity_id: input_boolean.hot_water_on_surplus
+            message: >
+              {{ txt['log_goal_' ~ g.goal] | replace('{t}', g.t | string) | replace('{goal}', g.target | string)
+                 | replace('{status}', status_text) }}
+    - choose:
+        # Start a session: marker on, record, heat to the maximum and hold it (no boost) until the end.
+        - conditions:
+            - condition: template
+              value_template: "{{ d.action == 'start' }}"
+          sequence:
+            - action: input_boolean.turn_on
+              target:
+                entity_id: input_boolean.hot_water_surplus_active
+            - event: ha_kit_hot_water_session
+              event_data:
+                state: "{{ d.session.state }}"
+                reason: "{{ d.session.reason }}"
+                target: "{{ d.session.target }}"
+                start_temperature: "{{ d.session.start_temperature }}"
+                started: "{{ d.session.started }}"
+                ended: "{{ d.session.ended }}"
+                import_price: "{{ d.session.import_price }}"
+                export_price: "{{ d.session.export_price }}"
+            - action: script.hot_water_heat
+              continue_on_error: true
+              data:
+                target: "{{ d.target }}"
+                boost: false
+                reason: "{{ why }}"
+        # End a session: marker off, record, back to normal at the minimum, report what it did.
+        - conditions:
+            - condition: template
+              value_template: "{{ d.action == 'stop' }}"
+          sequence:
+            - action: input_boolean.turn_off
+              target:
+                entity_id: input_boolean.hot_water_surplus_active
+            - event: ha_kit_hot_water_session
+              event_data:
+                state: "{{ d.session.state }}"
+                reason: "{{ d.session.reason }}"
+                target: "{{ d.session.target }}"
+                start_temperature: "{{ d.session.start_temperature }}"
+                started: "{{ d.session.started }}"
+                ended: "{{ d.session.ended }}"
+                import_price: "{{ d.session.import_price }}"
+                export_price: "{{ d.session.export_price }}"
+            - action: script.hot_water_normal
+              continue_on_error: true
+              data:
+                target: "{{ d.target }}"
+                reason: "{{ why }}"
+            - if:
+                - condition: template
+                  value_template: "{{ d.result is mapping }}"
+              then:
+                - event: ha_kit_result
+                  event_data:
+                    kind: "{{ d.result.kind }}"
+                    kwh: "{{ d.result.kwh }}"
+                    eur: "{{ d.result.eur }}"
+                    export_missed: "{{ d.result.export_missed }}"
+        # One charge now (cheapest hour, safety net): record, heat with boost, report the cheap hour.
+        - conditions:
+            - condition: template
+              value_template: "{{ d.action == 'boost' }}"
+          sequence:
+            - event: ha_kit_hot_water_session
+              event_data:
+                state: "{{ d.session.state }}"
+                reason: "{{ d.session.reason }}"
+                target: "{{ d.session.target }}"
+                start_temperature: "{{ d.session.start_temperature }}"
+                started: "{{ d.session.started }}"
+                ended: "{{ d.session.ended }}"
+                import_price: "{{ d.session.import_price }}"
+                export_price: "{{ d.session.export_price }}"
+            - action: script.hot_water_heat
+              continue_on_error: true
+              data:
+                target: "{{ d.target }}"
+                boost: true
+                reason: "{{ why }}"
+            - if:
+                - condition: template
+                  value_template: "{{ d.result is mapping }}"
+              then:
+                - event: ha_kit_result
+                  event_data:
+                    kind: "{{ d.result.kind }}"
+                    kwh: "{{ d.result.kwh }}"
+                    eur: "{{ d.result.eur }}"
+                    export_missed: "{{ d.result.export_missed }}"
+        # End of a boost: back to normal at the minimum (the heat stays in the tank).
+        - conditions:
+            - condition: template
+              value_template: "{{ d.action == 'end_boost' }}"
+          sequence:
+            - event: ha_kit_hot_water_session
+              event_data:
+                state: "{{ d.session.state }}"
+                reason: "{{ d.session.reason }}"
+                target: "{{ d.session.target }}"
+                start_temperature: "{{ d.session.start_temperature }}"
+                started: "{{ d.session.started }}"
+                ended: "{{ d.session.ended }}"
+                import_price: "{{ d.session.import_price }}"
+                export_price: "{{ d.session.export_price }}"
+            - action: script.hot_water_normal
+              continue_on_error: true
+              data:
+                target: "{{ d.target }}"
+                reason: "{{ why }}"
+    # The shower button only counts for one morning.
+    - if:
+        - condition: template
+          value_template: "{{ d.shower_off }}"
+      then:
+        - action: input_boolean.turn_off
+          target:
+            entity_id: input_boolean.hot_water_shower_tomorrow
+    - if:
+        - condition: template
+          value_template: "{{ d.log is mapping }}"
+      then:
+        - action: logbook.log
+          data:
+            name: "{{ txt.name }}"
+            entity_id: input_boolean.hot_water_on_surplus
+            message: >
+              {% set ns = namespace(m=txt.get(d.log.key, d.log.key)) %}
+              {% for k, v in d.log.items() if k != 'key' %}
+                {% set shown = txt.get('why_' ~ v, v) if k in ['why', 'why_what'] else v %}
+                {% set ns.m = ns.m | replace('{' ~ k ~ '}', shown | string) %}
+              {% endfor %}
+              {{ ns.m }}

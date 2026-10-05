@@ -1,0 +1,144 @@
+<% from '_zappi.jinja' import zappi, phase_switching with context %>
+<% set phase_e = zappi.charger_phase %>
+# Charger (myenergi Zappi): phase switching (ha-kit module charger-zappi, see charger-zappi/LOGIC.md).
+# Written by charger-zappi/deploy.py through the config API (same as the automation editor).
+# Adapter-internal: it only chooses HOW the Zappi charges (1 or 3 phases), never WHETHER or WHEN. The charge mode
+# stays with ev-charging (single writer of script.ev_charger_set_mode); this automation never changes it.
+<% if not phase_switching %>
+# Not rendered: phase switching needs ev-charging in modules:, a phase select (entities.charger_phase or
+# charger_zappi.prefix) and a 3-phase connection (ev_charging.phases: 3). deploy.py removes an earlier one.
+[]
+<% else %>
+- id: charger_zappi_phases
+  alias: "<@ t('auto_phases_alias') @>"
+  description: >-
+    <@ t('auto_phases_description') @>
+  mode: queued
+  max: 3
+  triggers:
+    - trigger: state
+      entity_id: binary_sensor.charger_zappi_three_phase_wanted
+      not_to:
+        - unavailable
+        - unknown
+      id: wanted
+    - trigger: state
+      entity_id: sensor.ev_charger_mode
+      not_to:
+        - unavailable
+        - unknown
+      id: mode
+    - trigger: state
+      entity_id: input_boolean.charger_zappi_phase_auto
+      id: switch
+    # The 15 min on 1 phase run out without any state change: look again regularly.
+    - trigger: time_pattern
+      minutes: "/5"
+      id: check
+    - trigger: homeassistant
+      event: start
+      id: start
+  conditions:
+    - condition: template
+      value_template: "{{ has_value('<@ phase_e @>') }}"
+    # Switch off: only the moment it turns off (phases back to auto); after that the phases are yours.
+    - condition: or
+      conditions:
+        - condition: state
+          entity_id: input_boolean.charger_zappi_phase_auto
+          state: "on"
+        - condition: trigger
+          id: switch
+  actions:
+    - variables:
+        txt:
+          logbook: "<@ t('logbook_name') @>"
+          auto: "<@ t('log_phase_auto') @>"
+          switch_off: "<@ t('log_phase_switch_off') @>"
+          three: "<@ t('log_phase_three') @>"
+          one: "<@ t('log_phase_one') @>"
+          discharge: "<@ t('why_discharge') @>"
+          behind: "<@ t('why_behind') @>"
+          low: "<@ t('why_low') @>"
+          no_data: "<@ t('why_no_data') @>"
+          modes:
+            solar_only: "<@ t('mode_solar_only') @>"
+            solar_min: "<@ t('mode_solar_min') @>"
+            fast: "<@ t('mode_fast') @>"
+            stop: "<@ t('mode_stop') @>"
+        phase: "{{ states('<@ phase_e @>') }}"
+        mode: "{{ states('sensor.ev_charger_mode') }}"
+        switch_on: "{{ is_state('input_boolean.charger_zappi_phase_auto', 'on') }}"
+        wanted: "{{ is_state('binary_sensor.charger_zappi_three_phase_wanted', 'on') }}"
+        kw: "{{ (states('sensor.ev_charging_available_power_avg') | float(0) / 1000) | round(1) }}"
+    - choose:
+        # fast / solar_min: the Zappi picks its phases itself again (a charge plan or cheap window wants full power).
+        # Switch turned off: give the choice back to the Zappi once.
+        - alias: "Fast, solar_min or switch off: phases back to auto"
+          conditions:
+            - condition: template
+              value_template: "{{ phase != 'auto' and (not switch_on or mode in ['fast', 'solar_min']) }}"
+          sequence:
+            - action: select.select_option
+              continue_on_error: true
+              target:
+                entity_id: <@ phase_e @>
+              data:
+                option: auto
+            - action: logbook.log
+              data:
+                name: "{{ txt.logbook }}"
+                entity_id: sensor.ev_charger_mode
+                message: >-
+                  {{ txt.switch_off if not switch_on else txt.auto | replace('{mode}', txt.modes.get(mode, mode)) }}
+        # solar_only with room for 3 phases (10 min, see the binary sensor) and at least 15 min since the last
+        # switch: a phase switch interrupts the charging session for about a minute.
+        - alias: "solar_only with room: 3 phases"
+          conditions:
+            - condition: template
+              value_template: "{{ switch_on and mode == 'solar_only' and wanted and phase != '3' }}"
+            - condition: state
+              entity_id: <@ phase_e @>
+              state:
+                - "1"
+                - auto
+              for: "00:15:00"
+          sequence:
+            - action: select.select_option
+              continue_on_error: true
+              target:
+                entity_id: <@ phase_e @>
+              data:
+                option: "3"
+            - action: logbook.log
+              data:
+                name: "{{ txt.logbook }}"
+                entity_id: sensor.ev_charger_mode
+                message: "{{ txt.three | replace('{kw}', kw | string) }}"
+        # solar_only without room: 1 phase at once (on 1 phase the car starts from about 1.4 kW, on 3 phases only
+        # from about 4.1 kW). Also from auto: in auto the Zappi may jump to 3 phases on its own.
+        - alias: "solar_only without room: 1 phase"
+          conditions:
+            - condition: template
+              value_template: "{{ switch_on and mode == 'solar_only' and not wanted and phase != '1' }}"
+          sequence:
+            - action: select.select_option
+              continue_on_error: true
+              target:
+                entity_id: <@ phase_e @>
+              data:
+                option: "1"
+            - variables:
+                reason: "{{ state_attr('binary_sensor.charger_zappi_three_phase_wanted', 'reason') }}"
+                why: >-
+                  {% if reason == 'battery_discharge' %}{{ txt.discharge }}
+                  {% elif reason == 'battery_behind' %}{{ txt.behind }}
+                  {% elif reason == 'no_data' %}{{ txt.no_data }}
+                  {% else %}{{ txt.low | replace('{kw}', kw | string) }}{% endif %}
+            - action: logbook.log
+              data:
+                name: "{{ txt.logbook }}"
+                entity_id: sensor.ev_charger_mode
+                message: "{{ txt.one | replace('{why}', why) }}"
+      # stop (Stopped) and unknown: nothing; the next mode change triggers again.
+<% endif %>

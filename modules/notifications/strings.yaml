@@ -1,0 +1,115 @@
+# User-facing texts of the module notifications, one key per text: {en: ..., nl: ...}. Used in the module's files as
+# <@ t('key') @> (tools/fill.py picks house.language, default en; a missing language falls back to en with a warning).
+# {name} in a text is replaced at fill time when t() gets that keyword argument; otherwise Home Assistant fills it in
+# at run time with | replace('{name}', value). Texts are inserted with | tojson: any character is allowed.
+
+# --- Helpers (names shown in the UI) ---
+helper_surplus_kw: { en: Notification surplus from, nl: Melding overschot vanaf }
+helper_surplus_minutes: { en: Notification surplus for, nl: Melding overschot gedurende }
+helper_surplus_pause: { en: Notification surplus at most every, nl: Melding overschot hoogstens om de }
+helper_price_ahead: { en: Notification power price ahead reported on, nl: Melding stroomprijs vooraf gemeld op }
+
+# --- Script send_notification ---
+script_alias: { en: Send notification, nl: Melding sturen }
+script_description:
+  en: >-
+    Sends a notification to the Companion app of everyone in notifications.recipients (house.yaml), otherwise to
+    everyone with a notify service. Fields: title, message and optionally extra (data for the app: url, tag, group,
+    push, actions) and only_home (only who is at home). For other modules: action script.send_notification with
+    data title, message, extra.
+  nl: >-
+    Stuurt een melding naar de Companion-app van iedereen in notifications.recipients (house.yaml), anders naar
+    iedereen met een notify-service. Velden: title, message en optioneel extra (data voor de app: url, tag, group,
+    push, actions) en only_home (alleen wie thuis is). Voor andere modules: action script.send_notification met
+    data title, message, extra.
+field_title: { en: Title, nl: Titel }
+field_message: { en: Message, nl: Bericht }
+field_extra: { en: Extra, nl: Extra }
+field_only_home: { en: Only people at home, nl: Alleen wie thuis is }
+field_only_home_description:
+  en: "on = only the recipients whose person is home now; nobody home = no notification"
+  nl: "aan = alleen de ontvangers wier persoon nu thuis is; niemand thuis = geen melding"
+field_extra_description:
+  en: "data for the Companion app, e.g. {url: /lovelace/energy, tag: power}"
+  nl: "data voor de Companion-app, bv. {url: /lovelace/energie, tag: stroom}"
+
+# --- Logbook ---
+logbook_name: { en: Notifications, nl: Meldingen }
+
+# --- Kind power_price: automation notification_free_or_negative_power ---
+price_alias: { en: "Notification: free or negative power", nl: "Melding: gratis of negatieve stroom" }
+price_description_ahead:
+  en: >-
+    (1) Once per day, as soon as tomorrow's prices are known: a notification when slots with free or negative import
+    are coming.
+  nl: >-
+    (1) Eén keer per dag, zodra de prijzen van morgen bekend zijn: melding als er tijdvakken komen met gratis of
+    negatieve afname.
+price_description_ahead_export:
+  en: >-
+    (1) Once per day, as soon as tomorrow's prices are known: a notification when slots with free or negative import
+    or negative export are coming.
+  nl: >-
+    (1) Eén keer per dag, zodra de prijzen van morgen bekend zijn: melding als er tijdvakken komen met gratis of
+    negatieve afname of negatieve injectie.
+price_description_now: { en: (2) At the moment import becomes free., nl: (2) Op het moment dat afname gratis wordt. }
+price_description_export_now: { en: (3) At the moment exporting costs money., nl: (3) Op het moment dat injecteren geld kost. }
+price_description_sensors:
+  en: >-
+    Prices: {sensors}, with the attributes starts and prices (see notifications/LOGIC.md). Recipients:
+    script.send_notification.
+  nl: >-
+    Prijzen: {sensors}, met de attributen starts en prices (zie notifications/LOGIC.md). Ontvangers:
+    script.send_notification.
+word_and: { en: and, nl: en }
+title_free_coming: { en: Free power coming, nl: Gratis stroom op komst }
+title_negative_export_coming: { en: Negative export price coming, nl: Negatieve injectie op komst }
+message_import_free_windows: { en: "Import free or negative: {windows}.", nl: "Afname gratis of negatief: {windows}." }
+message_export_costs_windows: { en: "Export costs money: {windows}.", nl: "Injectie kost geld: {windows}." }
+message_store_rather: { en: Better to store or use it than to export., nl: Liever opslaan of verbruiken dan injecteren. }
+log_prices_known:
+  en: "tomorrow's prices known · free {free}, negative export {export}"
+  nl: "prijzen van morgen bekend · gratis {free}, negatieve injectie {export}"
+word_none: { en: none, nl: geen }
+log_no_notification: { en: · no notification, nl: · geen melding }
+title_free_now: { en: Power is free now, nl: Stroom is nu gratis }
+message_import_now: { en: "Import now costs {price} €/kWh.", nl: "Afname kost nu {price} €/kWh." }
+message_window: { en: "Window: {windows}.", nl: "Venster: {windows}." }
+log_import_free: { en: "import free · {price} €/kWh", nl: "afname gratis · {price} €/kWh" }
+title_export_costs: { en: Exporting costs money now, nl: Injecteren kost nu geld }
+message_export_now:
+  en: "Export is now {price} €/kWh. Use or store the solar power."
+  nl: "Injectie is nu {price} €/kWh. Verbruik of sla de zonnestroom op."
+message_until: { en: "Until: {time}.", nl: "Tot: {time}." }
+log_export_negative: { en: "export negative · {price} €/kWh", nl: "injectie negatief · {price} €/kWh" }
+
+# --- Kind surplus: automation notification_solar_surplus ---
+surplus_alias: { en: "Notification: solar surplus", nl: "Melding: overschot zonne-energie" }
+surplus_description:
+  en: >-
+    Notification when more than input_number.notification_surplus_kw goes to the grid ({sensor}) for
+    input_number.notification_surplus_minutes, between 08:00 and 18:00 and until 2 hours before sunset. At most one
+    notification per input_number.notification_surplus_pause_h.
+  nl: >-
+    Melding als er input_number.notification_surplus_minutes lang meer dan input_number.notification_surplus_kw naar
+    het net gaat ({sensor}), tussen 08:00 en 18:00 en tot 2 uur voor zonsondergang. Hoogstens één melding per
+    input_number.notification_surplus_pause_h.
+title_surplus: { en: Solar surplus, nl: Zonne-overschot }
+message_surplus:
+  en: You are now sending {kw} kW to the grid. Good moment for the laundry or the dishwasher.
+  nl: Je stuurt nu {kw} kW naar het net. Goed moment voor de was of de vaatwasser.
+log_surplus: { en: "{kw} kW to the grid · notification sent", nl: "{kw} kW naar het net · melding gestuurd" }
+
+# --- Kind filter: automation notification_ventilation_filter ---
+filter_alias: { en: "Notification: replace ventilation filter", nl: "Melding: ventilatiefilter vervangen" }
+filter_description:
+  en: Notification when the ventilation filter must be replaced within 14 days ({sensor}).
+  nl: Melding als de filter van de ventilatie binnen 14 dagen vervangen moet worden ({sensor}).
+title_filter: { en: Ventilation filter, nl: Ventilatiefilter }
+message_filter:
+  en: The ventilation filters must be replaced in {days} days. Time to order new ones.
+  nl: De filters van de ventilatie moeten over {days} dagen vervangen worden. Tijd om nieuwe te bestellen.
+
+# --- Macros in custom_templates/notifications.jinja ---
+word_tomorrow: { en: tomorrow, nl: morgen }
+word_unknown: { en: unknown, nl: onbekend }

@@ -1,0 +1,35 @@
+# Palettes of the generated themes (every theme next to Organic). tools/build_themes.py --write turns each entry into
+# themes/<id>.yaml; Organic itself (themes/organic.yaml) is tuned by hand and gives the fonts and shapes of every theme.
+#
+# A palette per mode (light, dark), all colours as #RRGGBB:
+#   bg      page                     card    card                  raised  lifted surface (light: lighter than card)
+#   line    lines                    text    text                  muted   secondary text, "off" icons
+#   accent  fills (buttons, switches)                              ink     accent for icons and small text (>= 4.5:1)
+#   "on"    text on an accent fill (quoted: YAML 1.1 reads a bare on as true)   second  companion colour (HA accent-color, open covers)
+#   good / warn / bad  status        side    sidebar background
+# A new theme: add an entry here, a name in ../strings.yaml (theme_name_<id>, en + nl), the id in ../_themes.jinja
+# (theme_ids), then run build_themes.py --write. The check must pass (every text and icon >= 4.5:1).
+
+# Energy palette per mode: the same for every theme, so a flow keeps its colour whoever is looking.
+# Names are the cw-* token names (--cw-zon, ...; Dutch on purpose, see CONTRIBUTING.md "Known naming leftovers").
+energy:
+  light: { zon: "#E8A571", batterij: "#7F8B64", net: "#BB7644", huis: "#F5C9AE", injectie: "#874B22", wagen: "#AEBF92", water: "#4F7F92" }
+  dark: { zon: "#E8A571", batterij: "#7F8B64", net: "#BB7644", huis: "#F5C9AE", injectie: "#D9B48F", wagen: "#AEBF92", water: "#8FB8C9" }
+
+themes:
+  garden:
+    about: "Sage and moss with a warm clay tone: green, calm, natural."
+    light: { bg: "#ECEFE4", card: "#DFE5D4", raised: "#F6F8F1", line: "#C5CEB5", text: "#1C211A", muted: "#535C4D", accent: "#8AA373", ink: "#46603A", "on": "#1C211A", second: "#86523A", good: "#3E6A2E", warn: "#7A5410", bad: "#A23C2A", side: "#E4E9DA" }
+    dark: { bg: "#161A15", card: "#21271F", raised: "#2E352B", line: "#3D4639", text: "#E7ECDF", muted: "#ADB8A2", accent: "#9DB884", ink: "#A9C391", "on": "#161A15", second: "#DDA98A", good: "#7CC47A", warn: "#E3B04E", bad: "#EE8575", side: "#121511" }
+  coast:
+    about: "Mist blue and sea water with a sand tone: fresh and light."
+    light: { bg: "#EDF1F3", card: "#DEE6EA", raised: "#F7F9FA", line: "#C3D0D7", text: "#18222A", muted: "#4E5D67", accent: "#5E93B0", ink: "#2C5B75", "on": "#18222A", second: "#7A5B36", good: "#3C6A33", warn: "#7A5410", bad: "#A23C2A", side: "#E5EBEE" }
+    dark: { bg: "#131A1F", card: "#1D262D", raised: "#29343C", line: "#37444D", text: "#E5EDF2", muted: "#A7B7C1", accent: "#7FB3CF", ink: "#8EC0DA", "on": "#131A1F", second: "#D9B48F", good: "#7CC47A", warn: "#E3B04E", bad: "#EE8575", side: "#0F1418" }
+  heath:
+    about: "Lavender and plum with sage: soft and warm."
+    light: { bg: "#F1EDF2", card: "#E5DDE8", raised: "#F9F7FA", line: "#CDC1D2", text: "#211C24", muted: "#5C5361", accent: "#A586B3", ink: "#66487A", "on": "#211C24", second: "#56633F", good: "#3E6A2E", warn: "#7A5410", bad: "#A23C2A", side: "#EAE4EC" }
+    dark: { bg: "#19161B", card: "#252028", raised: "#322C36", line: "#423A46", text: "#EFE8F2", muted: "#B8ADBE", accent: "#C3A3D2", ink: "#C9ADD7", "on": "#19161B", second: "#B4C49A", good: "#7CC47A", warn: "#E3B04E", bad: "#EE8575", side: "#141216" }
+  graphite:
+    about: "Stone and graphite with ochre: sober, cool, high contrast."
+    light: { bg: "#EEEDEA", card: "#E1DFDA", raised: "#F8F7F5", line: "#CAC7BF", text: "#1C1C1A", muted: "#575550", accent: "#D2A23C", ink: "#755611", "on": "#1C1C1A", second: "#3F5E73", good: "#3E6A2E", warn: "#7A5410", bad: "#A23C2A", side: "#E7E6E2" }
+    dark: { bg: "#151515", card: "#202020", raised: "#2C2C2B", line: "#3B3A38", text: "#EDECE8", muted: "#B2AFA7", accent: "#E0B54F", ink: "#E3BC5E", "on": "#151515", second: "#9DBBD0", good: "#7CC47A", warn: "#E3B04E", bad: "#EE8575", side: "#101010" }

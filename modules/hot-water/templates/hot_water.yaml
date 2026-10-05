@@ -1,0 +1,175 @@
+<% from '_hot_water.jinja' import litres, cop_default, bath, tariff_on, ev, kwh_per_degree_default with context %>
+<% set d = module.defaults %>
+<# Template sensors of the hot water buffer -> /config/templates/hot_water.yaml. The kWh sensors have no device class:
+   device_class energy needs a total state class, and these are plans, not meters. The fallbacks in float(...) are the
+   defaults of module.yaml, for the moment before deploy.py has set the helpers. The macros are in
+   custom_templates/hot_water.jinja. #>
+# Hot water buffer: template sensors (ha-kit module hot-water, see hot-water/LOGIC.md).
+# Filled in from house.yaml by tools/fill.py; uploaded by hot-water/deploy.py to /config/templates/hot_water.yaml.
+- sensor:
+    # Electrical kWh still needed to bring the tank to the surplus maximum: (max - tank) x kWh per degree.
+    - name: <@ t('sensor_energy_needed') | tojson @>
+      unique_id: hot_water_energy_needed
+      default_entity_id: sensor.hot_water_energy_needed
+      unit_of_measurement: kWh
+      state_class: measurement
+      icon: mdi:water-boiler
+      availability: "{{ is_number(states('sensor.hot_water_temperature')) }}"
+      state: >
+        {% from 'hot_water.jinja' import kwh_per_degree %}
+        {% set mx = states('input_number.hot_water_surplus_max') | float(<@ d['input_number.hot_water_surplus_max'] @>) %}
+        {% set t = states('sensor.hot_water_temperature') | float(0) %}
+        {{ ([mx - t, 0] | max * kwh_per_degree() | float(<@ kwh_per_degree_default @>)) | round(2) }}
+      attributes:
+        kwh_per_degree: >
+          {% from 'hot_water.jinja' import kwh_per_degree %}
+          {{ kwh_per_degree() | float(<@ kwh_per_degree_default @>) }}
+        cop: "{{ states('sensor.hot_water_cop') | float(<@ cop_default @>) }}"
+        tank_litres: <@ litres @>
+        target: "{{ states('input_number.hot_water_surplus_max') | float(<@ d['input_number.hot_water_surplus_max'] @>) }}"
+
+    # Room in the solar plan for the tank: what energy-plan expects to be left today after the house and the battery
+    # (sensor.energy_plan_margin)<% if ev %>, minus what the car on the charger still needs (sensor.ev_charging_energy_needed)<% endif %>.
+    # Unavailable after the sun has left the panels: the margin then only says what the battery still lacks.
+    - name: <@ t('sensor_room') | tojson @>
+      unique_id: hot_water_room
+      default_entity_id: sensor.hot_water_room
+      unit_of_measurement: kWh
+      state_class: measurement
+      icon: mdi:solar-power-variant-outline
+      availability: >
+        {{ is_number(states('sensor.energy_plan_margin'))
+           and state_attr('sensor.energy_plan_margin', 'after_sun') not in [true, 'true', 'True'] }}
+      state: >
+<% if ev %>
+        {% set car = [states('sensor.ev_charging_energy_needed') | float(0), 0] | max %}
+<% else %>
+        {% set car = 0 %}
+<% endif %>
+        {{ (states('sensor.energy_plan_margin') | float(0) - car) | round(1) }}
+      attributes:
+        margin_kwh: "{{ states('sensor.energy_plan_margin') | float(none) }}"
+<% if ev %>
+        car_kwh: "{{ states('sensor.ev_charging_energy_needed') | float(0) }}"
+<% endif %>
+
+    # What still goes to the grid today even with a full tank: room - energy needed, at least 0.
+    - name: <@ t('sensor_expected_export') | tojson @>
+      unique_id: hot_water_expected_export
+      default_entity_id: sensor.hot_water_expected_export
+      unit_of_measurement: kWh
+      state_class: measurement
+      icon: mdi:transmission-tower-export
+      availability: "{{ is_number(states('sensor.hot_water_room')) and is_number(states('sensor.hot_water_energy_needed')) }}"
+      state: >
+        {{ ([states('sensor.hot_water_room') | float(0) - states('sensor.hot_water_energy_needed') | float(0), 0] | max) | round(1) }}
+<% if tariff_on %>
+
+    # Cheapest consecutive hour between sunset (or now) and the next sunrise: the morning goal is heated then.
+    - name: <@ t('sensor_cheapest_morning') | tojson @>
+      unique_id: hot_water_cheapest_hour_before_sunrise
+      default_entity_id: sensor.hot_water_cheapest_hour_before_sunrise
+      device_class: timestamp
+      icon: mdi:weather-sunset-up
+      state: >
+        {% from 'hot_water.jinja' import morning_hour %}
+        {% set h = morning_hour() | from_json %}
+        {{ h.start if h.start is defined else none }}
+      attributes:
+        mean_price: >
+          {% from 'hot_water.jinja' import morning_hour %}
+          {% set h = morning_hour() | from_json %}
+          {{ h.mean if h.mean is defined else none }}
+        end: >
+          {% from 'hot_water.jinja' import morning_hour %}
+          {% set h = morning_hour() | from_json %}
+          {{ h.end if h.end is defined else none }}
+<% if bath %>
+
+    # Cheapest consecutive hour between hot_water.bath_from (or now) and the bath check, today.
+    - name: <@ t('sensor_cheapest_bath') | tojson @>
+      unique_id: hot_water_cheapest_hour_before_bath
+      default_entity_id: sensor.hot_water_cheapest_hour_before_bath
+      device_class: timestamp
+      icon: mdi:bathtub-outline
+      state: >
+        {% from 'hot_water.jinja' import bath_hour %}
+        {% set h = bath_hour() | from_json %}
+        {{ h.start if h.start is defined else none }}
+      attributes:
+        mean_price: >
+          {% from 'hot_water.jinja' import bath_hour %}
+          {% set h = bath_hour() | from_json %}
+          {{ h.mean if h.mean is defined else none }}
+        end: >
+          {% from 'hot_water.jinja' import bath_hour %}
+          {% set h = bath_hour() | from_json %}
+          {{ h.end if h.end is defined else none }}
+<% endif %>
+<% endif %>
+
+- binary_sensor:
+    # Heating on surplus pays: the export price now is below heat value x the import price we would pay later for
+    # the same heat (mean of the cheapest 2 h coming, else the lowest coming price), or the export price is negative.
+    # On without prices<% if not tariff_on %> (here always: no tariff module installed)<% endif %>: then the sun is not wasted.
+    - name: <@ t('sensor_heating_pays') | tojson @>
+      unique_id: hot_water_heating_pays
+      default_entity_id: binary_sensor.hot_water_heating_pays
+      icon: mdi:cash-check
+<% if tariff_on %>
+      state: >
+        {% set exp = states('sensor.power_price_export') | float(none) %}
+        {% set c = state_attr('sensor.power_price_import', 'cheapest_2h') %}
+        {% set later = c.mean if c is mapping and c.mean is number else state_attr('sensor.power_price_import', 'min_coming') %}
+        {% set h = states('input_number.hot_water_heat_value') | float(<@ d['input_number.hot_water_heat_value'] @>) %}
+        {{ exp is none or later is not number or exp < 0 or exp < h * later }}
+      attributes:
+        export_price: "{{ states('sensor.power_price_export') | float(none) }}"
+        later_price: >
+          {% set c = state_attr('sensor.power_price_import', 'cheapest_2h') %}
+          {{ c.mean if c is mapping and c.mean is number else state_attr('sensor.power_price_import', 'min_coming') }}
+        threshold: >
+          {% set c = state_attr('sensor.power_price_import', 'cheapest_2h') %}
+          {% set later = c.mean if c is mapping and c.mean is number else state_attr('sensor.power_price_import', 'min_coming') %}
+          {% set h = states('input_number.hot_water_heat_value') | float(<@ d['input_number.hot_water_heat_value'] @>) %}
+          {{ (h * later) | round(4) if later is number else none }}
+        reason: >
+          {% set exp = states('sensor.power_price_export') | float(none) %}
+          {% set c = state_attr('sensor.power_price_import', 'cheapest_2h') %}
+          {% set later = c.mean if c is mapping and c.mean is number else state_attr('sensor.power_price_import', 'min_coming') %}
+          {% set h = states('input_number.hot_water_heat_value') | float(<@ d['input_number.hot_water_heat_value'] @>) %}
+          {% if exp is none or later is not number %}no_prices
+          {% elif exp < 0 %}negative_export
+          {% elif exp < h * later %}pays
+          {% else %}export_pays_more{% endif %}
+<% else %>
+      state: "{{ true }}"
+      attributes:
+        reason: no_tariff
+<% endif %>
+
+# The running session, written only by automation hot_water_buffer (event ha_kit_hot_water_session). States: idle,
+# solar, cheap_power, boost. Keeps the start temperature and prices for the results, the end time for the 30-minute
+# rest and the number of session starts today. Restored after a restart.
+- trigger:
+    - trigger: event
+      event_type: ha_kit_hot_water_session
+  sensor:
+    - name: <@ t('sensor_session') | tojson @>
+      unique_id: hot_water_session
+      default_entity_id: sensor.hot_water_session
+      icon: mdi:water-boiler-auto
+      state: "{{ trigger.event.data.state | default('idle') }}"
+      attributes:
+        reason: "{{ trigger.event.data.reason | default(none) }}"
+        target: "{{ trigger.event.data.target | default(none) }}"
+        start_temperature: "{{ trigger.event.data.start_temperature | default(none) }}"
+        started: "{{ trigger.event.data.started | default(none) }}"
+        ended: "{{ trigger.event.data.ended | default(none) }}"
+        import_price: "{{ trigger.event.data.import_price | default(none) }}"
+        export_price: "{{ trigger.event.data.export_price | default(none) }}"
+        day: "{{ now().date().isoformat() }}"
+        starts_today: >
+          {% set a = this.attributes if this is defined and this.attributes is defined else {} %}
+          {% set before = a.get('starts_today', 0) | int(0) if a.get('day') == now().date().isoformat() else 0 %}
+          {{ before + (1 if trigger.event.data.state | default('idle') in ['solar', 'cheap_power'] else 0) }}

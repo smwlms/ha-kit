@@ -1,0 +1,49 @@
+# EV charging: scripts (ha-kit module ev-charging, see ev-charging/LOGIC.md "Apply").
+# Written by ev-charging/deploy.py through the config API (same as the script editor).
+# A mode chosen by hand on a screen (the charger buttons of the energy screen) goes through this script, never
+# straight to script.ev_charger_set_mode: it only fires the event ha_kit_ev_charging_manual, and ev_charging_apply
+# (the only caller of the charger script and the only writer of input_select.ev_charging_owner) sets the owner to
+# manual and the charger to that mode. A direct call of the charger script would look like a call of the kit.
+
+ev_charging_manual_mode:
+  alias: <@ t('script_manual_alias') | tojson @>
+  icon: mdi:hand-back-right
+  description: >-
+    <@ t('script_manual_description') @>
+  mode: queued
+  max: 5
+  fields:
+    mode:
+      name: <@ t('field_manual_mode_name') | tojson @>
+      description: <@ t('field_manual_mode_description') | tojson @>
+      required: true
+      example: fast
+      selector:
+        select:
+          options:
+            - solar_only
+            - solar_min
+            - fast
+            - stop
+    solar_share:
+      name: <@ t('field_manual_share_name') | tojson @>
+      description: <@ t('field_manual_share_description') | tojson @>
+      example: 50
+      selector:
+        number:
+          min: 0
+          max: 100
+          step: 1
+          unit_of_measurement: "%"
+    reason:
+      name: <@ t('field_manual_reason_name') | tojson @>
+      description: <@ t('field_manual_reason_description') | tojson @>
+      example: <@ t('manual_reason_default') | tojson @>
+      selector:
+        text:
+  sequence:
+    - event: ha_kit_ev_charging_manual
+      event_data:
+        mode: "{{ mode | default('') }}"
+        solar_share: "{{ solar_share | default('') }}"
+        reason: "{{ reason | default('') }}"

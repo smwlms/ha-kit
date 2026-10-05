@@ -1,0 +1,134 @@
+<% from '_shading.jinja' import all_rooms, blinds, curtains, sun_on, normal, dutch_sides, sun, sides, weather, indoor with context %>
+<% if not blinds and not curtains %><@ fail('house.yaml: no room has a blind or curtain (rooms[].blind / curtain); the module shading needs at least one') @><% endif %>
+<% for k in sun if k.side | upper not in normal %><@ fail('house.yaml: room ' ~ k.slug ~ ' has side ' ~ k.side ~ '; choose N, NE, E, SE, S, SW, W or NW' ~ ((' (' ~ k.side ~ ' is the old Dutch notation for ' ~ dutch_sides[k.side | upper] ~ ')') if k.side | upper in dutch_sides else '') ~ ', or shading: false for that room') @><% endfor %>
+<% if sun and not weather %><@ fail('house.yaml: entities.weather is empty; needed for shading on sun and heat (or set shading.sun_protection: false)') @><% endif %>
+# Shading: helpers and cover groups (ha-kit module shading, see shading/LOGIC.md "Settings").
+# Uploaded by shading/deploy.py to /config/packages/shading.yaml (module base: packages: !include_dir_named packages/).
+# No `initial` anywhere: Home Assistant keeps the last value over a restart. deploy.py sets the defaults from
+# module.yaml (defaults:) once, when a helper is created for the first time.
+# Rooms with a blind: <@ blinds | map(attribute='slug') | join(', ') or 'none' @>. Rooms with a curtain: <@ curtains | map(attribute='slug') | join(', ') or 'none' @>.
+# Rooms in "sun and heat": <@ sun | map(attribute='slug') | join(', ') or 'none' @>.
+<% if sun or (blinds and curtains) %>
+
+input_boolean:
+<% if sun %>
+  shading_automatic:                 # master switch for the automation shading_sun (default on)
+    name: <@ t('helper_automatic') | tojson @>
+    icon: mdi:weather-sunny-alert
+<% for k in sun %>
+  shading_closed_<@ k.slug @>:          # set by the automation: blind closed against the sun (the schedule skips opening it)
+    name: <@ t('helper_closed', room=k.name) | tojson @>
+    icon: mdi:window-shutter-alert
+  shading_manual_<@ k.slug @>:          # someone opened it by hand: the sun leaves it alone for the rest of the day
+    name: <@ t('helper_manual', room=k.name) | tojson @>
+    icon: mdi:hand-back-right
+<% endfor %>
+<% endif %>
+<% if blinds and curtains %>
+  curtains_follow_blinds:            # the automation curtains_sync_times copies the blind times (default on)
+    name: <@ t('helper_curtains_follow') | tojson @>
+    icon: mdi:link-variant
+<% endif %>
+<% endif %>
+<% if sun %>
+
+input_number:
+  shading_outdoor_warm_from:         # warm: warmest outdoor temperature of today (forecast) from (default 24)
+    name: <@ t('helper_outdoor_warm') | tojson @>
+    icon: mdi:sun-thermometer
+    min: 15
+    max: 35
+    step: 1
+    unit_of_measurement: °C
+<% if indoor %>
+  shading_indoor_warm_from:          # warm: indoor temperature from (default 22)
+    name: <@ t('helper_indoor_warm') | tojson @>
+    icon: mdi:home-thermometer
+    min: 18
+    max: 28
+    step: 0.5
+    unit_of_measurement: °C
+<% endif %>
+  shading_max_cloud_cover:           # sun counts only below this forecast cloud cover, next 3 h (default 50)
+    name: <@ t('helper_max_cloud') | tojson @>
+    icon: mdi:weather-cloudy
+    min: 10
+    max: 100
+    step: 5
+    unit_of_measurement: "%"
+  shading_min_sun_elevation:         # sun lower than this does not count (trees, neighbours) (default 5)
+    name: <@ t('helper_min_elevation') | tojson @>
+    icon: mdi:weather-sunset-up
+    min: 0
+    max: 30
+    step: 1
+    unit_of_measurement: °
+<% for z in sides %>
+  shading_angle_<@ z | lower @>:               # facade <@ z @> (<@ normal.get(z, 0) @>°): sun counts within this angle of the facade normal (default 70)
+    name: <@ t('helper_angle', side=z) | tojson @>
+    icon: mdi:angle-acute
+    min: 20
+    max: 90
+    step: 5
+    mode: box
+    unit_of_measurement: °
+<% endfor %>
+<% endif %>
+
+input_datetime:
+<% if blinds %>
+  blinds_open_workday:               # automation blinds_schedule (default 07:30)
+    name: <@ t('helper_blinds_open_workday') | tojson @>
+    icon: mdi:weather-sunset-up
+    has_date: false
+    has_time: true
+  blinds_open_weekend:               # (default 09:00)
+    name: <@ t('helper_blinds_open_weekend') | tojson @>
+    icon: mdi:coffee-outline
+    has_date: false
+    has_time: true
+  blinds_close:                      # every day; also the reset of the sun flags (default 19:00)
+    name: <@ t('helper_blinds_close') | tojson @>
+    icon: mdi:weather-night
+    has_date: false
+    has_time: true
+<% endif %>
+<% if curtains %>
+  curtains_open_workday:             # automation curtains_schedule (default 07:30)
+    name: <@ t('helper_curtains_open_workday') | tojson @>
+    icon: mdi:weather-sunset-up
+    has_date: false
+    has_time: true
+  curtains_open_weekend:             # (default 09:00)
+    name: <@ t('helper_curtains_open_weekend') | tojson @>
+    icon: mdi:coffee-outline
+    has_date: false
+    has_time: true
+  curtains_close:                    # (default 19:00)
+    name: <@ t('helper_curtains_close') | tojson @>
+    icon: mdi:weather-night
+    has_date: false
+    has_time: true
+<% endif %>
+
+# One cover for all blinds / all curtains (dashboard buttons "all open / all closed"). The automations target the
+# rooms themselves, not these groups. The entity id follows the name in the install language.
+cover:
+<% if blinds %>
+  - platform: group
+    name: <@ t('group_all_blinds') | tojson @>
+    unique_id: shading_all_blinds
+    entities:
+<% for k in blinds %>
+      - <@ k.blind @>
+<% endfor %>
+<% endif %>
+<% if curtains %>
+  - platform: group
+    name: <@ t('group_all_curtains') | tojson @>
+    unique_id: shading_all_curtains
+    entities:
+<% for k in curtains %>
+      - <@ k.curtain @>
+<% endfor %>
+<% endif %>

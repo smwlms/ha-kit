@@ -1,0 +1,29 @@
+# Module metadata, read by tools/fill.py (--list), tools/choose.py (ask:) and tools/check.py.
+# Copy this folder to modules/<your-module>/ (lower case, hyphens) and replace everything that says "template".
+# A folder whose name starts with '_' is skipped by fill.py unless house.yaml lists it in modules:.
+name: Template
+description: Minimal working module to copy; turns a light on and sends a notification when a switch helper turns on
+status: template
+# Other modules this one needs (their helpers, scripts or sensors). fill.py stops when one is not in modules:.
+depends_on: []
+requires:
+  integrations: []
+  hardware: []
+# true = the build order may skip it; shown in the module table of README.md.
+optional: true
+# One file per item of a list in house.yaml, e.g. one firmware file per room with sensor: true:
+#   - { source: esphome/room.yaml, per: rooms, if: item.sensor, name: <path with a variable marker around item.slug> }
+# (see modules/room-sensor/module.yaml for a real one).
+generate: []
+# Questions for tools/choose.py. A module is chosen when every question gets the answer it needs (default: yes).
+# Questions with the same id are asked once; a brand adapter uses options + need.
+ask:
+  - id: template
+    question: Install the template module (only for trying out the kit)?
+# Fields of house.yaml this module reads (document them in house.example.yaml as well).
+house_fields:
+  - people[].name (the first person is greeted)
+  - entities.template_light (optional)
+# Start values that deploy.py sets ONCE, when the helper is new (never `initial`: that resets on every restart).
+defaults:
+  input_boolean.ha_kit_template_enabled: "off"

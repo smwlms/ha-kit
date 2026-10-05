@@ -1,0 +1,765 @@
+<% from '_ev_charging.jinja' import ev_cars, plan_cars, amps_cars, limit_cars, has_tariff, has_notifications, battery,
+   battery_soc, own_counter, voltage, phases with context %>
+<% set amps_map = {} %>
+<% set _amps = [] %>
+<% for c in amps_cars %>
+<% set _ = amps_map.update({c.prefix: c.current}) %>
+<% set _ = _amps.append("'" ~ c.prefix ~ "': '" ~ c.current ~ "'") %>
+<% endfor %>
+<# Single-quoted Jinja literal of amps_map, for templates inside double-quoted YAML strings. #>
+<% set amps_lit = '{' ~ (_amps | join(', ')) ~ '}' %>
+<% set name_map = {} %>
+<% for c in ev_cars %>
+<% set _ = name_map.update({c.prefix: c.name}) %>
+<% endfor %>
+<% set modes = ['solar_only', 'solar_min', 'fast', 'stop'] %>
+<% set modes_lit = "['solar_only', 'solar_min', 'fast', 'stop']" %>
+<% set reasons = ['off', 'manual', 'no_car', 'plan', 'peak_limited', 'grid_assist', 'car_full', 'paused_battery', 'battery_behind', 'solar'] %>
+<% set cheap_states = ['off', 'no_cheap_power', 'no_sun', 'no_car', 'car_full', 'battery_behind', 'battery_not_full', 'battery_discharging', 'month_peak', 'grid_import_high', 'too_little_surplus', 'commands_used_up', 'charger_busy', 'grid_assist'] %>
+# EV charging: automations (ha-kit module ev-charging, see ev-charging/LOGIC.md).
+# Written by ev-charging/deploy.py through the config API (same as the automation editor).
+# Single writers: ev_charging_apply is the only caller of script.ev_charger_set_mode and the only writer of
+# input_select.ev_charging_owner; ev_charging_car_amps the only writer of the car charge current; ev_plan_<car>_limit
+# the only writer of that car's charge limit. They carry out sensor.ev_charging_wanted and sensor.ev_plan_<car>;
+# the decisions themselves are in templates/ev_charging.yaml and templates/ev_plan.yaml.
+
+- id: ev_charging_apply
+  alias: <@ t('auto_apply_alias') | tojson @>
+  description: >-
+    <@ t('auto_apply_description') @>
+  mode: queued
+  max: 5
+  triggers:
+    - trigger: state
+      entity_id: sensor.ev_charging_wanted
+      id: wanted
+    # Only real changes of the charger (not the return from unavailable after a restart or a cloud drop).
+    - trigger: state
+      entity_id: sensor.ev_charger_mode
+      not_from:
+        - unknown
+        - unavailable
+      not_to:
+        - unknown
+        - unavailable
+      id: charger_mode
+    - trigger: state
+      entity_id: binary_sensor.ev_charger_connected
+      from: "on"
+      to: "off"
+      id: unplugged
+    - trigger: state
+      entity_id: input_boolean.ev_charging_smart
+      id: smart
+    # A mode chosen by hand on a screen (script.ev_charging_manual_mode, e.g. the energy screen's charger buttons).
+    - trigger: event
+      event_type: ha_kit_ev_charging_manual
+      id: manual_request
+    - trigger: time_pattern
+      minutes: "/5"
+      id: check
+    - trigger: homeassistant
+      event: start
+      id: start
+  actions:
+    - variables:
+        txt:
+          logbook: <@ t('logbook_name') | tojson @>
+          applied: <@ t('log_applied') | tojson @>
+          manual: <@ t('log_manual') | tojson @>
+          manual_request: <@ t('log_manual_request') | tojson @>
+          manual_request_off: <@ t('log_manual_request_off') | tojson @>
+          manual_reason: <@ t('manual_reason_default') | tojson @>
+          released: <@ t('log_released') | tojson @>
+          handed_back: <@ t('log_handed_back') | tojson @>
+          modes:
+<% for m in modes %>
+            <@ m @>: <@ t('mode_' ~ m) | tojson @>
+<% endfor %>
+          reasons:
+<% for r in reasons %>
+            <@ r @>: <@ t('reason_' ~ r) | tojson @>
+<% endfor %>
+        smart: "{{ is_state('input_boolean.ev_charging_smart', 'on') }}"
+        connected: "{{ is_state('binary_sensor.ev_charger_connected', 'on') }}"
+        owner_now: "{{ states('input_select.ev_charging_owner') }}"
+        wanted: "{{ states('sensor.ev_charging_wanted') }}"
+        owner: "{{ state_attr('sensor.ev_charging_wanted', 'owner') or 'none' }}"
+        reason: "{{ state_attr('sensor.ev_charging_wanted', 'reason') or '' }}"
+        share: "{{ state_attr('sensor.ev_charging_wanted', 'solar_share') | int(50) }}"
+        mode_now: "{{ states('sensor.ev_charger_mode') }}"
+        share_now: "{{ state_attr('sensor.ev_charger_mode', 'solar_share') }}"
+        # Seconds since the kit last called the charger script (cloud lag: the charger follows up to ~90 s later).
+        since_call: >
+          {% set lt = state_attr('script.ev_charger_set_mode', 'last_triggered') %}
+          {{ ((now() - lt).total_seconds() if lt is not none else 99999) | int }}
+    - choose:
+        - alias: "Mode chosen by hand on a screen: owner manual (with smart on) and that mode, until the car is unplugged"
+          conditions:
+            - condition: trigger
+              id: manual_request
+            - condition: template
+              value_template: "{{ (trigger.event.data.mode | default('')) in <@ modes_lit @> }}"
+          sequence:
+            - variables:
+                req_mode: "{{ trigger.event.data.mode }}"
+                req_share: "{{ trigger.event.data.solar_share | default('') }}"
+                req_reason: "{{ trigger.event.data.reason | default('') or txt.manual_reason }}"
+            # Owner first: the charger-mode trigger that follows the call then sees owner manual and does nothing.
+            # Also without a car: a mode chosen before plugging in holds for that charge session.
+            - if:
+                - condition: template
+                  value_template: "{{ smart and owner_now != 'manual' }}"
+              then:
+                - action: input_select.select_option
+                  target:
+                    entity_id: input_select.ev_charging_owner
+                  data:
+                    option: manual
+            - if:
+                - condition: template
+                  value_template: "{{ req_share | is_number }}"
+              then:
+                - action: script.ev_charger_set_mode
+                  continue_on_error: true
+                  data:
+                    mode: "{{ req_mode }}"
+                    solar_share: "{{ req_share | int }}"
+                    reason: "{{ req_reason }}"
+              else:
+                - action: script.ev_charger_set_mode
+                  continue_on_error: true
+                  data:
+                    mode: "{{ req_mode }}"
+                    reason: "{{ req_reason }}"
+            - action: logbook.log
+              data:
+                name: "{{ txt.logbook }}"
+                entity_id: input_boolean.ev_charging_smart
+                message: >-
+                  {{ (txt.manual_request if smart else txt.manual_request_off)
+                     | replace('{mode}', txt.modes.get(req_mode, req_mode)) | replace('{reason}', req_reason) }}
+        - alias: "Car unplugged: release the charger (manual ends here)"
+          conditions:
+            - condition: trigger
+              id: unplugged
+            - condition: template
+              value_template: "{{ owner_now != 'none' }}"
+          sequence:
+            - action: input_select.select_option
+              target:
+                entity_id: input_select.ev_charging_owner
+              data:
+                option: none
+            - action: logbook.log
+              data:
+                name: "{{ txt.logbook }}"
+                entity_id: input_boolean.ev_charging_smart
+                message: "{{ txt.released }}"
+        - alias: "Someone else changed the charger: owner manual until the car is unplugged"
+          conditions:
+            - condition: trigger
+              id: charger_mode
+            - condition: template
+              value_template: >-
+                {{ smart and connected and owner_now != 'manual' and mode_now in <@ modes_lit @>
+                   and wanted in <@ modes_lit @> and mode_now != wanted and since_call > 150 }}
+          sequence:
+            - action: input_select.select_option
+              target:
+                entity_id: input_select.ev_charging_owner
+              data:
+                option: manual
+            - action: logbook.log
+              data:
+                name: "{{ txt.logbook }}"
+                entity_id: input_boolean.ev_charging_smart
+                message: "{{ txt.manual | replace('{mode}', txt.modes.get(mode_now, mode_now)) }}"
+        - alias: "Master switch off: hand the charger back once (solar_only when the kit had it)"
+          conditions:
+            - condition: trigger
+              id: smart
+            - condition: template
+              value_template: "{{ not smart }}"
+          sequence:
+            - if:
+                - condition: template
+                  value_template: "{{ owner_now in ['surplus', 'cheap', 'plan'] and mode_now in <@ modes_lit @> and mode_now != 'solar_only' }}"
+              then:
+                - action: script.ev_charger_set_mode
+                  continue_on_error: true
+                  data:
+                    mode: solar_only
+                    reason: "{{ txt.handed_back }}"
+            - if:
+                - condition: template
+                  value_template: "{{ owner_now != 'none' }}"
+              then:
+                - action: input_select.select_option
+                  target:
+                    entity_id: input_select.ev_charging_owner
+                  data:
+                    option: none
+        - alias: "Carry out the arbiter (sensor.ev_charging_wanted)"
+          conditions:
+            - condition: template
+              value_template: "{{ smart and owner_now != 'manual' and owner != 'manual' }}"
+            # The 5-minute check and the start only retry when the charger did not follow (at most every 10 min).
+            - condition: template
+              value_template: "{{ trigger.id not in ['check', 'start'] or since_call > 600 }}"
+          sequence:
+            - if:
+                - condition: template
+                  value_template: "{{ owner_now != owner }}"
+              then:
+                - action: input_select.select_option
+                  target:
+                    entity_id: input_select.ev_charging_owner
+                  data:
+                    option: "{{ owner }}"
+            - if:
+                - condition: template
+                  value_template: >-
+                    {{ wanted in <@ modes_lit @> and mode_now not in ['unknown', 'unavailable']
+                       and (mode_now != wanted or (wanted == 'solar_only' and share_now is number and share_now | int != share)) }}
+              then:
+                - variables:
+                    why: "{{ txt.reasons.get(reason, reason) }}"
+                - action: script.ev_charger_set_mode
+                  continue_on_error: true
+                  data:
+                    mode: "{{ wanted }}"
+                    solar_share: "{{ share }}"
+                    reason: "{{ why }}"
+                - action: logbook.log
+                  data:
+                    name: "{{ txt.logbook }}"
+                    entity_id: input_boolean.ev_charging_smart
+                    message: "{{ txt.applied | replace('{mode}', txt.modes.get(wanted, wanted)) | replace('{reason}', why) }}"
+<% if amps_cars %>
+
+- id: ev_charging_car_amps
+  alias: <@ t('auto_amps_alias') | tojson @>
+  description: >-
+    <@ t('auto_amps_description') @>
+  mode: queued
+  max: 3
+  triggers:
+    - trigger: time_pattern
+      minutes: "/5"
+      id: regulate
+    - trigger: state
+      entity_id: input_boolean.ev_charging_car_amps_auto
+      to: "on"
+      id: regulate
+    # The plan's current changed (month-peak headroom, house load).
+    - trigger: state
+      entity_id: sensor.ev_charging_wanted
+      attribute: amps
+      id: plan
+<% if has_tariff %>
+    - trigger: state
+      entity_id: binary_sensor.ev_charging_peak_risk
+      to: "on"
+      id: peak
+<% endif %>
+    # Fast by hand: the car may take everything the charger offers (after 90 s, when the car sees the offer).
+    - trigger: state
+      entity_id: sensor.ev_charger_mode
+      to: fast
+      for: "00:01:30"
+      id: fast
+    # The car started charging: after a phase switch it takes the new pilot current, set it again.
+    - trigger: state
+      entity_id:
+<% for c in amps_cars %>
+        - <@ c.state @>
+<% endfor %>
+      to: charging
+      for: "00:00:20"
+      id: charging
+  conditions:
+    - condition: state
+      entity_id: input_boolean.ev_charging_car_amps_auto
+      state: "on"
+    - condition: template
+      value_template: "{{ <@ amps_lit @>.get(states('sensor.ev_charging_car'), '') != '' }}"
+  actions:
+    - variables:
+        txt:
+          logbook: <@ t('logbook_name') | tojson @>
+          set: <@ t('log_amps') | tojson @>
+          why_plan: <@ t('why_amps_plan') | tojson @>
+          why_fast: <@ t('why_amps_fast') | tojson @>
+          why_solar: <@ t('why_amps_solar') | tojson @>
+        car: "{{ states('sensor.ev_charging_car') }}"
+        number: "{{ <@ amps_lit @>.get(car) }}"
+        current: "{{ states(number) | int(0) }}"
+        maximum: "{{ state_attr(number, 'max') | int(16) }}"
+        minimum: "{{ [states('input_number.ev_charging_min_amps') | int(5), maximum] | min }}"
+        owner: "{{ states('input_select.ev_charging_owner') }}"
+        mode: "{{ states('sensor.ev_charger_mode') }}"
+        charging: >
+          {{ state_attr('sensor.ev_charging_car', 'charging_state') == 'charging' }}
+        phases: >
+          {% set ph = states('sensor.ev_charger_phases') | int(<@ phases @>) %}
+          {{ ph if ph in [1, 3] else <@ phases @> }}
+        avail: "{{ states('sensor.ev_charging_available_power_avg') | float(0) }}"
+        solar_target: >
+          {{ [minimum, [(avail / (<@ voltage @> * phases)) | round(0, 'floor') | int, maximum] | min] | max }}
+        plan_amps: "{{ state_attr('sensor.ev_charging_wanted', 'amps') }}"
+        plan_target: "{{ [plan_amps | int(0), maximum] | min }}"
+        # The plan just started (amps went from none to a number): set at once, also upwards.
+        plan_start: >
+          {{ trigger.id == 'plan' and trigger.from_state is not none and trigger.from_state.attributes.get('amps') is none }}
+        budget_ok: >
+          {{ states('counter.tesla_commands_today') | int(0) < states('input_number.ev_charging_car_commands_per_day') | int(25) }}
+        rest_ok: >
+          {% set c = states.counter.tesla_commands_today %}
+          {{ c is none or (now() - c.last_changed).total_seconds() >= 600 }}
+    - choose:
+        # Charge plan in fast: the current that fits under the month peak. Down at once on a peak risk, a start or a
+        # check; a change of the headroom alone (every minute) only moves it by 2 A or more. Up only by 2 A or more.
+        # The plan may exceed the daily budget (a planned trip comes first).
+        - alias: "Plan in fast: current within the month-peak headroom"
+          conditions:
+            - condition: template
+              value_template: >-
+                {{ owner == 'plan' and mode == 'fast' and is_state('sensor.ev_charging_wanted', 'fast') and plan_amps is number
+                   and ((plan_target | int < current and (trigger.id != 'plan' or plan_start or plan_target | int <= current - 2))
+                        or (plan_target | int >= current + 2 and (trigger.id != 'plan' or plan_start))) }}
+          sequence:
+            - variables:
+                target: "{{ plan_target }}"
+                why: "{{ txt.why_plan }}"
+            - action: number.set_value
+              continue_on_error: true
+              target:
+                entity_id: "{{ number }}"
+              data:
+                value: "{{ target }}"
+            - action: counter.increment
+              target:
+                entity_id: counter.tesla_commands_today
+            - action: logbook.log
+              data:
+                name: "{{ txt.logbook }}"
+                entity_id: input_boolean.ev_charging_car_amps_auto
+                message: "{{ txt.set | replace('{from}', current | string) | replace('{to}', target | string) | replace('{why}', why) }}"
+        - alias: "Fast by hand: the car to the maximum the charger offers"
+          conditions:
+            - condition: trigger
+              id: fast
+            - condition: template
+              value_template: "{{ owner == 'manual' and current != maximum and budget_ok }}"
+          sequence:
+            - action: number.set_value
+              continue_on_error: true
+              target:
+                entity_id: "{{ number }}"
+              data:
+                value: "{{ maximum }}"
+            - action: counter.increment
+              target:
+                entity_id: counter.tesla_commands_today
+            - action: logbook.log
+              data:
+                name: "{{ txt.logbook }}"
+                entity_id: input_boolean.ev_charging_car_amps_auto
+                message: "{{ txt.set | replace('{from}', current | string) | replace('{to}', maximum | string) | replace('{why}', txt.why_fast) }}"
+        # Surplus (solar_only) or cheap assist (solar_min): the current follows the 10-minute available power, within
+        # the budget, only on a difference, at least 10 min apart except a drop of 2 A or more.
+        - alias: "Surplus or cheap assist: current follows the available power"
+          conditions:
+            - condition: template
+              value_template: >-
+                {{ owner in ['surplus', 'cheap'] and mode in ['solar_only', 'solar_min'] and charging
+                   and solar_target | int != current and budget_ok and (rest_ok or solar_target | int <= current - 2) }}
+          sequence:
+            - action: number.set_value
+              continue_on_error: true
+              target:
+                entity_id: "{{ number }}"
+              data:
+                value: "{{ solar_target }}"
+            - action: counter.increment
+              target:
+                entity_id: counter.tesla_commands_today
+            - action: logbook.log
+              data:
+                name: "{{ txt.logbook }}"
+                entity_id: input_boolean.ev_charging_car_amps_auto
+                message: >-
+                  {{ txt.set | replace('{from}', current | string) | replace('{to}', solar_target | string)
+                     | replace('{why}', txt.why_solar | replace('{kw}', ((avail / 1000) | round(1)) | string)) }}
+<% endif %>
+<% for c in limit_cars %>
+<% set p = c.prefix %>
+
+- id: ev_plan_<@ p @>_limit
+  alias: <@ t('auto_limit_alias', name=c.name) | tojson @>
+  description: >-
+    <@ t('auto_limit_description') @>
+  mode: queued
+  max: 3
+  triggers:
+    - trigger: state
+      entity_id: sensor.ev_plan_<@ p @>
+      attribute: target_percent
+    - trigger: state
+      entity_id: <@ c.cable @>
+    - trigger: state
+      entity_id: input_boolean.ev_plan_<@ p @>
+<% if c.online %>
+    - trigger: state
+      entity_id: <@ c.online @>
+      to: "on"
+<% endif %>
+    - trigger: time_pattern
+      minutes: "/15"
+    - trigger: homeassistant
+      event: start
+  actions:
+    - variables:
+        txt:
+          logbook: <@ t('logbook_plan', name=c.name) | tojson @>
+          raised: <@ t('log_limit_raised') | tojson @>
+          restored: <@ t('log_limit_restored') | tojson @>
+        plan_on: "{{ is_state('input_boolean.ev_plan_<@ p @>', 'on') }}"
+        target: "{{ state_attr('sensor.ev_plan_<@ p @>', 'target_percent') | int(0) }}"
+        current: "{{ states('<@ c.battery @>') | float(0) }}"
+        limit_now: "{{ states('<@ c.limit @>') | int(0) }}"
+        previous: "{{ states('input_number.ev_plan_<@ p @>_previous_limit') | int(0) }}"
+        reachable: "{{ is_state('<@ c.cable @>', 'on')<% if c.online %> or is_state('<@ c.online @>', 'on')<% endif %> }}"
+    - choose:
+        - alias: "Target above the car's limit: raise the limit to the target (the old limit is kept)"
+          conditions:
+            - condition: template
+              value_template: >-
+                {{ plan_on and is_state('<@ c.cable @>', 'on') and has_value('<@ c.limit @>') and target > 0
+                   and current < target and target > limit_now }}
+          sequence:
+            - if:
+                - condition: template
+                  value_template: "{{ previous < 1 }}"
+              then:
+                - action: input_number.set_value
+                  target:
+                    entity_id: input_number.ev_plan_<@ p @>_previous_limit
+                  data:
+                    value: "{{ limit_now }}"
+            - action: number.set_value
+              continue_on_error: true
+              target:
+                entity_id: <@ c.limit @>
+              data:
+                value: "{{ [[target, 50] | max, 100] | min }}"
+            - action: counter.increment
+              target:
+                entity_id: counter.tesla_commands_today
+            - action: logbook.log
+              data:
+                name: "{{ txt.logbook }}"
+                entity_id: input_boolean.ev_plan_<@ p @>
+                message: "{{ txt.raised | replace('{to}', target | string) | replace('{from}', (previous if previous > 0 else limit_now) | string) }}"
+        - alias: "No target any more: the limit back to what it was"
+          conditions:
+            - condition: template
+              value_template: "{{ previous > 0 and (target == 0 or not plan_on) and reachable }}"
+          sequence:
+            - action: number.set_value
+              continue_on_error: true
+              target:
+                entity_id: <@ c.limit @>
+              data:
+                value: "{{ previous }}"
+            - action: counter.increment
+              target:
+                entity_id: counter.tesla_commands_today
+            - action: logbook.log
+              data:
+                name: "{{ txt.logbook }}"
+                entity_id: input_boolean.ev_plan_<@ p @>
+                message: "{{ txt.restored | replace('{to}', previous | string) }}"
+            - action: input_number.set_value
+              target:
+                entity_id: input_number.ev_plan_<@ p @>_previous_limit
+              data:
+                value: 0
+<% endfor %>
+<% if plan_cars %>
+
+- id: ev_plan_target_reset
+  alias: <@ t('auto_reset_alias') | tojson @>
+  description: >-
+    <@ t('auto_reset_description') @>
+  mode: queued
+  max: 3
+  triggers:
+    - trigger: time_pattern
+      minutes: "/15"
+    - trigger: homeassistant
+      event: start
+    - trigger: state
+      entity_id:
+<% for c in plan_cars %>
+        - input_datetime.ev_plan_<@ c.prefix @>_departure
+<% endfor %>
+  actions:
+    - repeat:
+        for_each: <@ plan_cars | map(attribute='prefix') | list | tojson @>
+        sequence:
+          - if:
+              - condition: template
+                value_template: >-
+                  {% set ts = state_attr('input_datetime.ev_plan_' ~ repeat.item ~ '_departure', 'timestamp') %}
+                  {{ states('input_number.ev_plan_' ~ repeat.item ~ '_target') | int(0) > 0 and ts is number and ts < as_timestamp(now()) }}
+            then:
+              - action: input_number.set_value
+                target:
+                  entity_id: "{{ 'input_number.ev_plan_' ~ repeat.item ~ '_target' }}"
+                data:
+                  value: 0
+<% endif %>
+<% if has_tariff or plan_cars %>
+
+- id: ev_charging_notify
+  alias: <@ t('auto_notify_alias') | tojson @>
+  description: >-
+    <@ t('auto_notify_description') @>
+  mode: queued
+  max: 5
+  triggers:
+<% if has_tariff %>
+    - trigger: state
+      entity_id: binary_sensor.power_price_cheap
+      from: "off"
+      to: "on"
+      id: window_start
+    - trigger: state
+      entity_id: binary_sensor.power_price_cheap
+      from: "on"
+      to: "off"
+      id: window_end
+<% endif %>
+<% if plan_cars %>
+    - trigger: state
+      entity_id:
+<% for c in plan_cars %>
+        - sensor.ev_plan_<@ c.prefix @>
+<% endfor %>
+      attribute: feasible
+      to: false
+      id: not_feasible
+    - trigger: time
+      at: "21:00:00"
+      id: evening
+<% endif %>
+  actions:
+    - variables:
+        txt:
+          logbook: <@ t('logbook_name') | tojson @>
+<% if has_tariff %>
+          cheap_title: <@ t('notify_cheap_start_title') | tojson @>
+          cheap_message: <@ t('notify_cheap_start_message' if battery else 'notify_cheap_start_message_no_battery') | tojson @>
+          cheap_end_title: <@ t('notify_cheap_end_title') | tojson @>
+          cheap_end_message: <@ t('notify_cheap_end_message') | tojson @>
+          unknown: <@ t('unknown_time') | tojson @>
+          cheap:
+<% for s in cheap_states %>
+            <@ s @>: <@ t('cheap_' ~ s) | tojson @>
+<% endfor %>
+<% endif %>
+<% if plan_cars %>
+          nf_title: <@ t('notify_not_feasible_title') | tojson @>
+          nf_message: <@ t('notify_not_feasible_message') | tojson @>
+          nf_peak: <@ t('notify_not_feasible_peak') | tojson @>
+          ev_title: <@ t('notify_evening_title') | tojson @>
+          ev_trips: <@ t('evening_trips') | tojson @>
+          ev_departure: <@ t('evening_departure') | tojson @>
+          ev_needs: <@ t('evening_needs') | tojson @>
+          ev_not_plugged: <@ t('evening_not_plugged') | tojson @>
+          ev_enough: <@ t('evening_enough') | tojson @>
+          ev_blocks: <@ t('evening_blocks') | tojson @>
+          ev_plus_sun: <@ t('evening_plus_sun') | tojson @>
+          ev_sun_only: <@ t('evening_sun_only') | tojson @>
+          ev_over_100: <@ t('evening_over_100') | tojson @>
+          ev_without_distance: <@ t('evening_without_distance') | tojson @>
+        names: <@ name_map | tojson @>
+        plan_list: <@ (plan_cars | map(attribute='prefix') | list) | tojson @>
+        plan_cables: <@ (plan_cars | map(attribute='cable') | list) | tojson @>
+<% endif %>
+    - choose:
+<% if has_tariff %>
+        - alias: "Cheap window starts (daytime, cheap assist on)"
+          conditions:
+            - condition: trigger
+              id: window_start
+            - condition: state
+              entity_id: input_boolean.ev_charging_cheap_enabled
+              state: "on"
+            - condition: state
+              entity_id: sun.sun
+              state: above_horizon
+          sequence:
+            - variables:
+                end: >
+                  {% set a = state_attr('sensor.power_price_import', 'prices') or [] %}
+                  {% set st = state_attr('sensor.power_price_import', 'starts') or [] %}
+                  {% set neg = state_attr('sensor.power_price_export', 'negative_coming') or [] %}
+                  {% set d = states('input_number.power_price_cheap_below') | float(0) %}
+                  {% set ns = namespace(end=none) %}
+                  {% for i in range([a | count, st | count] | min) %}
+                    {% if ns.end is none and as_datetime(st[i]) > now() and not (st[i] in neg or a[i] <= d) %}
+                      {% set ns.end = as_local(as_datetime(st[i])).strftime('%H:%M') %}
+                    {% endif %}
+                  {% endfor %}
+                  {{ ns.end or txt.unknown }}
+                title: "{{ txt.cheap_title | replace('{end}', end) }}"
+                message: >-
+                  {% set s = states('sensor.ev_charging_cheap_status') %}
+                  {{ txt.cheap_message<% if battery %> | replace('{battery}', states('<@ battery_soc @>') | int(0) | string)<% endif %>
+                     | replace('{max_kw}', states('input_number.ev_charging_cheap_max_grid_kw') | string)
+                     | replace('{status}', txt.cheap.get(s, s)) }}
+<% if has_notifications %>
+            - action: script.send_notification
+              continue_on_error: true
+              data:
+                title: "{{ title }}"
+                message: "{{ message }}"
+<% endif %>
+            - action: logbook.log
+              data:
+                name: "{{ txt.logbook }}"
+                entity_id: input_boolean.ev_charging_smart
+                message: "{{ title }} · {{ message }}"
+        - alias: "Cheap window over (daytime, cheap assist on)"
+          conditions:
+            - condition: trigger
+              id: window_end
+            - condition: state
+              entity_id: input_boolean.ev_charging_cheap_enabled
+              state: "on"
+            - condition: state
+              entity_id: sun.sun
+              state: above_horizon
+          sequence:
+<% if has_notifications %>
+            - action: script.send_notification
+              continue_on_error: true
+              data:
+                title: "{{ txt.cheap_end_title }}"
+                message: "{{ txt.cheap_end_message }}"
+<% endif %>
+            - action: logbook.log
+              data:
+                name: "{{ txt.logbook }}"
+                entity_id: input_boolean.ev_charging_smart
+                message: "{{ txt.cheap_end_title }}"
+<% endif %>
+<% if plan_cars %>
+        - alias: "A charge plan is not feasible"
+          conditions:
+            - condition: trigger
+              id: not_feasible
+            - condition: template
+              value_template: >-
+                {% set p = trigger.entity_id.split('.')[1][8:] %}
+                {{ is_state('input_boolean.ev_plan_' ~ p, 'on') and state_attr(trigger.entity_id, 'target_percent') | int(0) > 0 }}
+          sequence:
+            - variables:
+                p: "{{ trigger.entity_id.split('.')[1][8:] }}"
+                a: "{{ states[trigger.entity_id].attributes }}"
+                title: "{{ txt.nf_title | replace('{car}', names.get(p, p)) }}"
+                message: >-
+                  {{ txt.nf_message | replace('{target}', a.target_percent | string)
+                     | replace('{departure}', as_timestamp(a.departure) | timestamp_custom('%d/%m %H:%M'))
+                     | replace('{shortfall}', a.shortfall_kwh | string) | replace('{current}', a.current_percent | round(0) | int | string)
+                     | replace('{peak}', txt.nf_peak | replace('{kw}', a.power_kw | string) if a.peak_tight else '') }}
+<% if has_notifications %>
+            - action: script.send_notification
+              continue_on_error: true
+              data:
+                title: "{{ title }}"
+                message: "{{ message }}"
+<% endif %>
+            - action: logbook.log
+              data:
+                name: "{{ txt.logbook }}"
+                entity_id: "{{ 'input_boolean.ev_plan_' ~ p }}"
+                message: "{{ title }} · {{ message }}"
+        - alias: "21:00: every car with a departure tomorrow"
+          conditions:
+            - condition: trigger
+              id: evening
+          sequence:
+            - repeat:
+                for_each: "{{ plan_list }}"
+                sequence:
+                  - variables:
+                      p: "{{ repeat.item }}"
+                      s: "{{ 'sensor.ev_plan_' ~ p }}"
+                      a: "{{ states[s].attributes if states[s] is not none else {} }}"
+                      go: >-
+                        {% set v = a.get('departure') %}
+                        {{ is_state('input_boolean.ev_plan_' ~ p, 'on') and a.get('target_percent', 0) | int(0) > 0 and v is not none
+                           and as_local(as_datetime(v)).date() == (now() + timedelta(days=1)).date() }}
+                  - if:
+                      - condition: template
+                        value_template: "{{ go }}"
+                    then:
+                      - variables:
+                          name: "{{ names.get(p, p) }}"
+                          title: "{{ txt.ev_title | replace('{car}', name) }}"
+                          message: >-
+                            {% set target = a.target_percent | int(0) %}
+                            {% set cur = a.current_percent | float(0) %}
+                            {% set apps = a.appointments or [] %}
+                            {% if a.calendar_km | int(0) > 0 %}
+                              {% set head = txt.ev_trips | replace('{km}', a.calendar_km | string) | replace('{appointments}', (' (' ~ apps | join(', ') ~ ')') if apps else '') %}
+                            {% else %}
+                              {% set head = txt.ev_departure | replace('{time}', as_local(as_datetime(a.departure)).strftime('%H:%M')) %}
+                            {% endif %}
+                            {% set m = head ~ (txt.ev_needs | replace('{target}', target | string) | replace('{current}', cur | round(0) | int | string)) %}
+                            {% set cab = plan_cables[plan_list.index(p)] %}
+                            {% if not is_state(cab, 'on') %}{% set m = m ~ (txt.ev_not_plugged | replace('{car}', name)) %}
+                            {% elif cur >= target %}{% set m = m ~ txt.ev_enough %}
+                            {% elif a.blocks %}
+                              {% set m = m ~ (txt.ev_blocks | replace('{blocks}', a.blocks | join(', ')) | replace('{kwh}', a.planned_kwh | string) | replace('{cost}', a.cost_eur | string)) %}
+                              {% if a.solar_kwh | float(0) > 0 %}{% set m = m ~ (txt.ev_plus_sun | replace('{kwh}', a.solar_kwh | string)) %}{% endif %}
+                              {% set m = m ~ '.' %}
+                            {% else %}{% set m = m ~ (txt.ev_sun_only | replace('{kwh}', a.solar_kwh | string)) %}{% endif %}
+                            {% if a.calendar_needed_percent | int(0) > 100 %}{% set m = m ~ (txt.ev_over_100 | replace('{percent}', a.calendar_needed_percent | string)) %}{% endif %}
+                            {% if a.appointments_without_distance %}{% set m = m ~ (txt.ev_without_distance | replace('{list}', a.appointments_without_distance | join(', '))) %}{% endif %}
+                            {{ m }}
+<% if has_notifications %>
+                      - action: script.send_notification
+                        continue_on_error: true
+                        data:
+                          title: "{{ title }}"
+                          message: "{{ message }}"
+<% endif %>
+                      - action: logbook.log
+                        data:
+                          name: "{{ txt.logbook }}"
+                          entity_id: "{{ 'input_boolean.ev_plan_' ~ p }}"
+                          message: "{{ title }} · {{ message }}"
+<% endif %>
+<% endif %>
+<% if own_counter %>
+
+# counter.tesla_commands_today belongs to the module gate; without gate this module defines it and resets it here.
+# Installing gate later: fill in again and deploy ev-charging first (this automation and the counter go), then gate.
+- id: ev_charging_tesla_counter_reset
+  alias: <@ t('auto_counter_reset_alias') | tojson @>
+  description: >-
+    <@ t('auto_counter_reset_description') @>
+  mode: single
+  triggers:
+    - trigger: time
+      at: "00:00:00"
+  actions:
+    - action: counter.reset
+      target:
+        entity_id: counter.tesla_commands_today
+<% endif %>

@@ -1,0 +1,8 @@
+<# The view of the results screen, rendered from house.yaml, modules: and the capabilities (_results.jinja).
+   JSON is valid YAML: the whole view is one tojson so no value needs YAML quoting. #>
+<% from '_results.jinja' import view with context %>
+# View "<@ view.path @>" with custom:results-screen-card (ha-kit module results). Written by results/deploy.py into a
+# dashboard (default: the Overview, as the last view), or paste it yourself: Edit dashboard > three dots > Raw
+# configuration editor, add it under views:. Filled in from house.yaml: every entity id, list and text is written out
+# here; the card itself has none built in. Fill in again after changing house.yaml or modules:, then deploy again.
+<@ view | tojson(indent=2) @>

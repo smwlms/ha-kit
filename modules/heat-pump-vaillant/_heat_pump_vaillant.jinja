@@ -1,0 +1,83 @@
+<#
+  Shared derivations of heat-pump-vaillant: every entity id this module reads or writes, derived from house.yaml
+  (heat_pump:, entities.heat_pump, entities.water_heater, hot_water.cop). Imported by package.yaml, scripts.yaml,
+  templates/heat_pump_vaillant.yaml, deploy.py, README.md and LOGIC.md:
+    <% from '_heat_pump_vaillant.jinja' import system, zones, band_zones, water_heater, ... with context %>
+  Only names set at the top level can be imported.
+  myVAILLANT (mypyllant) entity names, with S = heat_pump.system, Z = zone name, C = circuit index:
+    climate.S_zone_Z_circuit_C_climate                  zone (heating/cooling band, time program, quick veto)
+    sensor.S_zone_Z_circuit_C_desired_cooling_temperature
+    sensor.S_circuit_C_current_flow_temperature
+    sensor.S_energy_manager_state                        STANDBY, DHW, HEATING / SPACE_HEATING, COOLING, ...
+    sensor.S_system_water_pressure, binary_sensor.S_trouble_codes
+    water_heater.S_domestic_hot_water_0, switch.S_domestic_hot_water_0_boost, sensor.S_domestic_hot_water_0_tank_temperature
+#>
+<% set hp = heat_pump if heat_pump is defined and heat_pump else {} %>
+<% set ents = entities if entities is defined and entities else {} %>
+<% if hp is not mapping %><@ fail('house.yaml: heat_pump must be a section (system, zones, ...) for heat-pump-vaillant') @><% endif %>
+<% if not hp.get('system') %><@ fail('house.yaml: heat_pump.system is missing (required for heat-pump-vaillant: the myVAILLANT system name in the entity ids)') @><% endif %>
+<% set system = hp.system | string %>
+<% set cooling = hp.get('cooling') is sameas true %>
+<% set raw_zones = hp.get('zones') or ([{'name': hp.zone}] if hp.get('zone') else []) %>
+<% if raw_zones is string or raw_zones is mapping or not raw_zones %><@ fail('house.yaml: heat_pump.zones is missing or not a list (required for heat-pump-vaillant: one item per myVAILLANT zone, e.g. - { name: living }; or the older heat_pump.zone)') @><% endif %>
+<% set ns = namespace(zones=[], keys=[]) %>
+<% for z in raw_zones %>
+<% if z is not mapping or not z.get('name') %><@ fail('house.yaml: heat_pump.zones[' ~ loop.index0 ~ '] needs a name (the zone name in the entity ids)') @><% endif %>
+<% set circuit = z.circuit if z.get('circuit') is not none else 0 %>
+<% set key = (z.get('key') or z.name) | string %>
+<% if key in ns.keys %><@ fail('house.yaml: heat_pump.zones has two zones with key ' ~ key ~ ' (set key: on one of them)') @><% endif %>
+<% set climate = z.get('climate') or (ents.get('heat_pump') if loop.first else none) or ('climate.' ~ system ~ '_zone_' ~ z.name ~ '_circuit_' ~ circuit ~ '_climate') %>
+<% if not (climate | regex_search('^climate\\.[a-z0-9_]+$')) %><@ fail('house.yaml: climate entity of zone ' ~ key ~ ' is not a climate entity id: ' ~ climate) @><% endif %>
+<% set stem = climate.split('.')[1] | regex_replace('_climate$', '') %>
+<% set ns.keys = ns.keys + [key] %>
+<% set ns.zones = ns.zones + [{
+  'key': key,
+  'name': z.name | string,
+  'circuit': circuit,
+  'climate': climate,
+  'cooling': (z.cooling is sameas true) if z.get('cooling') is not none else cooling,
+  'band': z.get('band') is not sameas false,
+  'cooling_setpoint': 'sensor.' ~ stem ~ '_desired_cooling_temperature',
+  'flow_temperature': 'sensor.' ~ system ~ '_circuit_' ~ circuit ~ '_current_flow_temperature',
+}] %>
+<% endfor %>
+<% set zones = ns.zones %>
+<% set nm = namespace(m={}) %>
+<% for z in zones %>
+<% set nm.m = dict(nm.m, **{z.key: z.climate}) %>
+<% endfor %>
+<% set zone_map = nm.m %>
+<% set band_zones = zones | selectattr('band') | list %>
+<% set any_cooling = band_zones | selectattr('cooling') | list | length > 0 %>
+<% set main_zone = zones[0] %>
+<% set circuits = zones | map(attribute='circuit') | unique | list %>
+<% set water_heater = ents.get('water_heater') or ('water_heater.' ~ system ~ '_domestic_hot_water_0') %>
+<% if not (water_heater | regex_search('^water_heater\\.[a-z0-9_]+$')) %><@ fail('house.yaml: entities.water_heater is not a water_heater entity id: ' ~ water_heater) @><% endif %>
+<% set hot_water_boost = 'switch.' ~ water_heater.split('.')[1] ~ '_boost' %>
+<% set tank_temperature = 'sensor.' ~ water_heater.split('.')[1] ~ '_tank_temperature' %>
+<% set energy_manager = 'sensor.' ~ system ~ '_energy_manager_state' %>
+<% set water_pressure = 'sensor.' ~ system ~ '_system_water_pressure' %>
+<% set fault = 'binary_sensor.' ~ system ~ '_trouble_codes' %>
+<# Estimated electrical power per state (W). Start values; heat_pump.power_estimate_w overrides per key. #>
+<% set pw = hp.get('power_estimate_w') or {} %>
+<% if pw is not mapping %><@ fail('house.yaml: heat_pump.power_estimate_w must be a mapping {hot_water: W, heating: W, cooling: W}') @><% endif %>
+<% set power_w = {
+  'idle': (pw.idle if pw.get('idle') is not none else 0) | int,
+  'hot_water': (pw.hot_water if pw.get('hot_water') is not none else 2000) | int,
+  'heating': (pw.heating if pw.get('heating') is not none else 1800) | int,
+  'cooling': (pw.cooling if pw.get('cooling') is not none else 800) | int,
+} %>
+<# Operation modes of the water heater: the names depend on the controller (VRC700: Auto/Day/Off; sensoCOMFORT and
+   newer: Time Controlled/Manual/Off). The script takes the first one of each list that the water heater offers. #>
+<% set hm = hp.get('hot_water_modes') or {} %>
+<% if hm is not mapping %><@ fail('house.yaml: heat_pump.hot_water_modes must be a mapping {normal: ..., heat: ...}') @><% endif %>
+<% set mode_normal = ([hm.normal] if hm.get('normal') else []) + ['Auto', 'Time Controlled', 'TIME_CONTROLLED'] %>
+<% set mode_heat = ([hm.heat] if hm.get('heat') else []) + ['Day', 'Manual', 'MANUAL'] %>
+<% set cop_heat = hp.get('hot_water_heat_kwh') or '' %>
+<% set cop_electric = hp.get('hot_water_electric_kwh') or '' %>
+<% if (cop_heat and not cop_electric) or (cop_electric and not cop_heat) %><@ fail('house.yaml: heat_pump.hot_water_heat_kwh and hot_water_electric_kwh go together (both or neither)') @><% endif %>
+<% set hw = hot_water if hot_water is defined and hot_water is mapping else {} %>
+<% set cop_default = (hw.cop if hw.get('cop') else 2.8) | float %>
+<# Brand entities deploy.py checks for (the derived names must exist in Home Assistant). #>
+<% set required_entities = (zones | map(attribute='climate') | list) + [water_heater, energy_manager] %>
+<% set optional_entities = (zones | selectattr('cooling') | map(attribute='cooling_setpoint') | list) + (zones | map(attribute='flow_temperature') | unique | list) + [hot_water_boost, tank_temperature, water_pressure, fault] + ([cop_heat, cop_electric] if cop_heat else []) %>

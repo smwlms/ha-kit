@@ -1,0 +1,95 @@
+<# Shared preamble (who and what this module follows): _presence.jinja in this folder. #>
+<% from '_presence.jinja' import P, tracked, car_list, place_kinds, dutch_kinds, places, school, drop_offs, family, work,
+   runs, calendar, stay_calendar, work_zone, day_keys, day_names with context %>
+<# Full check of the presence section (only here, so an error is reported once). #>
+<% if not tracked %><@ fail('presence: nobody in people has a phone (people[].phone); the module only follows people with a phone') @><% endif %>
+<% set keys = tracked | map(attribute='key') | list %>
+<% for x in P.get('places') or [] %>
+<% if x.get('kind') in dutch_kinds %><@ fail('presence.places: place ' ~ (x.get('key') or '?') ~ ' has kind ' ~ x.kind ~ ', the old Dutch value; use ' ~ dutch_kinds[x.kind]) @><% endif %>
+<% if not x.get('key') or not x.get('name') or x.get('kind') not in place_kinds %><@ fail('presence.places: every place has key, name and kind (work, school, drop_off or family)') @><% endif %>
+<% if x.kind == 'work' and x.get('person') not in keys %><@ fail('presence.places: work place ' ~ x.key ~ ' needs as person the key of someone in people with a phone') @><% endif %>
+<% endfor %>
+<% if places | selectattr('kind', 'eq', 'school') | list | length > 1 %><@ fail('presence.places: at most one place of kind school') @><% endif %>
+<% if drop_offs and school is none %><@ fail('presence.places: drop-off points without a school; add a place of kind school') @><% endif %>
+<% if work | map(attribute='person') | unique | list | length != work | length %><@ fail('presence.places: at most one work place per person') @><% endif %>
+<% if places | map(attribute='key') | unique | list | length != places | length %><@ fail('presence.places: every key may occur only once') @><% endif %>
+<% set day_titles = t('days_full_mon').split() %>
+# Our week: helpers (ha-kit module presence, see presence/LOGIC.md).
+# Uploaded by presence/deploy.py to /config/packages/presence.yaml (module base: packages/).
+# These are bookkeeping helpers that the automations write; nothing here has `initial`, so Home Assistant restores
+# them after a restart (an open working day survives a restart). The arrival_<day> start values are set once by
+# deploy.py (module.yaml, defaults: arrival). The schedules (school windows) are UI helpers made by deploy.py,
+# so you can change them in Settings > Helpers.
+# Not here (UI, see presence/README.md): the two Local Calendars, the person entities and the zones.
+
+input_datetime:
+<% for p in tracked %>
+  presence_<@ p.key @>_away_since:              # <@ p.name @> left home (set on every departure)
+    name: <@ t('helper_away_since', name=p.name) | tojson @>
+    has_date: true
+    has_time: true
+<% if p.key in work_zone %>
+  presence_<@ p.key @>_left_work:               # <@ p.name @> left <@ work_zone[p.key] @>
+    name: <@ t('helper_left_work', name=p.name) | tojson @>
+    has_date: true
+    has_time: true
+  presence_<@ p.key @>_arrived_at_work:         # first arrival of the open working day (0 = none open)
+    name: <@ t('helper_arrived_at_work', name=p.name) | tojson @>
+    has_date: true
+    has_time: true
+<% endif %>
+<% if runs %>
+  presence_<@ p.key @>_school_run_logged:       # last school run logged for <@ p.name @> (de-duplication, 45 min)
+    name: <@ t('helper_school_run_logged', name=p.name) | tojson @>
+    has_date: true
+    has_time: true
+<% endif %>
+<% endfor %>
+<% if runs and car_list %>
+  presence_tesla_left_school_zone:              # a Tesla left the school or family zone (guard for phone-only runs)
+    name: <@ t('helper_tesla_left_school_zone') | tojson @>
+    has_date: true
+    has_time: true
+<% endif %>
+<% for a in car_list %>
+  presence_charge_start_<@ a.prefix @>:          # start of a charging session of <@ a.name @> away from home (0 = none)
+    name: <@ t('helper_charge_start', car=a.name) | tojson @>
+    has_date: true
+    has_time: true
+<% endfor %>
+  # Learned arrival time per weekday (automation arrival_learn, nightly from the log). Read by other modules
+  # (appliances, planned) as "we are usually home by". Start value: deploy.py, once.
+<% for d in day_names %>
+  arrival_<@ d @>:
+    name: <@ t('helper_arrival', day=day_titles[loop.index0]) | tojson @>
+    icon: mdi:home-clock-outline
+    has_date: false
+    has_time: true
+<% endfor %>
+<% if car_list %>
+
+input_number:                  # battery level at the start of a charging session away from home
+<% for a in car_list %>
+  presence_charge_start_battery_<@ a.prefix @>:
+    name: <@ t('helper_charge_start_battery', car=a.name) | tojson @>
+    min: 0
+    max: 100
+    step: 0.1
+    mode: box
+    unit_of_measurement: "%"
+<% endfor %>
+<% endif %>
+<% if work_zone or car_list %>
+
+input_text:
+<% for p in tracked if p.key in work_zone %>
+  presence_<@ p.key @>_work_trips:              # work trips of the open working day: "11:05-12:20, 14:00-14:30"
+    name: <@ t('helper_work_trips', name=p.name) | tojson @>
+    max: 255
+<% endfor %>
+<% for a in car_list %>
+  presence_destination_<@ a.prefix @>:           # last navigation destination of <@ a.name @> (names the Supercharger)
+    name: <@ t('helper_destination', car=a.name) | tojson @>
+    max: 255
+<% endfor %>
+<% endif %>

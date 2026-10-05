@@ -1,0 +1,62 @@
+<# Example dashboard section for the parcel service; not deployed automatically. #>
+<% set parcel_left = (entities.doorbell_package_camera | default(none)) and (entities.doorbell_package | default(none)) %>
+<# The entity id of an automation follows its alias when it is created: derive it the way Home Assistant does. #>
+<% set parcel_left_entity = 'automation.' ~ (t('left_alias') | lower | regex_replace('[^a-z0-9]+', '_') | trim('_')) %>
+# Example card parcel service: paste into a dashboard (Edit > Add card > Manual).
+# When: the expected day and Today / Tomorrow / Off. Garage door: Ajar (with confirmation) and the settings.
+type: vertical-stack
+cards:
+  - type: tile
+    entity: input_datetime.parcel_expected
+    name: <@ t('helper_expected') | tojson @>
+  - type: grid
+    columns: 3
+    square: false
+    cards:
+      - type: button
+        name: <@ t('day_today') | tojson @>
+        icon: mdi:calendar-today
+        tap_action:
+          action: perform-action
+          perform_action: script.parcel_expected
+          data:
+            day: today
+      - type: button
+        name: <@ t('day_tomorrow') | tojson @>
+        icon: mdi:calendar-arrow-right
+        tap_action:
+          action: perform-action
+          perform_action: script.parcel_expected
+          data:
+            day: tomorrow
+      - type: button
+        name: <@ t('day_off') | tojson @>
+        icon: mdi:calendar-remove
+        tap_action:
+          action: perform-action
+          perform_action: script.parcel_expected
+          data:
+            day: "off"
+  - type: button
+    name: <@ t('card_garage_ajar') | tojson @>
+    icon: mdi:garage-open-variant
+    tap_action:
+      action: perform-action
+      perform_action: script.doorbell_reply
+      data:
+        button: parcel_service
+      confirmation:
+        text: <@ t('card_garage_ajar_confirm') | tojson @>
+  - type: entities
+    title: <@ t('card_garage_door') | tojson @>
+    entities:
+      - entity: input_number.parcel_service_ajar
+        name: <@ t('card_ajar') | tojson @>
+      - entity: input_number.parcel_service_open
+        name: <@ t('card_open') | tojson @>
+      - entity: binary_sensor.gate_open
+        name: <@ t('card_gate') | tojson @>
+<% if parcel_left %>
+      - entity: <@ parcel_left_entity @>
+        name: <@ t('card_parcel_left') | tojson @>
+<% endif %>

@@ -1,0 +1,208 @@
+<% from '_appliances.jinja' import apps, has_energy, has_battery, has_presence with context %>
+<#- Two dashboard views: Appliances (status, program, start/stop) and Appliance settings. deploy.py --tab adds them
+    to a dashboard; or paste each view in the raw configuration editor. Core cards only (heading, markdown, tile,
+    history-graph); Home Assistant 2025.1 or newer for heading buttons. -#>
+# Appliances (ha-kit module appliances-home-connect): two views for a dashboard. Added by deploy.py --tab, or paste
+# each item below as a view in the raw configuration editor (Edit dashboard > three dots > Raw configuration editor).
+# The paths assume the Overview (/lovelace/...); deploy.py --dashboard <url_path> rewrites them for another one.
+- title: <@ t('view_title') | tojson @>
+  path: appliances
+  icon: mdi:dishwasher
+  type: sections
+  max_columns: 2
+  sections:
+    - type: grid
+      column_span: 2
+      cards:
+        - type: heading
+          heading: <@ t('view_title') | tojson @>
+          heading_style: title
+          badges:
+            - type: button
+              icon: mdi:cog-outline
+              tap_action:
+                action: navigate
+                navigation_path: /lovelace/appliances-settings
+<% for a in apps %>
+    - type: grid
+      cards:
+        - type: heading
+          heading: <@ a.name | tojson @>
+          icon: <@ a.icon @>
+          badges:
+            - type: button
+              icon: mdi:sun-clock
+              tap_action:
+                action: perform-action
+                perform_action: script.appliance_smart_start
+                data:
+                  appliance: <@ a.key @>
+              visibility:
+                - condition: state
+                  entity: <@ a.e.status @>
+                  state: [ready, inactive]
+                - condition: state
+                  entity: <@ a.waiting @>
+                  state: "off"
+            # Also while waiting for sun or with a delayed start: appliance_start_now cancels the delay first.
+            - type: button
+              icon: mdi:play
+              tap_action:
+                action: perform-action
+                perform_action: script.appliance_start_now
+                data:
+                  appliance: <@ a.key @>
+                  reason: <@ t('reason_dashboard') | tojson @>
+                confirmation:
+                  text: <@ t('confirm_start_now', name=a.name) | tojson @>
+              visibility:
+                - condition: state
+                  entity: <@ a.e.status @>
+                  state: [ready, inactive, delayedstart]
+            - type: button
+              icon: mdi:timer-sand-complete
+              tap_action:
+                action: perform-action
+                perform_action: input_boolean.turn_off
+                target:
+                  entity_id: <@ a.waiting @>
+                confirmation:
+                  text: <@ t('confirm_cancel_wait', name=a.name) | tojson @>
+              visibility:
+                - condition: state
+                  entity: <@ a.waiting @>
+                  state: "on"
+            - type: button
+              icon: mdi:stop
+              tap_action:
+                action: perform-action
+                perform_action: button.press
+                target:
+                  entity_id: <@ a.e.stop @>
+                confirmation:
+                  text: <@ t('confirm_stop', name=a.name) | tojson @>
+              visibility:
+                - condition: state
+                  entity: <@ a.e.status @>
+                  state: [run, delayedstart, pause]
+        # One line: what the appliance does and when it is done (texts in the house language).
+        - type: markdown
+          text_only: true
+          content: >-
+            {%- set s = states('<@ a.e.status @>') -%}
+            {%- set wait = is_state('<@ a.waiting @>', 'on') -%}
+            {%- set planned = states('<@ a.smart_start_at @>') -%}
+            {%- set end = as_timestamp(states('<@ a.e.finish_time @>'), none) -%}
+            {%- set prog = states('<@ a.e.active_program @>') -%}
+            {%- set prog = state_translated('<@ a.e.active_program @>') if prog not in ['unknown', 'unavailable'] else (state_translated('<@ a.e.selected_program @>') if states('<@ a.e.selected_program @>') not in ['unknown', 'unavailable'] else '') -%}
+            {%- if wait -%}{{ <@ t('view_waiting') | tojson @> | replace('{time}', planned[11:16]) }}
+            {%- elif s == 'run' -%}{{ <@ t('view_running') | tojson @> | replace('{progress}', states('<@ a.e.progress @>') | int(0) | string) | replace('{time}', end | timestamp_custom('%H:%M') if end else '?') }}
+            {%- elif s == 'delayedstart' -%}{{ (<@ t('view_start_at') | tojson @> | replace('{time}', planned[11:16])) if as_timestamp(planned, 0) > as_timestamp(now()) else <@ t('view_delayed') | tojson @> }}
+            {%- elif s == 'finished' -%}{{ <@ t('view_done') | tojson @> if is_state('<@ a.e.door @>', 'open') else <@ t('view_done_door') | tojson @> }}
+            {%- elif s == 'ready' -%}{{ <@ t('view_ready') | tojson @> }}
+            {%- elif s in ['unavailable', 'unknown', 'inactive'] -%}{{ <@ t('view_off') | tojson @> }}
+            {%- else -%}{{ state_translated('<@ a.e.status @>') }}{%- endif -%}
+            {{ ('  \n' ~ prog) if prog else '' }}
+        - type: tile
+          entity: <@ a.e.selected_program @>
+          name: <@ t('card_program') | tojson @>
+          icon: mdi:format-list-bulleted
+          hide_state: true
+          features_position: inline
+          features:
+            - type: select-options
+<% endfor %>
+    - type: grid
+      column_span: 2
+      cards:
+        - type: heading
+          heading: <@ t('card_today') | tojson @>
+          icon: mdi:chart-timeline
+        - type: history-graph
+          hours_to_show: 24
+          grid_options:
+            columns: full
+          entities:
+<% for a in apps %>
+            - entity: <@ a.e.status @>
+              name: <@ a.name | tojson @>
+<% endfor %>
+- title: <@ t('view_settings_title') | tojson @>
+  path: appliances-settings
+  icon: mdi:cog-outline
+  type: sections
+  max_columns: 2
+  subview: true
+  back_path: /lovelace/appliances
+  sections:
+<% for a in apps %>
+    - type: grid
+      cards:
+        - type: heading
+          heading: <@ a.name | tojson @>
+          icon: <@ a.icon @>
+        # auto = the learned arrival of that day (or the fixed time without presence), otherwise that hour.
+        - type: tile
+          entity: <@ a.ready_by @>
+          name: <@ t('card_ready_by') | tojson @>
+          hide_state: true
+          features_position: inline
+          features:
+            - type: select-options
+        - type: tile
+          entity: <@ a.duration @>
+          name: <@ t('card_duration') | tojson @>
+          hide_state: true
+          features_position: inline
+          features:
+            - type: numeric-input
+              style: buttons
+        # Read-only: Home Connect only lets you switch remote start on at the appliance itself.
+        - type: tile
+          entity: <@ a.e.remote_start @>
+          name: <@ t('card_remote_start') | tojson @>
+          icon: mdi:remote
+        - type: tile
+          entity: <@ a.smart_start_at @>
+          name: <@ t('card_planned_start') | tojson @>
+<% endfor %>
+<% if has_energy or has_presence %>
+    - type: grid
+      column_span: 2
+      cards:
+        - type: heading
+          heading: <@ t('card_planning') | tojson @>
+          icon: mdi:sun-clock
+<% if has_battery %>
+        - type: tile
+          entity: input_number.appliances_battery_minimum
+          name: <@ t('card_battery_minimum') | tojson @>
+          hide_state: true
+          features_position: inline
+          features:
+            - type: numeric-input
+              style: buttons
+<% endif %>
+<% if has_energy %>
+        - type: tile
+          entity: input_number.appliances_solar_minimum_kwh
+          name: <@ t('card_solar_minimum') | tojson @>
+          hide_state: true
+          features_position: inline
+          features:
+            - type: numeric-input
+              style: buttons
+        - type: tile
+          entity: input_datetime.appliances_solar_peak
+          name: <@ t('card_solar_peak') | tojson @>
+<% endif %>
+<% if has_presence %>
+        - type: markdown
+          text_only: true
+          content: >-
+            {%- set days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] -%}
+            {%- set short = <@ t('days_short') | tojson @>.split(',') -%}
+            **<@ t('card_arrival') @>**{{ '  \n' }}
+            {%- for d in days %} {{ short[loop.index0] }} {{ states('input_datetime.arrival_' ~ d)[:5] }}{{ ' ·' if not loop.last }}{%- endfor %}
+<% endif %>
+<% endif %>

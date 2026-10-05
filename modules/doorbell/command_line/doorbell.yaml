@@ -1,0 +1,21 @@
+<# command_line entries of the doorbell -> /config/command_line/doorbell.yaml (merged by the base module's
+   command_line: !include_dir_merge_list command_line/). The TvOverlay notifier only exists with a TV. #>
+# Module doorbell: command_line (list). Reload: command_line.reload (Developer tools > YAML).
+# Doorbell archive: every ring/parcel photo goes to /media/doorbell/archive/; this deletes photos older than
+# 31 days (hourly) and reports how many are left.
+- sensor:
+    name: <@ t('archive_sensor') | tojson @>
+    unique_id: doorbell_archive_photos
+    command: "mkdir -p /media/doorbell/archive && find /media/doorbell/archive -type f -name '*.jpg' -mtime +31 -delete; find /media/doorbell/archive -type f -name '*.jpg' | wc -l"
+    scan_interval: 3600
+    command_timeout: 30
+    unit_of_measurement: <@ t('archive_unit') | tojson @>
+    icon: mdi:image-multiple-outline
+<% if doorbell.tv | default(none) %>
+# TvOverlay on the Google TV: doorbell snapshot as base64 popup, top right. Used by script.doorbell_tv;
+# the notify message is the text line.
+- notify:
+    name: tvoverlay_doorbell
+    command: "python3 /config/tvoverlay/doorbell.py"
+    command_timeout: 10
+<% endif %>

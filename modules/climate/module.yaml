@@ -1,0 +1,53 @@
+# Module metadata, read by tools/fill.py (--list), tools/choose.py (ask:), tools/check.py and climate/deploy.py
+# (defaults). Contract: docs/phase4-contracts.md section 4 "climate".
+name: Climate
+description: "Climate screen, indoor peak forecast, floor mode chosen over several days, free cooling with outside air through the ventilation, ComfoClime boost on a cold dip"
+status: built, not tested on HA
+# Layer: core. No hard dependency: the floor block needs a module that provides heat-pump, the ventilation blocks need
+# the ventilation roles (derived with ventilation-zehnder), the shading block needs shading. Each block hides without.
+depends_on: []
+provides: []
+requires:
+  integrations:
+    - "weather integration with an hourly and a daily forecast (e.g. Met.no)"
+    - "Recorder on SQLite, Home Assistant's default (indoor forecast)"
+    - "a heat-pump module, e.g. heat-pump-vaillant (optional: floor mode)"
+    - "ventilation-zehnder or own ventilation roles (optional: free cooling, season profile, ComfoClime)"
+  hardware: []
+optional: true
+generate: []
+ask:
+  - id: climate
+    question: "Add the climate screen and let the house choose floor heating or cooling and free cooling with outside air?"
+# Fields of house.yaml this module reads (every field is explained in house.example.yaml).
+house_fields:
+  - "entities.indoor_temperature, weather (required); outdoor_temperature, indoor_humidity, heat_pump (optional)"
+  - "entities.ventilation and ventilation_* roles, comfoclime, comfoclime_power_w (optional; derived with ventilation-zehnder)"
+  - "entities.solar_power_w, solar_forecast_today, solar_forecast_remaining_today (optional, indoor forecast)"
+  - "climate.target, comfort, floor_mode, floor_cooling, ventilation_cooling, season_profile, loud_hours, comfoclime_boost, ventilation_values, forecast_days, view_path (all optional)"
+  - "ventilation.name, display_name, mac_suffix, comfoclime (with ventilation-zehnder); rooms[] (with shading); house.timezone"
+# Start values that deploy.py sets ONCE, when the helper is new. The ids are part of the contract. Helpers of a block
+# this house does not have do not exist and are skipped.
+defaults:
+  input_boolean.climate_floor_mode_auto: "on"
+  input_select.climate_floor_mode: "neutral"
+  input_number.climate_floor_heating_low: 20.5
+  input_number.climate_floor_heating_high: 26
+  input_number.climate_floor_neutral_low: 19.5
+  input_number.climate_floor_neutral_high: 26
+  input_number.climate_floor_cooling_low: 18
+  input_number.climate_floor_cooling_high: 23
+  input_number.climate_floor_cooling_from_outdoor_max: 24
+  input_number.climate_floor_heating_below_outdoor_max: 17
+  input_boolean.climate_ventilation_cooling: "on"
+  input_number.climate_ventilation_cooling_from: 21.5
+  input_select.climate_ventilation_state: "auto"
+# tools/check.py: the other side of the optional switches, used in its all-modules house (where the ComfoClime of
+# ventilation-zehnder is on): no floor mode, own loud hours, the boost with other values, own ventilation values.
+check_variant:
+  climate:
+    floor_mode: false
+    loud_hours: { start: "22:30", end: "07:00" }
+    comfoclime_boost: { below: 19, hours: 1.5 }
+    ventilation_values: { medium: Medium, high: High, profile_cooling: Cool }
+    season_profile: false

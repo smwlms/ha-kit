@@ -1,0 +1,40 @@
+<# Helpers of the module e-ink-display. Uploaded by e-ink-display/deploy.py to /config/packages/e_ink_display.yaml.
+   No `initial`: deploy.py sets the defaults of module.yaml once, for new helpers only. #>
+<% from '_e_ink.jinja' import relay with context %>
+# E-ink display (ha-kit module e-ink-display): refresh interval of the screen<% if relay %> and smart charging of the tablet<% endif %>.
+input_number:
+  # Seconds between two redraws of the e-ink page (fewer redraws = less ghosting). Read by www/e-ink-screen.js.
+  e_ink_display_refresh:
+    name: "<@ t('helper_refresh') @>"
+    icon: mdi:timer-refresh-outline
+    min: 5
+    max: 600
+    step: 5
+    unit_of_measurement: s
+    mode: box
+<% if relay %>
+  # Charger on below this battery level (%).
+  e_ink_display_charge_on_below:
+    name: "<@ t('helper_charge_on_below') @>"
+    icon: mdi:battery-20
+    min: 10
+    max: 90
+    step: 5
+    unit_of_measurement: "%"
+    mode: slider
+  # Charger off above this battery level (%).
+  e_ink_display_charge_off_above:
+    name: "<@ t('helper_charge_off_above') @>"
+    icon: mdi:battery-80
+    min: 20
+    max: 100
+    step: 5
+    unit_of_measurement: "%"
+    mode: slider
+
+input_boolean:
+  # Master switch of the charging automation; off = the relay is left alone.
+  e_ink_display_smart_charging:
+    name: "<@ t('helper_smart_charging') @>"
+    icon: mdi:battery-charging-outline
+<% endif %>

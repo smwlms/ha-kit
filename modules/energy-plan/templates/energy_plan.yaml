@@ -1,0 +1,102 @@
+<% from '_energy_plan.jinja' import grid_import, grid_export, solar, house_role, battery, battery_power,
+   discharge_factor, charger with context %>
+<% set d = module.defaults %>
+<# Template sensors of the energy plan -> /config/templates/energy_plan.yaml. Power roles may be W or kW: the macro
+   watts() (custom_templates/energy_plan.jinja) reads them with their unit. The fallbacks in float(...) are the
+   defaults of module.yaml, for the moment before deploy.py has set the helpers. #>
+# Energy plan: template sensors (ha-kit module energy-plan, see energy-plan/LOGIC.md).
+# Filled in from house.yaml by tools/fill.py; uploaded by energy-plan/deploy.py to /config/templates/energy_plan.yaml.
+# sensor.energy_plan_margin (the day plan) is a command_line sensor: command_line/energy_plan.yaml.
+- sensor:
+    # Export to the grid in kW, whatever the unit of the role; source of the 10-minute average
+    # (sensor.energy_plan_export_avg, statistics in packages/energy_plan.yaml).
+    - name: <@ t('sensor_export_kw') | tojson @>
+      unique_id: energy_plan_export_kw
+      default_entity_id: sensor.energy_plan_export_kw
+      unit_of_measurement: kW
+      device_class: power
+      state_class: measurement
+      icon: mdi:transmission-tower-export
+      availability: "{{ is_number(states('<@ grid_export @>')) }}"
+      state: >
+        {% from 'energy_plan.jinja' import watts %}
+        {{ ([watts('<@ grid_export @>') | float(0), 0] | max / 1000) | round(3) }}
+    # Consumption of the house in W, the car included.
+<% if house_role %>
+    # The role entities.house_power_w is set: this sensor follows it (in W).
+<% set house_w = "[watts('" ~ house_role ~ "') | float(0), 0] | max" %>
+<% set house_ok = "is_number(states('" ~ house_role ~ "'))" %>
+<% else %>
+    # Computed: grid import - export + solar<% if battery_power %> + battery discharge - battery charge<% endif %>.
+<% set house_w = "[watts('" ~ grid_import ~ "') | float(0) - watts('" ~ grid_export ~ "') | float(0) + [watts('" ~ solar ~ "') | float(0), 0] | max" ~ (" + " ~ discharge_factor ~ " * watts('" ~ battery_power ~ "') | float(0)" if battery_power else "") ~ ", 0] | max" %>
+<% set house_ok = "is_number(states('" ~ grid_import ~ "')) and is_number(states('" ~ grid_export ~ "')) and is_number(states('" ~ solar ~ "'))" ~ (" and is_number(states('" ~ battery_power ~ "'))" if battery_power else "") %>
+<% endif %>
+    - name: <@ t('sensor_house_power') | tojson @>
+      unique_id: energy_plan_house_power
+      default_entity_id: sensor.energy_plan_house_power
+      unit_of_measurement: W
+      device_class: power
+      state_class: measurement
+      icon: mdi:home-lightning-bolt-outline
+      availability: "{{ <@ house_ok @> }}"
+      state: >
+        {% from 'energy_plan.jinja' import watts %}
+        {{ (<@ house_w @>) | round(0) }}
+      attributes:
+        source: "<@ 'role' if house_role else 'computed' @>"
+<% if charger %>
+        # Without the car (sensor.ev_charger_power of the ev-charger module), in W.
+        without_car: >
+          {% from 'energy_plan.jinja' import watts %}
+          {{ [(<@ house_w @>) - [watts('<@ charger @>') | float(0), 0] | max, 0] | max | round(0) }}
+<% endif %>
+
+- binary_sensor:
+    # Surplus: the 10-minute export average with a band around input_number.energy_plan_surplus_kw, like Home
+    # Assistant's threshold helper: on above threshold + hysteresis, off below threshold - hysteresis, in between
+    # it keeps its state. Off while the average has no value.
+    - name: <@ t('binary_surplus') | tojson @>
+      unique_id: energy_plan_surplus
+      default_entity_id: binary_sensor.energy_plan_surplus
+      icon: mdi:solar-power-variant
+      state: >
+        {% set avg = states('sensor.energy_plan_export_avg') %}
+        {% set at = states('input_number.energy_plan_surplus_kw') | float(<@ d['input_number.energy_plan_surplus_kw'] @>) %}
+        {% set band = states('input_number.energy_plan_surplus_hysteresis_kw') | float(<@ d['input_number.energy_plan_surplus_hysteresis_kw'] @>) %}
+        {% if not is_number(avg) %}false
+        {% elif avg | float > at + band %}true
+        {% elif avg | float < at - band %}false
+        {% else %}{{ this.state == 'on' }}{% endif %}
+      attributes:
+        export_avg_kw: "{{ states('sensor.energy_plan_export_avg') | float(none) }}"
+        on_above_kw: >
+          {{ (states('input_number.energy_plan_surplus_kw') | float(<@ d['input_number.energy_plan_surplus_kw'] @>)
+              + states('input_number.energy_plan_surplus_hysteresis_kw') | float(<@ d['input_number.energy_plan_surplus_hysteresis_kw'] @>)) | round(2) }}
+        off_below_kw: >
+          {{ (states('input_number.energy_plan_surplus_kw') | float(<@ d['input_number.energy_plan_surplus_kw'] @>)
+              - states('input_number.energy_plan_surplus_hysteresis_kw') | float(<@ d['input_number.energy_plan_surplus_hysteresis_kw'] @>)) | round(2) }}
+<% if battery %>
+    # Battery behind: the battery will not be full by the time the sun leaves the panels. On when the margin is
+    # below input_number.energy_plan_battery_safety_kwh while the sun is still on the panels; off again only when
+    # the margin is above safety + hysteresis. Never on at 98 % or more, after the sun, or without a margin.
+    - name: <@ t('binary_battery_behind') | tojson @>
+      unique_id: energy_plan_battery_behind
+      default_entity_id: binary_sensor.energy_plan_battery_behind
+      icon: mdi:battery-clock-outline
+      state: >
+        {% set s = 'sensor.energy_plan_margin' %}
+        {% set m = states(s) %}
+        {% set soc = states('<@ battery @>') | float(0) %}
+        {% set limit = states('input_number.energy_plan_battery_safety_kwh') | float(<@ d['input_number.energy_plan_battery_safety_kwh'] @>) %}
+        {% set band = states('input_number.energy_plan_battery_hysteresis_kwh') | float(<@ d['input_number.energy_plan_battery_hysteresis_kwh'] @>) %}
+        {% if soc >= 98 or not is_number(m) or state_attr(s, 'after_sun') %}false
+        {% elif this.state == 'on' %}{{ m | float < limit + band }}
+        {% else %}{{ m | float < limit }}{% endif %}
+      attributes:
+        margin_kwh: "{{ states('sensor.energy_plan_margin') | float(none) }}"
+        sun_end: "{{ state_attr('sensor.energy_plan_margin', 'sun_end') }}"
+        on_below_kwh: "{{ states('input_number.energy_plan_battery_safety_kwh') | float(<@ d['input_number.energy_plan_battery_safety_kwh'] @>) }}"
+        off_above_kwh: >
+          {{ (states('input_number.energy_plan_battery_safety_kwh') | float(<@ d['input_number.energy_plan_battery_safety_kwh'] @>)
+              + states('input_number.energy_plan_battery_hysteresis_kwh') | float(<@ d['input_number.energy_plan_battery_hysteresis_kwh'] @>)) | round(2) }}
+<% endif %>

@@ -1,0 +1,82 @@
+# User-facing texts of the module base, one key per text: {en: ..., nl: ...}. Used in the module's files as
+# <@ t('key') @> (tools/fill.py picks house.language, default en; a missing language falls back to en with a warning).
+# These texts end up inside JavaScript string literals in www/cw-thema.js: no double quotes or backslashes.
+# {name} placeholders are filled in by the browser (fmt() in cw-thema.js), not by fill.py.
+theme_auto: { en: Automatic, nl: Automatisch }
+theme_light: { en: Light, nl: Licht }
+theme_dark: { en: Dark, nl: Donker }
+theme_menu: { en: Appearance, nl: Weergave }
+theme_style: { en: Style, nl: Stijl }
+theme_style_and_menu: { en: Style and appearance, nl: Stijl en weergave }
+# aria-label and tooltip of the theme button; {style} = theme name, {mode} = Automatic/Light/Dark in lower case.
+theme_button_label: { en: "Style {style}, appearance {mode}", nl: "Stijl {style}, weergave {mode}" }
+# Names of the themes as Home Assistant shows them (the YAML key of themes/<id>.yaml, Profile > Theme and the
+# theme button). Changing a name renames the theme: a user who picked the old name falls back to the default
+# (see README, "Migrating"). The nl names are the ones of the Dutch-language original, so it keeps its choices.
+theme_name_organic: { en: Organic, nl: Organic }
+theme_name_garden: { en: Garden, nl: Tuin }
+theme_name_coast: { en: Coast, nl: Kust }
+theme_name_heath: { en: Heath, nl: Heide }
+theme_name_graphite: { en: Graphite, nl: Grafiet }
+status_choose: { en: Choose status row, nl: Statusrij kiezen }
+status_row: { en: Status row, nl: Statusrij }
+status_choose_help:
+  en: Choose what you see at the top; the arrows set the order.
+  nl: Kies wat jij bovenaan ziet; de pijltjes zetten de volgorde.
+status_empty:
+  en: "Nothing chosen: the status row is empty."
+  nl: "Niets gekozen: de statusrij is leeg."
+button_default: { en: Default, nl: Standaard }
+button_done: { en: Done, nl: Klaar }
+button_run: { en: Run, nl: Uitvoeren }
+button_details: { en: Details, nl: Details }
+button_open: { en: Open, nl: Openen }
+button_close: { en: Close, nl: Sluiten }
+# Stepper in the info sheet (cw-toggles item with stap): aria-labels of the − and + buttons.
+step_down: { en: Lower, nl: Lager }
+step_up: { en: Higher, nl: Hoger }
+info_title: { en: Info, nl: Info }
+# Settings button in the page header (card custom:cw-kop with settings: <path>).
+settings: { en: Settings, nl: Instellingen }
+text_input: { en: Text, nl: Tekst }
+explain: { en: Explanation, nl: Uitleg }
+card_header: { en: "Page header (title, subtitle, theme button)", nl: "Paginakop (titel, subregel, themaknop)" }
+card_status: { en: Status row (icons with value), nl: Statusrij (iconen met waarde) }
+card_theme: { en: Theme button (style · auto · light · dark), nl: Themaknop (stijl · auto · licht · donker) }
+status_saved_for:
+  en: Saved for {who}, on every device.
+  nl: Bewaard voor {who}, op elk toestel.
+move_up: { en: "Move {name} up", nl: "{name} naar voren" }
+move_down: { en: "Move {name} down", nl: "{name} naar achteren" }
+status_count_one_row:
+  en: "{n} of {total} visible · {rows} row on this screen"
+  nl: "{n} van {total} zichtbaar · {rows} rij op dit scherm"
+status_count_rows:
+  en: "{n} of {total} visible · {rows} rows on this screen"
+  nl: "{n} van {total} zichtbaar · {rows} rijen op dit scherm"
+status_too_many_rows:
+  en: ": turn {extra} off for 2 rows"
+  nl: ": zet er {extra} uit voor 2 rijen"
+state_on: { en: "on", nl: aan }
+state_off: { en: "off", nl: uit }
+long_press_hint: { en: long press = explanation, nl: lang drukken = uitleg }
+# Part of the resource version (?v=19-en): a new language is a new file for the browser cache.
+language_code: { en: en, nl: nl }
+# Number format of the values in cw-status chips (decimal separator), a BCP 47 locale.
+number_locale: { en: en-GB, nl: nl-BE }
+# Names of the Home Assistant weather states (window.cwWeerNaam, used by other modules' cards).
+weather_sunny: { en: sunny, nl: zonnig }
+weather_clear_night: { en: clear night, nl: heldere nacht }
+weather_partlycloudy: { en: partly cloudy, nl: half bewolkt }
+weather_cloudy: { en: cloudy, nl: bewolkt }
+weather_fog: { en: fog, nl: mist }
+weather_rainy: { en: rain, nl: regen }
+weather_pouring: { en: pouring rain, nl: stortregen }
+weather_lightning_rainy: { en: thunderstorm, nl: onweer }
+weather_lightning: { en: thunderstorm, nl: onweer }
+weather_snowy: { en: snow, nl: sneeuw }
+weather_snowy_rainy: { en: sleet, nl: natte sneeuw }
+weather_hail: { en: hail, nl: hagel }
+weather_windy: { en: windy, nl: winderig }
+weather_windy_variant: { en: windy, nl: winderig }
+weather_exceptional: { en: exceptional weather, nl: uitzonderlijk weer }

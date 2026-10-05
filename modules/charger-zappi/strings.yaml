@@ -1,0 +1,78 @@
+# User-facing texts of the module charger-zappi, one key per text: {en: ..., nl: ...}. Used as <@ t('key') @>.
+# Rules: no double quotes or backslashes (the texts sit between double quotes in YAML); placeholders like {mode}
+# without a value at fill time stay in the text and are filled in by Home Assistant at run time (replace()); keep
+# them when you translate; no emoji.
+
+# --- helpers (package.yaml) ---
+helper_phase_auto: { en: "EV charger: phases automatic", nl: "Laadpaal: fasen automatisch" }
+helper_three_phase_from: { en: "EV charger: 3 phases from", nl: "Laadpaal: 3 fasen vanaf" }
+helper_one_phase_below: { en: "EV charger: 1 phase below", nl: "Laadpaal: 1 fase onder" }
+
+# --- sensors (templates/charger_zappi.yaml) ---
+sensor_mode: { en: EV charger mode, nl: Laadpaal modus }
+sensor_status: { en: EV charger status, nl: Laadpaal status }
+sensor_connected: { en: EV charger car connected, nl: Laadpaal auto aangesloten }
+sensor_power: { en: EV charger power, nl: Laadpaal vermogen }
+sensor_energy_today: { en: EV charger energy today, nl: Laadpaal energie vandaag }
+sensor_solar_energy_today: { en: EV charger solar energy today, nl: Laadpaal zonne-energie vandaag }
+sensor_phases: { en: EV charger phases, nl: Laadpaal fasen }
+sensor_three_phase_wanted: { en: "EV charger: room for 3 phases", nl: "Laadpaal: ruimte voor 3 fasen" }
+
+# --- script ev_charger_set_mode (scripts.yaml) ---
+script_alias: { en: "EV charger: set mode", nl: "Laadpaal: modus zetten" }
+script_description:
+  en: >-
+    Adapter of the ev-charger capability for the myenergi Zappi. solar_only = Eco+, solar_min = Eco, fast = Fast,
+    stop = Stopped; solar_share sets the Minimum Green Level. Only ev-charging calls this script; it decides when to
+    charge, this script only translates. Waits up to 60 s until the cloud confirms.
+  nl: >-
+    Adapter van de ev-charger-capability voor de myenergi Zappi. solar_only = Eco+, solar_min = Eco, fast = Fast,
+    stop = Stopped; solar_share zet het Minimum Green Level. Alleen ev-charging roept dit script aan; die beslist
+    wanneer er geladen wordt, dit script vertaalt enkel. Wacht tot 60 s tot de cloud bevestigt.
+field_mode_name: { en: Mode, nl: Modus }
+field_mode_description:
+  en: "solar_only (only surplus), solar_min (surplus with a minimum from the grid), fast or stop"
+  nl: "solar_only (enkel overschot), solar_min (overschot met een minimum van het net), fast of stop"
+field_share_name: { en: Solar share, nl: Aandeel zon }
+field_share_description:
+  en: "Optional, 0-100: share of the charge power that must be surplus (Zappi Minimum Green Level)"
+  nl: "Optioneel, 0-100: aandeel van het laadvermogen dat overschot moet zijn (Minimum Green Level van de Zappi)"
+field_reason_name: { en: Reason, nl: Reden }
+field_reason_description: { en: "Why, for the logbook", nl: "Waarom, voor het logboek" }
+field_reason_example: { en: solar surplus, nl: zonne-overschot }
+
+# --- logbook ---
+logbook_name: { en: EV charger, nl: Laadpaal }
+mode_solar_only: { en: solar only, nl: enkel zon }
+mode_solar_min: { en: solar with minimum, nl: zon met minimum }
+mode_fast: { en: fast, nl: snel }
+mode_stop: { en: stop, nl: stop }
+log_unknown_mode: { en: "unknown mode {mode}, nothing changed", nl: "onbekende modus {mode}, niets gewijzigd" }
+log_unavailable: { en: "charger unavailable, mode {mode} not set", nl: "laadpaal onbereikbaar, modus {mode} niet gezet" }
+log_mode_set: { en: "mode {mode} ({brand})", nl: "modus {mode} ({brand})" }
+log_mode_no_follow:
+  en: "mode {mode} ({brand}) sent, the charger did not confirm within 60 s"
+  nl: "modus {mode} ({brand}) verstuurd, de laadpaal bevestigde niet binnen 60 s"
+log_share_set: { en: "minimum green level {level} %", nl: "minimum groen {level} %" }
+
+# --- automation charger_zappi_phases (automations.yaml) ---
+auto_phases_alias: { en: "EV charger: 1 or 3 phases by surplus", nl: "Laadpaal: 1 of 3 fasen volgens overschot" }
+auto_phases_description:
+  en: >-
+    Only in solar_only (Eco+) with the phase switch on: 3 phases when binary_sensor.charger_zappi_three_phase_wanted
+    is on (surplus above the high threshold for 10 min, battery not discharging and not behind) and the phase has
+    been 1 or auto for 15 min; 1 phase as soon as it turns off. Back to auto in fast or solar_min and when the switch
+    turns off. Stop is left alone. Never changes the charge mode. See charger-zappi/LOGIC.md.
+  nl: >-
+    Alleen in solar_only (Eco+) met de faseschakelaar aan: 3 fasen als binary_sensor.charger_zappi_three_phase_wanted
+    aan staat (overschot 10 min boven de hoge drempel, batterij ontlaadt niet en loopt niet achter) en de fase al
+    15 min op 1 of auto staat; 1 fase zodra hij uit gaat. Terug op auto in fast of solar_min en als de schakelaar
+    uit gaat. Stop blijft ongemoeid. Wijzigt nooit de laadmodus. Zie charger-zappi/LOGIC.md.
+log_phase_auto: { en: "phases back to auto ({mode})", nl: "fasen terug op auto ({mode})" }
+log_phase_switch_off: { en: "phase switching off: phases back to auto", nl: "fasen niet meer automatisch: terug op auto" }
+log_phase_three: { en: "3 phases, {kw} kW available", nl: "3 fasen, {kw} kW beschikbaar" }
+log_phase_one: { en: "1 phase, {why}", nl: "1 fase, {why}" }
+why_discharge: { en: battery feeds the car, nl: batterij voedt de wagen }
+why_behind: { en: battery behind, nl: batterij loopt achter }
+why_low: { en: "{kw} kW available", nl: "{kw} kW beschikbaar" }
+why_no_data: { en: no available-power value, nl: geen waarde voor beschikbaar vermogen }

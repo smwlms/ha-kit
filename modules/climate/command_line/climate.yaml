@@ -1,0 +1,37 @@
+<% from '_climate.jinja' import indoor, outdoor, solar, solar_rest, solar_today, target, comfort_low, comfort_high, forecast_days, feat with context %>
+<# command_line entry of the indoor forecast -> /config/command_line/climate.yaml (merged by the base module's
+   command_line: !include_dir_merge_list command_line/). The script reads the recorder database (SQLite) read-only.
+   The name stays English in every language: a command_line sensor cannot set its entity id, Home Assistant derives it
+   from the name (sensor.climate_indoor_peak, a contract id). No value after -- is ever empty (shell arguments): an
+   unknown value is passed as 'x'. All arguments are computed here, so the folded command below has no blocks.
+   Shell safety (Home Assistant runs the command in a shell): every value from house.yaml is an entity id checked by
+   safe_entity() or a number, and passes through shell_quote; the Home Assistant templates only put out numbers or x. #>
+<% for role, eid in [('indoor_temperature', indoor), ('solar_power_w', solar), ('outdoor_temperature', outdoor), ('solar_forecast_remaining_today', solar_rest), ('solar_forecast_today', solar_today)] if eid %><% set _ = safe_entity(eid, 'entities.' ~ role) %><% endfor %>
+<% set ids = '--indoor ' ~ (indoor | shell_quote) ~ ((' --solar ' ~ (solar | shell_quote)) if solar else '') ~ ((' --outdoor ' ~ (outdoor | shell_quote)) if outdoor else '') %>
+<% set warm_from = "{{ states('input_number.climate_floor_cooling_from_outdoor_max') | float(24) }}" if feat.floor else '24' %>
+<% set cool_below = "{{ states('input_number.climate_floor_heating_below_outdoor_max') | float(17) }}" if feat.floor else '17' %>
+<% set rest_arg = ("{{ states('" ~ solar_rest ~ "') | float('x') }}") if solar_rest else 'x' %>
+<% set today_arg = ("{{ states('" ~ solar_today ~ "') | float('x') }}") if solar_today else 'x' %>
+# Module climate: command_line (list). Reload: command_line.reload (Developer tools > YAML).
+# Today's indoor peak, the kind of day and the floor advice (climate/indoor_forecast.py, see climate/LOGIC.md).
+# Statistic ids: indoor <@ indoor @>, solar <@ solar or 'none' @>, outdoor <@ outdoor or 'none' @>.
+- sensor:
+    name: "Climate indoor peak"
+    unique_id: climate_indoor_peak
+    command: >-
+      python3 /config/climate/indoor_forecast.py <@ ids @>
+      --tz <@ house.timezone | shell_quote @> --days <@ forecast_days | int @> --target <@ target | float @> --low <@ comfort_low | float @> --high <@ comfort_high | float @>
+      --floor-warm <@ warm_from @> --floor-cool <@ cool_below @> --
+      {{ states('<@ indoor @>') | float('x') }}
+      <@ rest_arg @>
+      <@ today_arg @>
+      {{ state_attr('sensor.climate_weather_days', 'outdoor_mean_until_18') | float('x') }}
+      {% set d = state_attr('sensor.climate_weather_days', 'day_max') or [] %}{% for i in range(4) %}{{ (d[i] | float('x')) if d | count > i and d[i] is not none else 'x' }} {% endfor %}
+    scan_interval: 900
+    command_timeout: 30
+    unit_of_measurement: "°C"
+    device_class: temperature
+    # No value (e.g. no indoor temperature, or not SQLite) = unavailable; HA rejects a non-numeric state with a unit.
+    availability: "{{ value_json is defined and value_json.state is not none }}"
+    value_template: "{{ value_json.state }}"
+    json_attributes: [peak_hour, day_type, floor_advice, rise, solar_rest_kwh, forecast_factor, outdoor_minus_indoor, a, k_per_kwh, b_outdoor, days, model_hour, terms, morning_model, day_max_coming, error]

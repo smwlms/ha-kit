@@ -1,0 +1,168 @@
+# User-facing texts of the module appliances-home-connect, one key per text: {en: ..., nl: ...}. Used in the module's
+# files as <@ t('key') @> (tools/fill.py picks house.language, default en). {name} in a text is replaced at fill time
+# when t() gets that keyword argument; otherwise Home Assistant fills it in at run time with | replace('{x}', value).
+# Texts are inserted with | tojson: any character is allowed.
+
+# --- Appliances ---
+kind_dishwasher: { en: "Dishwasher", nl: "Vaatwasser" }
+kind_washer: { en: "Washing machine", nl: "Wasmachine" }
+kind_dryer: { en: "Dryer", nl: "Droogkast" }
+contents_dishwasher: { en: "the dishes", nl: "de vaat" }
+contents_washer: { en: "the laundry", nl: "de was" }
+contents_dryer: { en: "the laundry", nl: "de was" }
+
+# --- Helpers (names shown in the UI) ---
+helper_smart_waiting: { en: "{name} smart waiting", nl: "{name} slim wachten" }
+helper_smart_start: { en: "{name} smart start", nl: "{name} slim start" }
+helper_ready_by: { en: "{name} ready by", nl: "{name} klaar tegen" }
+helper_duration: { en: "{name} program duration", nl: "{name} programmaduur" }
+helper_battery_minimum: { en: "Appliances battery minimum", nl: "Toestellen batterij minimum" }
+helper_solar_minimum: { en: "Appliances wait for sun from", nl: "Toestellen wachten op zon vanaf" }
+helper_solar_peak: { en: "Appliances sunniest moment", nl: "Toestellen zonnigste moment" }
+
+# --- Small words ---
+word_tomorrow: { en: "tomorrow", nl: "morgen" }
+word_ready_by_arrival: { en: "the expected arrival", nl: "de verwachte thuiskomst" }
+decimal_separator: { en: ".", nl: "," }
+deadline_arrival: { en: "(arrival)", nl: "(thuiskomst)" }
+deadline_asap: { en: "(as soon as possible)", nl: "(zo snel mogelijk)" }
+button_now: { en: "Start now", nl: "Nu starten" }
+button_smart: { en: "Smart start", nl: "Slim starten" }
+logbook_name: { en: "Appliances", nl: "Toestellen" }
+
+# --- Why a plan starts when it does (logbook and notifications) ---
+reason_sun: { en: "sun first, {kwh} kWh expected", nl: "zon eerst, {kwh} kWh verwacht" }
+reason_cheapest: { en: "cheapest, mean €{price}/kWh, done by {deadline}", nl: "goedkoopst, gem. €{price}/kWh, klaar tegen {deadline}" }
+reason_latest: { en: "no prices: as late as possible, done by {deadline}", nl: "geen prijzen: zo laat mogelijk, klaar tegen {deadline}" }
+reason_too_tight: { en: "{deadline} is too close: right away", nl: "{deadline} is te krap: meteen" }
+reason_safety_net: { en: "safety net: no surplus came", nl: "vangnet: geen overschot gekomen" }
+reason_missed: { en: "planned moment missed by a restart", nl: "gepland moment gemist door een herstart" }
+reason_surplus: { en: "solar surplus", nl: "zonne-overschot" }
+reason_battery: { en: "battery full and sun on the panels", nl: "batterij vol en zon op de panelen" }
+reason_notification: { en: "from the notification", nl: "via de melding" }
+reason_dashboard: { en: "from the dashboard", nl: "via het dashboard" }
+
+# --- Notifications ---
+notify_not_ready_title: { en: "{name}: smart start not possible", nl: "{name}: slim starten kan niet" }
+not_ready_remote: { en: "Switch on remote start on the appliance first.", nl: "Zet eerst Start op afstand aan op het toestel." }
+not_ready_door: { en: "Close the door first.", nl: "Sluit eerst de deur." }
+not_ready_status: { en: "The appliance is not ready to start ({status}).", nl: "Het toestel is niet klaar om te starten ({status})." }
+notify_wait_sun_title: { en: "{name} waits for the sun", nl: "{name} wacht op zon" }
+notify_wait_sun_message:
+  en: "Starts on solar surplus or a full battery ({kwh} kWh of sun expected), at the latest {time}. Done by {deadline}. Rather now? Tap Start now."
+  nl: "Start bij zonne-overschot of een volle batterij ({kwh} kWh zon verwacht), uiterlijk {time}. Klaar tegen {deadline}. Liever meteen? Tik op Nu starten."
+notify_started_title: { en: "{name} started", nl: "{name} gestart" }
+notify_started_message: { en: "{program} is running", nl: "{program} loopt" }
+notify_scheduled_title: { en: "{name} planned at {time}", nl: "{name} gepland om {time}" }
+notify_scheduled_message: { en: "{program} starts at {time}", nl: "{program} start om {time}" }
+notify_not_started_title: { en: "{name} did not start", nl: "{name} niet gestart" }
+notify_not_started_message:
+  en: "Starting failed (status: {status}). Check that the door is closed and remote start is on."
+  nl: "Starten lukte niet (status: {status}). Kijk of de deur dicht is en Start op afstand aanstaat."
+notify_no_device_title: { en: "{name}: appliance not found", nl: "{name}: toestel niet gevonden" }
+notify_no_device_message:
+  en: "No Home Connect device found for {entity}. Check the prefix of this appliance in house.yaml."
+  nl: "Geen Home Connect-toestel gevonden voor {entity}. Kijk de prefix van dit toestel na in house.yaml."
+notify_offer_title: { en: "{name}: start?", nl: "{name} starten?" }
+notify_offer_message:
+  en: "{program} is ready. Smart start = sun or battery first, otherwise the best moment to be done by {deadline}."
+  nl: "{program} staat klaar. Slim starten = zon of batterij eerst, anders het beste moment om klaar te zijn tegen {deadline}."
+notify_cancelled_title: { en: "{name}: smart start cancelled", nl: "{name}: slim starten geannuleerd" }
+notify_cancelled_message:
+  en: "The door was opened. Close it and tap Smart start again (or switch the appliance on again when it plans by itself)."
+  nl: "De deur ging open. Sluit ze en tik opnieuw op Slim starten (of zet het toestel opnieuw aan als het zelf plant)."
+notify_door_title: { en: "{name}: door open", nl: "{name}: deur staat open" }
+notify_door_message:
+  en: "The door has been open for 2 min while the program is busy ({status}). Close the door so the program can go on."
+  nl: "De deur staat al 2 min open terwijl het programma bezig is ({status}). Sluit de deur zodat het programma verder kan."
+notify_error_title: { en: "{name}: {status}", nl: "{name}: {status}" }
+error_error: { en: "{name} reports an error. Look at the display or in the Home Connect app.", nl: "{name} meldt een fout. Kijk op het display of in de Home Connect-app." }
+error_actionrequired: { en: "{name} asks for an action (e.g. water, salt or the door). Look at the display.", nl: "{name} vraagt een actie (bv. water, zout of de deur). Kijk op het display." }
+error_aborting: { en: "{name} is aborting the program.", nl: "{name} breekt het programma af." }
+notify_done_title: { en: "{name} is done", nl: "{name} is klaar" }
+notify_done_message: { en: "{program} finished at {time}. Time to take out {contents}.", nl: "{program} is klaar om {time}. Tijd om {contents} eruit te halen." }
+notify_reminder_title: { en: "{name}: door still closed", nl: "{name}: deur nog dicht" }
+notify_reminder_message:
+  en: "{name} has been done for {minutes} min and the door is still closed. Don't forget {contents}."
+  nl: "{name} is al {minutes} min klaar en de deur is nog dicht. Vergeet {contents} niet."
+notify_aborted_message: { en: "The program was aborted.", nl: "Het programma werd afgebroken." }
+notify_maintenance_message:
+  en: "Refill or run it when it suits you. The message on the appliance goes away once you confirm it there."
+  nl: "Bijvullen of uitvoeren wanneer het past. De melding op het toestel verdwijnt na bevestigen."
+
+# --- Logbook ---
+log_plan: { en: "{name}: plan {time} ({reason})", nl: "{name}: plan {time} ({reason})" }
+log_started: { en: "{name}: {program} started", nl: "{name}: {program} gestart" }
+log_scheduled: { en: "{name}: {program} planned at {time}", nl: "{name}: {program} gepland om {time}" }
+log_not_started: { en: "{name}: did not start (status {status})", nl: "{name}: niet gestart (status {status})" }
+
+# --- Scripts ---
+notify_alias: { en: "Appliances: notification", nl: "Toestellen: melding" }
+notify_description:
+  en: "Notification of the appliances through script.send_notification: to who is home, everyone when nobody is home. The tag replaces an earlier notification of the same appliance."
+  nl: "Melding van de toestellen via script.send_notification: naar wie thuis is, naar iedereen als niemand thuis is. De tag vervangt een vorige melding van hetzelfde toestel."
+start_now_alias: { en: "Appliances: start the selected program", nl: "Toestellen: geselecteerd programma starten" }
+start_now_description:
+  en: "Starts the program selected on the appliance through Home Connect, now or with a delay (start_in seconds). Turns smart waiting off and reports whether it worked. Start now on a delayed start cancels the delay on the appliance first."
+  nl: "Start het op het toestel geselecteerde programma via Home Connect, meteen of met uitstel (start_in seconden). Zet slim wachten uit en meldt of het lukte. Nu starten op een uitgestelde start annuleert eerst het uitstel op het toestel."
+smart_start_alias: { en: "Appliances: smart start (sun or battery first, else the best moment)", nl: "Toestellen: slim starten (zon of batterij eerst, anders het beste moment)" }
+smart_start_description:
+  en: "Plans the selected program so it is done by the ready-by time of the appliance (an hour, or auto = the learned arrival). Sun expected before the latest start: wait for surplus or a full battery, at the latest at the sunniest moment. Otherwise a delayed start on the cheapest quarter (with a tariff module) or as late as possible."
+  nl: "Plant het geselecteerde programma zodat het klaar is tegen het klaar-tegen-uur van het toestel (een uur, of auto = de geleerde thuiskomst). Zon verwacht vóór de laatste start: wachten op overschot of een volle batterij, uiterlijk op het zonnigste moment. Anders een uitgestelde start op het goedkoopste kwartier (met een tariefmodule) of zo laat mogelijk."
+field_appliance: { en: "Appliance", nl: "Toestel" }
+field_start_in: { en: "Start in", nl: "Start over" }
+field_start_in_description: { en: "seconds; 0 = now", nl: "seconden; 0 = meteen" }
+field_reason: { en: "Reason", nl: "Reden" }
+field_title: { en: "Title", nl: "Titel" }
+field_message: { en: "Message", nl: "Bericht" }
+field_tag: { en: "Tag", nl: "Tag" }
+field_tag_description: { en: "a notification with the same tag replaces the previous one", nl: "een melding met dezelfde tag vervangt de vorige" }
+field_actions: { en: "Buttons", nl: "Knoppen" }
+field_actions_description: { en: "optional notification buttons: [{action, title}]", nl: "optionele meldingsknoppen: [{action, title}]" }
+
+# --- Automations ---
+offer_alias: { en: "Appliances: plan by itself or offer a smart start", nl: "Toestellen: zelf plannen of slim starten voorstellen" }
+offer_description:
+  en: "smart_start auto: switched on, door closed and remote start on for 2 min = plan by itself (script.appliance_smart_start). smart_start ask: remote start switched on = a notification with the buttons Smart start and Start now."
+  nl: "smart_start auto: aan, deur dicht en Start op afstand 2 min aan = zelf plannen (script.appliance_smart_start). smart_start ask: Start op afstand aangezet = een melding met de knoppen Slim starten en Nu starten."
+run_alias: { en: "Appliances: carry out a smart start", nl: "Toestellen: slim starten uitvoeren" }
+run_description:
+  en: "For appliances in smart waiting: start on solar surplus, or on a full home battery while the panels give at least 1 kW; otherwise at the planned moment (safety net). Cancels when the door opens or the appliance is started by hand."
+  nl: "Voor toestellen in slim wachten: start bij zonne-overschot, of bij een volle thuisbatterij terwijl de panelen minstens 1 kW leveren; anders op het geplande moment (vangnet). Annuleert als de deur opengaat of het toestel met de hand start."
+buttons_alias: { en: "Appliances: notification buttons", nl: "Toestellen: meldingsknoppen afhandelen" }
+buttons_description: { en: "Handles the buttons Smart start and Start now of the appliance notifications.", nl: "Verwerkt de knoppen Slim starten en Nu starten uit de toestelmeldingen." }
+door_alias: { en: "Appliances: door open during a program", nl: "Toestellen: deur open tijdens programma" }
+door_description: { en: "Notification when the door has been open for 2 min while a program runs, pauses or waits for its delayed start.", nl: "Melding als de deur 2 min openstaat terwijl een programma loopt, gepauzeerd is of uitgesteld wacht." }
+error_alias: { en: "Appliances: error or action required", nl: "Toestellen: fout of actie vereist" }
+error_description: { en: "Notification when an appliance reports an error, asks for an action or aborts a program.", nl: "Melding als een toestel een fout meldt, een actie vraagt of een programma afbreekt." }
+done_alias: { en: "Appliances: done + door reminder", nl: "Toestellen: klaar-melding + deurherinnering" }
+done_description: { en: "Notification when an appliance is done; while the door stays closed a reminder every 30 min (at most 3). Stops as soon as the door opens.", nl: "Melding als een toestel klaar is; blijft de deur dicht, dan elke 30 min een herinnering (max 3). Stopt zodra de deur opengaat." }
+maintenance_alias: { en: "Appliances: maintenance (salt, rinse aid, i-Dos, machine care)", nl: "Toestellen: onderhoud (zout, glansspoelmiddel, i-Dos, machinereiniging)" }
+maintenance_description: { en: "Notification when an appliance asks for salt, rinse aid, machine care or an i-Dos refill, or when a program was aborted.", nl: "Melding als een toestel zout, glansspoelmiddel, een machinereiniging of i-Dos vraagt, of als een programma afgebroken werd." }
+
+# --- Dashboard ---
+view_title: { en: "Appliances", nl: "Toestellen" }
+view_settings_title: { en: "Appliance settings", nl: "Toestellen instellen" }
+view_waiting: { en: "Waiting for sun or battery · at the latest {time}", nl: "Wacht op zon of batterij · uiterlijk {time}" }
+view_running: { en: "{progress} % · done {time}", nl: "{progress} % · klaar {time}" }
+view_start_at: { en: "Starts at {time}", nl: "Start om {time}" }
+view_delayed: { en: "Delayed start", nl: "Uitgesteld" }
+view_done: { en: "Done", nl: "Klaar" }
+view_done_door: { en: "Done · door still closed", nl: "Klaar · deur nog dicht" }
+view_ready: { en: "Ready to start", nl: "Klaar om te starten" }
+view_off: { en: "Off", nl: "Uit" }
+card_program: { en: "Program", nl: "Programma" }
+card_today: { en: "Today", nl: "Vandaag" }
+card_ready_by: { en: "Ready by (auto = arrival)", nl: "Klaar tegen (auto = thuiskomst)" }
+card_duration: { en: "Duration for the plan", nl: "Duur voor planning" }
+card_remote_start: { en: "Remote start", nl: "Start op afstand" }
+card_planned_start: { en: "Planned start", nl: "Geplande start" }
+card_planning: { en: "Planning", nl: "Planning" }
+card_battery_minimum: { en: "Battery minimum", nl: "Batterij minimum" }
+card_solar_minimum: { en: "Wait for sun from", nl: "Wachten op zon vanaf" }
+card_solar_peak: { en: "Sunniest moment", nl: "Zonnigste moment" }
+card_arrival: { en: "Arrival (learned)", nl: "Thuiskomst (geleerd)" }
+days_short: { en: "Mo,Tu,We,Th,Fr,Sa,Su", nl: "ma,di,wo,do,vr,za,zo" }
+confirm_start_now: { en: "{name}: start now?", nl: "{name} nu starten?" }
+confirm_cancel_wait: { en: "{name}: cancel the smart start?", nl: "{name}: slim starten annuleren?" }
+confirm_stop: { en: "{name}: stop the program?", nl: "{name}: programma stoppen?" }

@@ -1,0 +1,38 @@
+name: New brand for an existing function
+description: An adapter module that provides the roles a core module needs, for another brand (e.g. ventilation-ubbink, doorbell-reolink)
+labels: [brand adapter]
+body:
+  - type: input
+    id: function
+    attributes:
+      label: Function / core module
+      placeholder: e.g. ventilation, doorbell, gate
+    validations:
+      required: true
+  - type: input
+    id: brand
+    attributes:
+      label: Brand and model
+      placeholder: e.g. Ubbink Ubiflux Vigor W325
+    validations:
+      required: true
+  - type: textarea
+    id: integration
+    attributes:
+      label: How Home Assistant talks to it
+      description: Integration (core or custom), ESPHome firmware, cloud or local, and the entities it creates (anonymised).
+    validations:
+      required: true
+  - type: textarea
+    id: roles
+    attributes:
+      label: Roles it provides
+      description: Which roles of the core module this adapter fills, and what is missing compared to the existing adapter.
+  - type: checkboxes
+    id: tested
+    attributes:
+      label: Testing
+      options:
+        - label: I can test this on real hardware
+        - label: Examples use invented names, addresses and entity ids only
+          required: true

@@ -1,0 +1,566 @@
+<% from '_heat_pump_vaillant.jinja' import zones, band_zones, water_heater, hot_water_boost, mode_normal, mode_heat with context %>
+<% set ns = namespace(all=[], band=[]) %>
+<% for z in zones %>
+<% set slim = {'key': z.key, 'climate': z.climate, 'cooling': z.cooling, 'cooling_setpoint': z.cooling_setpoint} %>
+<% set ns.all = ns.all + [slim] %>
+<% if z.band %>
+<% set ns.band = ns.band + [slim] %>
+<% endif %>
+<% endfor %>
+# Heat pump (Vaillant): scripts of the capabilities heat-pump and hot-water-heater (ha-kit module heat-pump-vaillant,
+# see heat-pump-vaillant/LOGIC.md and docs/phase4-contracts.md section 3).
+# Written by heat-pump-vaillant/deploy.py through the config API (same as the script editor).
+# One writer per actuator: only climate calls script.heat_pump_set_floor_band (and the quick veto), only hot-water
+# calls script.hot_water_heat / script.hot_water_normal. These scripts decide nothing: they translate the request into
+# myVAILLANT calls, write only values that differ (the cloud has a limited number of commands) and log what they did.
+# Every cloud write increments counter.heat_pump_vaillant_writes_today; above
+# input_number.heat_pump_vaillant_max_writes_per_day the scripts stop writing (hot_water_normal always may).
+# Zones that take part in the band (band: true): <@ ns.band | map(attribute='key') | join(', ') or '-' @>.
+
+# --- heat-pump: floor band ------------------------------------------------------------------------------------
+heat_pump_set_floor_band:
+  alias: "<@ t('script_band_alias') @>"
+  icon: mdi:heat-pump-outline
+  description: >-
+    <@ t('script_band_description') @>
+  mode: queued
+  max: 10
+  fields:
+    low:
+      name: "<@ t('field_low_name') @>"
+      description: "<@ t('field_low_description') @>"
+      example: 20.5
+      selector:
+        number: { min: 5, max: 30, step: 0.5, unit_of_measurement: "°C", mode: box }
+    high:
+      name: "<@ t('field_high_name') @>"
+      description: "<@ t('field_high_description') @>"
+      example: 26
+      selector:
+        number: { min: 15, max: 30, step: 0.5, unit_of_measurement: "°C", mode: box }
+    reason:
+      name: "<@ t('field_reason_name') @>"
+      description: "<@ t('field_reason_description') @>"
+      example: "<@ t('field_reason_example') @>"
+      selector:
+        text: {}
+    zone:
+      name: "<@ t('field_zone_name') @>"
+      description: "<@ t('field_zone_description') @>"
+      selector:
+        select:
+          options: <@ ns.all | map(attribute='key') | list | tojson @>
+  sequence:
+    - variables:
+        txt:
+          logbook: "<@ t('logbook_floor') @>"
+          heating: "<@ t('log_heating') @>"
+          cooling: "<@ t('log_cooling') @>"
+          written: "<@ t('log_written') @>"
+          unchanged: "<@ t('log_unchanged') @>"
+          no_slots: "<@ t('log_no_slots') @>"
+          no_cooling: "<@ t('log_no_cooling') @>"
+          unreachable: "<@ t('log_unreachable') @>"
+          invalid: "<@ t('log_band_invalid') @>"
+          over_limit: "<@ t('log_over_limit') @>"
+        all_zones: <@ ns.all | tojson @>
+        band_zones: <@ ns.band | tojson @>
+        lo: >-
+          {% if low is defined and low | is_number %}{{ ((low | float * 2) | round(0)) / 2 }}{% else %}{{ none }}{% endif %}
+        hi: >-
+          {% if high is defined and high | is_number %}{{ ((high | float * 2) | round(0)) / 2 }}{% else %}{{ none }}{% endif %}
+        targets: >-
+          {% set z = zone | default('') %}
+          {{ all_zones | selectattr('key', 'eq', z) | list if z else band_zones }}
+        why: "{{ reason | default('') }}"
+        over_limit: >-
+          {{ states('counter.heat_pump_vaillant_writes_today') | int(0)
+             >= states('input_number.heat_pump_vaillant_max_writes_per_day') | int(40) }}
+    - if:
+        - condition: template
+          value_template: "{{ (lo is none and hi is none) or (lo is not none and hi is not none and lo >= hi) or targets | length == 0 }}"
+      then:
+        - action: logbook.log
+          data:
+            name: "{{ txt.logbook }}"
+            entity_id: sensor.heat_pump_state
+            message: >-
+              {{ txt.invalid }}: {{ low | default('-') }} / {{ high | default('-') }} °C{{ ' · ' ~ zone if zone | default('') else '' }}{{ ' (' ~ why ~ ')' if why else '' }}
+        - stop: invalid band
+    - if:
+        - condition: template
+          value_template: "{{ over_limit }}"
+      then:
+        - action: logbook.log
+          data:
+            name: "{{ txt.logbook }}"
+            entity_id: sensor.heat_pump_state
+            message: "{{ txt.over_limit }}{{ ' (' ~ why ~ ')' if why else '' }}"
+        - stop: write limit of today reached
+    - repeat:
+        for_each: "{{ targets }}"
+        sequence:
+          - variables:
+              z: "{{ repeat.item }}"
+              reachable: "{{ states(repeat.item.climate) not in ['unavailable', 'unknown'] }}"
+              days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+              heat_slots: >-
+                {% set ns = namespace(n=0) %}
+                {% set tp = state_attr(repeat.item.climate, 'time_program_heating') %}
+                {% if tp is mapping %}{% for d in days %}{% set ns.n = ns.n + ((tp.get(d) or []) | length) %}{% endfor %}{% endif %}
+                {{ ns.n }}
+              heat_differs: >-
+                {% set ns = namespace(diff=false) %}
+                {% set tp = state_attr(repeat.item.climate, 'time_program_heating') %}
+                {% if lo is not none and tp is mapping %}
+                  {% for d in days %}{% for s in (tp.get(d) or []) %}
+                    {% if ((s.setpoint | float(0)) - lo) | abs > 0.05 %}{% set ns.diff = true %}{% endif %}
+                  {% endfor %}{% endfor %}
+                {% endif %}
+                {{ ns.diff }}
+              cool_now: "{{ states(repeat.item.cooling_setpoint) | float(none) }}"
+              cool_differs: >-
+                {{ hi is not none and repeat.item.cooling and (cool_now is none or (cool_now - hi) | abs > 0.05) }}
+          - if:
+              - condition: template
+                value_template: "{{ not reachable }}"
+            then:
+              - action: logbook.log
+                data:
+                  name: "{{ txt.logbook }}"
+                  entity_id: sensor.heat_pump_state
+                  message: "{{ z.key }}: {{ txt.unreachable }}{{ ' (' ~ why ~ ')' if why else '' }}"
+            else:
+              # Cooling: the time-controlled cooling setpoint (climate.set_temperature with target_temp_high is
+              # ignored by myPyllant).
+              - if:
+                  - condition: template
+                    value_template: "{{ cool_differs }}"
+                then:
+                  - action: mypyllant.set_time_controlled_cooling_setpoint
+                    continue_on_error: true
+                    target:
+                      entity_id: "{{ z.climate }}"
+                    data:
+                      temperature: "{{ hi }}"
+                  - action: counter.increment
+                    target:
+                      entity_id: counter.heat_pump_vaillant_writes_today
+              - if:
+                  - condition: template
+                    value_template: "{{ cool_differs and heat_differs }}"
+                then:
+                  - delay: 5
+              # Heating: the setpoint of every slot of the heating time program. Not climate.set_temperature: with
+              # time_program_overwrite off myPyllant turns that into a quick veto of 3 h.
+              - if:
+                  - condition: template
+                    value_template: "{{ heat_differs }}"
+                then:
+                  - action: mypyllant.set_time_program
+                    continue_on_error: true
+                    target:
+                      entity_id: "{{ z.climate }}"
+                    data:
+                      program_type: heating
+                      time_program: >-
+                        {% set tp = state_attr(z.climate, 'time_program_heating') %}
+                        {% set ns = namespace(out={}) %}
+                        {% for d in days %}
+                          {% set sl = namespace(l=[]) %}
+                          {% for s in (tp.get(d) or []) %}
+                            {% set sl.l = sl.l + [{'start_time': s.start_time, 'end_time': s.end_time, 'setpoint': lo}] %}
+                          {% endfor %}
+                          {% set ns.out = dict(ns.out, **{d: sl.l}) %}
+                        {% endfor %}
+                        {{ ns.out }}
+                  - action: counter.increment
+                    target:
+                      entity_id: counter.heat_pump_vaillant_writes_today
+              - action: logbook.log
+                data:
+                  name: "{{ txt.logbook }}"
+                  entity_id: sensor.heat_pump_state
+                  message: >-
+                    {% set p = [] %}
+                    {% if lo is not none %}
+                      {% if heat_differs %}{% set p = p + [txt.heating ~ ' ' ~ lo ~ ' °C ' ~ txt.written] %}
+                      {% elif heat_slots | int(0) == 0 %}{% set p = p + [txt.heating ~ ': ' ~ txt.no_slots] %}
+                      {% else %}{% set p = p + [txt.heating ~ ' ' ~ lo ~ ' °C ' ~ txt.unchanged] %}{% endif %}
+                    {% endif %}
+                    {% if hi is not none %}
+                      {% if not z.cooling %}{% set p = p + [txt.cooling ~ ': ' ~ txt.no_cooling] %}
+                      {% elif cool_differs %}{% set p = p + [txt.cooling ~ ' ' ~ hi ~ ' °C ' ~ txt.written] %}
+                      {% else %}{% set p = p + [txt.cooling ~ ' ' ~ hi ~ ' °C ' ~ txt.unchanged] %}{% endif %}
+                    {% endif %}
+                    {{ z.key }}: {{ p | join(' · ') }}{{ ' (' ~ why ~ ')' if why else '' }}
+
+# --- heat-pump: quick veto (optional brand feature) --------------------------------------------------------------
+heat_pump_quick_veto:
+  alias: "<@ t('script_veto_alias') @>"
+  icon: mdi:thermometer-auto
+  description: >-
+    <@ t('script_veto_description') @>
+  mode: queued
+  max: 10
+  fields:
+    temperature:
+      name: "<@ t('field_veto_temperature_name') @>"
+      description: "<@ t('field_veto_temperature_description') @>"
+      example: 19
+      selector:
+        number: { min: 5, max: 30, step: 0.5, unit_of_measurement: "°C", mode: box }
+    hours:
+      name: "<@ t('field_veto_hours_name') @>"
+      description: "<@ t('field_veto_hours_description') @>"
+      example: 4
+      selector:
+        number: { min: 0, max: 24, step: 1, unit_of_measurement: h, mode: box }
+    reason:
+      name: "<@ t('field_reason_name') @>"
+      description: "<@ t('field_reason_description') @>"
+      selector:
+        text: {}
+    zone:
+      name: "<@ t('field_zone_name') @>"
+      description: "<@ t('field_zone_description') @>"
+      selector:
+        select:
+          options: <@ ns.all | map(attribute='key') | list | tojson @>
+  sequence:
+    - variables:
+        txt:
+          logbook: "<@ t('logbook_floor') @>"
+          veto: "<@ t('log_veto') @>"
+          veto_cancelled: "<@ t('log_veto_cancelled') @>"
+          unreachable: "<@ t('log_unreachable') @>"
+          invalid: "<@ t('log_veto_invalid') @>"
+          over_limit: "<@ t('log_over_limit') @>"
+        all_zones: <@ ns.all | tojson @>
+        band_zones: <@ ns.band | tojson @>
+        temp: >-
+          {% if temperature is defined and temperature | is_number %}{{ ((temperature | float * 2) | round(0)) / 2 }}{% else %}{{ none }}{% endif %}
+        duration: "{{ hours | float(0) if hours is defined and hours | is_number else 3 }}"
+        targets: >-
+          {% set z = zone | default('') %}
+          {{ all_zones | selectattr('key', 'eq', z) | list if z else band_zones }}
+        why: "{{ reason | default('') }}"
+        over_limit: >-
+          {{ states('counter.heat_pump_vaillant_writes_today') | int(0)
+             >= states('input_number.heat_pump_vaillant_max_writes_per_day') | int(40) }}
+    - if:
+        - condition: template
+          value_template: "{{ (duration > 0 and temp is none) or targets | length == 0 }}"
+      then:
+        - action: logbook.log
+          data:
+            name: "{{ txt.logbook }}"
+            entity_id: sensor.heat_pump_state
+            message: "{{ txt.invalid }}{{ ' (' ~ why ~ ')' if why else '' }}"
+        - stop: invalid quick veto
+    - if:
+        - condition: template
+          value_template: "{{ over_limit }}"
+      then:
+        - action: logbook.log
+          data:
+            name: "{{ txt.logbook }}"
+            entity_id: sensor.heat_pump_state
+            message: "{{ txt.over_limit }}{{ ' (' ~ why ~ ')' if why else '' }}"
+        - stop: write limit of today reached
+    - repeat:
+        for_each: "{{ targets }}"
+        sequence:
+          - variables:
+              z: "{{ repeat.item }}"
+          - choose:
+              - conditions:
+                  - condition: template
+                    value_template: "{{ states(z.climate) in ['unavailable', 'unknown'] }}"
+                sequence:
+                  - action: logbook.log
+                    data:
+                      name: "{{ txt.logbook }}"
+                      entity_id: sensor.heat_pump_state
+                      message: "{{ z.key }}: {{ txt.unreachable }}"
+              - conditions:
+                  - condition: template
+                    value_template: "{{ duration > 0 }}"
+                sequence:
+                  - action: mypyllant.set_quick_veto
+                    continue_on_error: true
+                    target:
+                      entity_id: "{{ z.climate }}"
+                    data:
+                      temperature: "{{ temp }}"
+                      duration_hours: "{{ duration }}"
+                  - action: counter.increment
+                    target:
+                      entity_id: counter.heat_pump_vaillant_writes_today
+                  - action: logbook.log
+                    data:
+                      name: "{{ txt.logbook }}"
+                      entity_id: sensor.heat_pump_state
+                      message: "{{ z.key }}: {{ txt.veto }} {{ temp }} °C · {{ duration }} h{{ ' (' ~ why ~ ')' if why else '' }}"
+            default:
+              - action: mypyllant.cancel_quick_veto
+                continue_on_error: true
+                target:
+                  entity_id: "{{ z.climate }}"
+              - action: counter.increment
+                target:
+                  entity_id: counter.heat_pump_vaillant_writes_today
+              - action: logbook.log
+                data:
+                  name: "{{ txt.logbook }}"
+                  entity_id: sensor.heat_pump_state
+                  message: "{{ z.key }}: {{ txt.veto_cancelled }}{{ ' (' ~ why ~ ')' if why else '' }}"
+
+# --- hot-water-heater ----------------------------------------------------------------------------------------
+hot_water_heat:
+  alias: "<@ t('script_heat_alias') @>"
+  icon: mdi:water-boiler
+  description: >-
+    <@ t('script_heat_description') @>
+  mode: queued
+  max: 10
+  fields:
+    target:
+      name: "<@ t('field_target_name') @>"
+      description: "<@ t('field_target_description') @>"
+      required: true
+      example: 55
+      selector:
+        number: { min: 35, max: 70, step: 1, unit_of_measurement: "°C", mode: box }
+    boost:
+      name: "<@ t('field_boost_name') @>"
+      description: "<@ t('field_boost_description') @>"
+      default: false
+      selector:
+        boolean: {}
+    reason:
+      name: "<@ t('field_reason_name') @>"
+      description: "<@ t('field_reason_description') @>"
+      selector:
+        text: {}
+  sequence:
+    - action: script.heat_pump_vaillant_hot_water_write
+      data:
+        kind: heat
+        target: "{{ target | default(none) }}"
+        boost: "{{ boost | default(false) | bool(false) }}"
+        reason: "{{ reason | default('') }}"
+
+hot_water_normal:
+  alias: "<@ t('script_normal_alias') @>"
+  icon: mdi:water-boiler-auto
+  description: >-
+    <@ t('script_normal_description') @>
+  mode: queued
+  max: 10
+  fields:
+    target:
+      name: "<@ t('field_target_name') @>"
+      description: "<@ t('field_normal_target_description') @>"
+      required: true
+      example: 45
+      selector:
+        number: { min: 35, max: 70, step: 1, unit_of_measurement: "°C", mode: box }
+    reason:
+      name: "<@ t('field_reason_name') @>"
+      description: "<@ t('field_reason_description') @>"
+      selector:
+        text: {}
+  sequence:
+    - action: script.heat_pump_vaillant_hot_water_write
+      data:
+        kind: normal
+        target: "{{ target | default(none) }}"
+        boost: false
+        reason: "{{ reason | default('') }}"
+
+# Internal: the only script that writes to the water heater. queued, so a heat and a normal shortly after each other
+# are written in order. Writes only what differs; 5 s between two writes (the cloud applies them in order).
+heat_pump_vaillant_hot_water_write:
+  alias: "<@ t('script_write_alias') @>"
+  icon: mdi:cloud-upload-outline
+  description: >-
+    <@ t('script_write_description') @>
+  mode: queued
+  max: 10
+  fields:
+    kind:
+      description: "<@ t('field_kind_description') @>"
+      selector:
+        select:
+          options: [heat, normal]
+    target:
+      selector:
+        number: { min: 35, max: 70, step: 1, unit_of_measurement: "°C", mode: box }
+    boost:
+      selector:
+        boolean: {}
+    reason:
+      selector:
+        text: {}
+  sequence:
+    - variables:
+        txt:
+          logbook: "<@ t('logbook_hot_water') @>"
+          heat: "<@ t('log_hot_water_heat') @>"
+          normal: "<@ t('log_hot_water_normal') @>"
+          target_written: "<@ t('log_target_written') @>"
+          mode_written: "<@ t('log_mode_written') @>"
+          boost_on: "<@ t('log_boost_on') @>"
+          boost_off: "<@ t('log_boost_off') @>"
+          unchanged: "<@ t('log_unchanged') @>"
+          no_mode: "<@ t('log_no_mode') @>"
+          no_boost: "<@ t('log_no_boost') @>"
+          unreachable: "<@ t('log_unreachable') @>"
+          over_limit: "<@ t('log_over_limit') @>"
+        wh: "<@ water_heater @>"
+        boost_switch: "<@ hot_water_boost @>"
+        modes: "{{ state_attr(wh, 'operation_list') or [] }}"
+        heat_mode: >-
+          {{ (<@ mode_heat | tojson @> | select('in', modes) | list + [none]) | first }}
+        normal_mode: >-
+          {{ (<@ mode_normal | tojson @> | select('in', modes) | list + [none]) | first }}
+        mode_now: "{{ states(wh) }}"
+        reachable: "{{ states(wh) not in ['unavailable', 'unknown'] }}"
+        t_min: "{{ state_attr(wh, 'min_temp') | float(35) }}"
+        t_max: "{{ state_attr(wh, 'max_temp') | float(70) }}"
+        goal: >-
+          {% if target is defined and target | is_number %}{{ ([[target | float, t_min] | max, t_max] | min) | round(0) }}{% else %}{{ none }}{% endif %}
+        target_now: "{{ state_attr(wh, 'temperature') | float(none) }}"
+        with_boost: "{{ kind == 'heat' and (boost | default(false) | bool(false)) }}"
+        want_mode: >-
+          {{ normal_mode if kind == 'normal' else (none if with_boost else heat_mode) }}
+        boost_exists: "{{ states(boost_switch) in ['on', 'off'] }}"
+        boost_is_on: "{{ is_state(boost_switch, 'on') }}"
+        w_target: "{{ goal is not none and (target_now is none or (target_now - goal) | abs > 0.4) }}"
+        w_mode: "{{ want_mode is not none and want_mode != mode_now }}"
+        w_boost_on: "{{ with_boost and boost_exists and not boost_is_on }}"
+        w_boost_off: "{{ kind == 'normal' and boost_is_on }}"
+        why: "{{ reason | default('') }}"
+        over_limit: >-
+          {{ kind != 'normal' and states('counter.heat_pump_vaillant_writes_today') | int(0)
+             >= states('input_number.heat_pump_vaillant_max_writes_per_day') | int(40) }}
+        summary: >-
+          {{ (txt.heat if kind == 'heat' else txt.normal) ~ ' ' ~ (goal if goal is not none else '-') ~ ' °C'
+             ~ (' + boost' if with_boost else '') }}
+    - if:
+        - condition: template
+          value_template: "{{ not reachable or over_limit }}"
+      then:
+        - action: logbook.log
+          data:
+            name: "{{ txt.logbook }}"
+            entity_id: sensor.hot_water_temperature
+            message: >-
+              {{ summary }} · {{ txt.unreachable if not reachable else txt.over_limit }}{{ ' (' ~ why ~ ')' if why else '' }}
+        - stop: water heater unreachable or write limit reached
+    - choose:
+        # heat: target first, then hold it all day (mode) or one charge now (boost).
+        - conditions:
+            - condition: template
+              value_template: "{{ kind == 'heat' }}"
+          sequence:
+            - if:
+                - condition: template
+                  value_template: "{{ w_target }}"
+              then:
+                - action: water_heater.set_temperature
+                  continue_on_error: true
+                  target:
+                    entity_id: "{{ wh }}"
+                  data:
+                    temperature: "{{ goal }}"
+                - action: counter.increment
+                  target:
+                    entity_id: counter.heat_pump_vaillant_writes_today
+            - if:
+                - condition: template
+                  value_template: "{{ w_target and (w_mode or w_boost_on) }}"
+              then:
+                - delay: 5
+            - if:
+                - condition: template
+                  value_template: "{{ w_mode }}"
+              then:
+                - action: water_heater.set_operation_mode
+                  continue_on_error: true
+                  target:
+                    entity_id: "{{ wh }}"
+                  data:
+                    operation_mode: "{{ want_mode }}"
+                - action: counter.increment
+                  target:
+                    entity_id: counter.heat_pump_vaillant_writes_today
+            - if:
+                - condition: template
+                  value_template: "{{ w_boost_on }}"
+              then:
+                - action: switch.turn_on
+                  continue_on_error: true
+                  target:
+                    entity_id: "{{ boost_switch }}"
+                - action: counter.increment
+                  target:
+                    entity_id: counter.heat_pump_vaillant_writes_today
+      # normal: boost off, back to the brand's automatic mode, then the target.
+      default:
+        - if:
+            - condition: template
+              value_template: "{{ w_boost_off }}"
+          then:
+            - action: switch.turn_off
+              continue_on_error: true
+              target:
+                entity_id: "{{ boost_switch }}"
+            - action: counter.increment
+              target:
+                entity_id: counter.heat_pump_vaillant_writes_today
+        - if:
+            - condition: template
+              value_template: "{{ w_mode }}"
+          then:
+            - action: water_heater.set_operation_mode
+              continue_on_error: true
+              target:
+                entity_id: "{{ wh }}"
+              data:
+                operation_mode: "{{ want_mode }}"
+            - action: counter.increment
+              target:
+                entity_id: counter.heat_pump_vaillant_writes_today
+        - if:
+            - condition: template
+              value_template: "{{ (w_boost_off or w_mode) and w_target }}"
+          then:
+            - delay: 5
+        - if:
+            - condition: template
+              value_template: "{{ w_target }}"
+          then:
+            - action: water_heater.set_temperature
+              continue_on_error: true
+              target:
+                entity_id: "{{ wh }}"
+              data:
+                temperature: "{{ goal }}"
+            - action: counter.increment
+              target:
+                entity_id: counter.heat_pump_vaillant_writes_today
+    - action: logbook.log
+      data:
+        name: "{{ txt.logbook }}"
+        entity_id: sensor.hot_water_temperature
+        message: >-
+          {% set p = [] %}
+          {% if w_target %}{% set p = p + [txt.target_written] %}{% endif %}
+          {% if w_boost_off %}{% set p = p + [txt.boost_off] %}{% endif %}
+          {% if w_mode %}{% set p = p + [txt.mode_written ~ ' ' ~ want_mode] %}{% endif %}
+          {% if w_boost_on %}{% set p = p + [txt.boost_on] %}{% endif %}
+          {% if want_mode is none and not with_boost %}{% set p = p + [txt.no_mode] %}{% endif %}
+          {% if with_boost and not boost_exists %}{% set p = p + [txt.no_boost] %}{% endif %}
+          {{ summary }} · {{ p | join(' · ') if p else txt.unchanged }}{{ ' (' ~ why ~ ')' if why else '' }}

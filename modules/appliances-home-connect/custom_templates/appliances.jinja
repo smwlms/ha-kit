@@ -1,0 +1,118 @@
+<% from '_appliances.jinja' import has_energy, has_tariff, has_presence, has_battery, fc_remaining, fc_tomorrow with context %>
+{#- Appliances: start window (ha-kit module appliances-home-connect, see appliances-home-connect/LOGIC.md, "The
+    start-time optimizer"). Filled in from house.yaml by tools/fill.py and uploaded by deploy.py to
+    /config/custom_templates/appliances.jinja; edit the kit, not this file in Home Assistant. Brand-free: it knows
+    nothing of Home Connect, so another brand can reuse it.
+
+    Built for this house with: energy-plan <@ 'yes' if has_energy else 'no' @>, tariff <@ 'yes' if has_tariff else 'no' @>, presence <@ 'yes' if has_presence else 'no' @>.
+
+    start_window(duration_h, ready_by='auto', auto_time='17:00')
+      duration_h  program duration in hours
+      ready_by    'auto' (the learned arrival of input_datetime.arrival_<day>; without presence auto_time) or 'HH:MM'
+      auto_time   the 'auto' deadline when there is no learned arrival
+    Returns JSON (use | from_json):
+      start, start_ts   when to start (ISO, local; epoch s). Never before now.
+      deadline          when the program must be done (ISO)
+      by                'arrival', 'auto_time', 'hour' or 'asap' (an arrival too close to make: as soon as possible)
+      sun               true = wait for solar surplus or a full battery; start is then the safety net
+      sun_from          ISO start of the solar window ('' without sun)
+      kwh               solar expected in that window (kWh)
+      reason            'sun', 'cheapest', 'latest' (no prices: as late as possible) or 'too_tight'
+      mean_price        mean import price of the chosen block (EUR/kWh) with reason 'cheapest', else null
+    Order: sun or battery first, then the deadline, then the price (LOGIC.md). -#}
+
+{% macro start_window(duration_h, ready_by='auto', auto_time='17:00') -%}
+{%- set dur = ((duration_h | float(3)) * 3600) | int -%}
+{%- set t0 = now() -%}
+{%- set earliest = t0 + timedelta(seconds=dur) -%}
+{%- set auto_time = auto_time if auto_time | string | regex_match('^\\d{1,2}:\\d{2}') else '17:00' -%}
+{#- 1. Deadline -#}
+{%- if ready_by | string | regex_match('^\\d{1,2}:\\d{2}') -%}
+{%- set deadline = today_at(ready_by) -%}
+{%- set deadline = deadline + timedelta(days=1) if deadline < earliest else deadline -%}
+{%- set by = 'hour' -%}
+{%- else -%}
+<% if has_presence %>
+{%- set days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] -%}
+{%- set a0 = states('input_datetime.arrival_' ~ days[t0.weekday()]) -%}
+{%- set a1 = states('input_datetime.arrival_' ~ days[(t0 + timedelta(days=1)).weekday()]) -%}
+{%- set learned = a0 | regex_match('^\\d{1,2}:\\d{2}') and a1 | regex_match('^\\d{1,2}:\\d{2}') -%}
+{%- set a0 = a0 if learned else auto_time -%}
+{%- set a1 = a1 if learned else auto_time -%}
+{%- set by = 'arrival' if learned else 'auto_time' -%}
+<% else %>
+{%- set a0, a1, by = auto_time, auto_time, 'auto_time' -%}
+<% endif %>
+{%- set arrival = today_at(a0) -%}
+{%- set arrival = today_at(a1) + timedelta(days=1) if arrival <= t0 else arrival -%}
+{%- set by = 'asap' if arrival < earliest else by -%}
+{%- set deadline = [arrival, earliest] | max -%}
+{%- endif -%}
+{%- set latest = deadline - timedelta(seconds=dur) -%}
+{#- 2. Solar window: today while the sun is up (or still to rise) and enough is left, else tomorrow from sunrise
+    + 90 min. Only the window is planned here; the actual start waits for real surplus (automation run). -#}
+<% if has_energy %>
+{%- set minimum = states('input_number.appliances_solar_minimum_kwh') | float(10) -%}
+<% if fc_remaining %>
+{%- set rest = states('<@ fc_remaining @>') | float(0) -%}
+<% else %>
+{%- set rest = state_attr('sensor.energy_plan_margin', 'pv_remaining_kwh') | float(0) -%}
+<% endif %>
+{%- set after_sun = state_attr('sensor.energy_plan_margin', 'after_sun') == true -%}
+{%- set up = is_state('sun.sun', 'above_horizon') -%}
+{%- set rising = as_datetime(state_attr('sun.sun', 'next_rising')) -%}
+{%- set rising = as_local(rising) if rising is not none else none -%}
+{%- if not after_sun and rest >= minimum and (up or (rising is not none and rising.date() == t0.date())) -%}
+{%- set sun_from = t0 if up else rising + timedelta(minutes=90) -%}
+{%- set kwh = rest -%}
+{%- elif rising is not none -%}
+{%- set sun_from = (rising + timedelta(days=1) if rising.date() == t0.date() else rising) + timedelta(minutes=90) -%}
+{%- set kwh = <@ ("states('" ~ fc_tomorrow ~ "') | float(0)") if fc_tomorrow else '0' @> if sun_from.date() == (t0 + timedelta(days=1)).date() else 0 -%}
+{%- else -%}
+{%- set sun_from, kwh = t0 + timedelta(days=2), 0 -%}
+{%- endif -%}
+{%- set sun = sun_from + timedelta(minutes=30) <= latest and kwh >= minimum -%}
+<% else %>
+{%- set sun, sun_from, kwh = false, t0, 0 -%}
+<% endif %>
+{#- 3. Start -#}
+{%- set ns = namespace(best=none, mean=none) -%}
+{%- if sun -%}
+<% if has_energy %>
+{#- Safety net while waiting for sun: the program centred on the sunniest moment of that day, within the window -#}
+{%- set peak = states('input_datetime.appliances_solar_peak') -%}
+{%- set peak = peak if peak | regex_match('^\\d{1,2}:\\d{2}') else '15:00' -%}
+{%- set day_shift = (as_local(sun_from).date() - t0.date()).days -%}
+{%- set centre = today_at(peak) + timedelta(days=day_shift) - timedelta(seconds=dur // 2) -%}
+{%- set start = [[centre, sun_from] | max, latest] | min -%}
+{%- set reason = 'sun' -%}
+<% endif %>
+{%- else -%}
+<% if has_tariff %>
+{#- Cheapest block of quarters that fits between now and the latest start (none when there is no room) -#}
+{%- set starts = state_attr('sensor.power_price_import', 'starts') or [] -%}
+{%- set prices = state_attr('sensor.power_price_import', 'prices') or [] -%}
+{%- set step = (as_timestamp(starts[1]) - as_timestamp(starts[0])) if starts | count > 1 else 900 -%}
+{%- set n = [((dur / step) | round(0, 'ceil')) | int, 1] | max -%}
+{%- for i in range([starts | count, prices | count] | min) if i + n <= prices | count and latest > t0 -%}
+{%- set t = as_datetime(starts[i]) -%}
+{%- if t is not none and as_timestamp(t) + step > as_timestamp(t0) and t <= latest -%}
+{%- set m = (prices[i:i + n] | map('float', 0) | sum) / n -%}
+{%- if ns.mean is none or m < ns.mean -%}
+{%- set ns.mean = m -%}
+{%- set ns.best = [as_local(t), t0] | max -%}
+{%- endif -%}
+{%- endif -%}
+{%- endfor -%}
+<% endif %>
+{%- if ns.best is not none -%}
+{%- set start, reason = ns.best, 'cheapest' -%}
+{%- else -%}
+{%- set start = [latest, t0] | max -%}
+{%- set reason = 'latest' if latest > t0 else 'too_tight' -%}
+{%- endif -%}
+{%- endif -%}
+{{ {'start': start.isoformat(), 'start_ts': as_timestamp(start) | int, 'deadline': deadline.isoformat(),
+    'by': by, 'sun': sun, 'sun_from': sun_from.isoformat() if sun else '', 'kwh': kwh | round(1),
+    'reason': reason, 'mean_price': ns.mean | round(4) if ns.mean is not none else none} | to_json }}
+{%- endmacro %}

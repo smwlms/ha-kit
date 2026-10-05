@@ -103,6 +103,17 @@ field_parcel_service_name: { en: Parcel service, nl: Pakjesdienst }
 field_parcel_service_description:
   en: Garage picture in the notification and a photo just before closing.
   nl: Garagebeeld in de melding en een foto vlak voor het sluiten.
+field_pressed_by_name: { en: Pressed by, nl: Gedrukt door }
+field_pressed_by_description:
+  en: >-
+    sourceDeviceID and sourceDeviceName of the phone that pressed a notification button; that person always gets the
+    notifications of this run. Empty = dashboard or automation.
+  nl: >-
+    sourceDeviceID en sourceDeviceName van de gsm die op een meldingsknop drukte; die persoon krijgt de meldingen van
+    deze run altijd. Leeg = dashboard of automation.
+# Logbook: who got a notification (names of the people, see doorbell/LOGIC.md "Who gets a notification").
+log_sent_to: { en: "notification to {names}", nl: "melding naar {names}" }
+log_nobody_subscribed: { en: no notification · nobody subscribed, nl: geen melding · niemand aangemeld }
 logbook_gate: { en: Gate, nl: Poort }
 # Reasons passed to script.gate_pulse / gate_close_manual (module gate): they end up in the gate's logbook.
 reason_parcel: { en: parcel, nl: pakje }

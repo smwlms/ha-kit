@@ -33,6 +33,12 @@ doorbell_reply:
       example: "2026-10-05T09:12:03.000+00:00"
       selector:
         text: {}
+    pressed_by:
+      name: <@ t('field_pressed_by_name') | tojson @>
+      description: <@ t('field_pressed_by_description') | tojson @>
+      example: iphone_jan iPhone of Jan
+      selector:
+        text: {}
 <% endif %>
   sequence:
     - variables:
@@ -91,6 +97,9 @@ doorbell_reply:
               action: script.turn_on
               target:
                 entity_id: script.parcel_garage
+              data:
+                variables:
+                  pressed_by: "{{ pressed_by | default('') }}"
         - conditions:
             - condition: template
               value_template: "{{ button == 'parcel_service' }}"
@@ -104,6 +113,7 @@ doorbell_reply:
                   open_s: "{{ states('input_number.parcel_service_open') | int(30) }}"
                   ajar_s: "{{ states('input_number.parcel_service_ajar') | float(0) }}"
                   parcel_service: true
+                  pressed_by: "{{ pressed_by | default('') }}"
 <% endif %>
     - delay: "00:03:00"
     - alias: Only restore if nobody replaced our text in the meantime

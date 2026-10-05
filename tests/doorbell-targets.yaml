@@ -1,0 +1,93 @@
+# Cases for targets(kind, pressed) in modules/doorbell/custom_templates/doorbell.jinja ("who gets a notification"),
+# run by tools/check.py on the filled-in builds with stubbed states(), is_state() and now(). INVENTED people:
+# jan (admin) and lien from house.example.yaml, an from tests/house.minimal.yaml.
+#   build       example         house.example.yaml: nl, parcel-service, recipients empty (jan and lien)
+#               minimal         tests/house.minimal.yaml: en, no parcel-service (no option parcel_day), only an
+#               all-modules-en  all modules, en, doorbell.recipients: [jan] (check_variant of doorbell); lien is no
+#               all-modules-nl  candidate
+#   kind        ring | parcel | parcel_alert (default ring)
+#   choice      person key -> option key (always, home, away, parcel_day, never: the label in the build's language)
+#               or a literal state (unknown, a label of another kit version); a person left out has no state (unknown)
+#   home        keys of the people whose person entity is home (the others are not_home)
+#   parcel_day  true = input_datetime.parcel_expected is today
+#   pressed     sourceDeviceID and sourceDeviceName of the phone that pressed a notification button
+#   expect      keys of the people who get the notification (check.py also checks names() for the logbook)
+cases:
+  - name: always + parcel day, no parcel day expected
+    build: example
+    choice: { jan: always, lien: parcel_day }
+    expect: [jan]
+  - name: always + parcel day, on the parcel day
+    build: example
+    choice: { jan: always, lien: parcel_day }
+    parcel_day: true
+    expect: [jan, lien]
+  - name: both only when home, both away -> failsafe, everyone not on never
+    build: example
+    choice: { jan: home, lien: home }
+    expect: [jan, lien]
+  - name: home and away, both home -> only the one at home
+    build: example
+    choice: { jan: home, lien: away }
+    home: [jan, lien]
+    expect: [jan]
+  - name: never + only when away, but at home -> failsafe gives the one not on never
+    build: example
+    choice: { jan: never, lien: away }
+    home: [lien]
+    expect: [lien]
+  - name: everyone on never -> nobody
+    build: example
+    choice: { jan: never, lien: never }
+    expect: []
+  - name: unknown state counts as always
+    build: example
+    choice: { jan: unknown, lien: never }
+    expect: [jan]
+  - name: parcel notifications, everyone on never -> nobody (no admin fallback)
+    build: example
+    kind: parcel
+    choice: { jan: never, lien: never }
+    expect: []
+  - name: safety notification of the garage, everyone on never -> the admin
+    build: example
+    kind: parcel_alert
+    choice: { jan: never, lien: never }
+    expect: [jan]
+  - name: whoever pressed always gets the follow-up
+    build: example
+    kind: parcel
+    choice: { jan: always, lien: never }
+    pressed: iphone_lien iPhone van Lien
+    expect: [jan, lien]
+  - name: whoever pressed, matched on the phone (sourceDeviceID) only
+    build: example
+    kind: parcel
+    choice: { jan: never, lien: never }
+    pressed: iphone_lien
+    expect: [lien]
+  - name: a short key is matched as a whole word only (an is not in "iPhone van Lien")
+    build: minimal
+    kind: parcel
+    choice: { an: never }
+    pressed: iphone_lien iPhone van Lien
+    expect: []
+  - name: without parcel-service an old label "only on a parcel day" counts as always
+    build: minimal
+    choice: { an: Only on a parcel day }
+    expect: [an]
+  - name: English labels, recipients [jan]
+    build: all-modules-en
+    choice: { jan: always, lien: parcel_day }
+    expect: [jan]
+  - name: doorbell.recipients is the upper limit, also for whoever pressed
+    build: all-modules-en
+    kind: parcel
+    choice: { jan: never }
+    pressed: iphone_lien iPhone of Lien
+    expect: []
+  - name: Dutch labels in the all-modules build, parcel day
+    build: all-modules-nl
+    choice: { jan: parcel_day }
+    parcel_day: true
+    expect: [jan]

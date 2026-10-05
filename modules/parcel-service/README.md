@@ -32,10 +32,22 @@ Example with invented values: section `parcel_service:` and `entities.garage_cam
 | `parcel_service.open_s`                                         | default time the gate stays open or ajar                                         |
 | `entities.garage_camera`                                        | camera in the garage; empty = no live view and no photo                          |
 | `entities.doorbell_package_camera`, `entities.doorbell_package` | from the module doorbell; without both "parcel left" drops out                   |
-| `doorbell.recipients`, `doorbell.calendar`, devices             | shared with the module doorbell: the same recipients, the same calendar and announcement |
+| `doorbell.recipients`, `doorbell.calendar`, devices             | shared with the module doorbell: the same candidates, the same calendar and announcement |
 | `house.language`                                                | language of the texts and of Gemini's answer                                     |
 
 `ajar_s` and `open_s` are only the start values: `deploy.py` sets them once, after that you adjust them on the dashboard.
+
+## Who gets a notification
+
+The parcel notifications follow each person's choice in `input_select.doorbell_<key>_parcel` (module doorbell, "Who gets a notification": Always, Only when I'm home, Only when I'm away, Never; nobody matches = everyone not on Never), decided once per run:
+
+| Notification                                                         | Goes to                                                                       |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| "Parcel left", "Garage door opening / ajar", "Parcel in the garage"  | whoever is subscribed; everyone on Never = nobody                             |
+| "Garage door not opened" (2x), "Garage door not closed" (Close gate) | the same, but nobody left = the admins (`people[].admin`, none = the first person): an open garage never stays silent |
+| any of them, after a press on a garage button                       | also the person who pressed (key, name or phone as a whole word of the iOS `sourceDeviceID` / `sourceDeviceName`) |
+
+The critical notification on the parcel day belongs to the ring: it follows `input_select.doorbell_<key>_ring` (option "Only on a parcel day"). The logbook says who got which notification.
 
 ## What you do in the UI
 
@@ -45,7 +57,7 @@ Example with invented values: section `parcel_service:` and `entities.garage_cam
 
 ## Install
 
-Order: `base`, `gate`, `doorbell`, then this module. When you add the parcel service later: fill in again with `parcel-service` in `modules:` and run `doorbell/deploy.py` and `gate/deploy.py` again (the ring automation gets the parcel steps, "gate open too long" stays silent during a delivery).
+Order: `base`, `gate`, `doorbell`, then this module. `deploy.py` stops when `input_select.doorbell_<key>_parcel` does not exist yet (doorbell not filled in again with `parcel-service`). When you add the parcel service later: fill in again with `parcel-service` in `modules:` and run `doorbell/deploy.py` and `gate/deploy.py` again (the ring automation gets the parcel steps, "gate open too long" stays silent during a delivery).
 
 ```bash
 cd build
@@ -83,3 +95,4 @@ Short; the full plan without the gate opening unexpectedly is in `LOGIC.md`.
 2. Day on **tomorrow**, ring with a box: normal doorbell notification (not critical), the gate stays closed.
 3. Day on **today**, someone at the gate, ring without a box: critical notification, then "No parcel seen: the garage stays closed".
 4. Again with a box in your hand: the gate opens (or opens ajar), notification with the garage view, closed after the set time, notification "Parcel in the garage" with photo, row in the visit list.
+5. Who gets it: day today, A and B on Always for the ring, A on Always and B on Never for parcel notifications. Ring, B long-presses "Garage ajar/open": A and B get "opening" and "in the garage" (B because B pressed). Logbook "notification to A, B".

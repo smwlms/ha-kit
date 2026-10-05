@@ -80,8 +80,12 @@ people:
     # the person does not count for presence (e.g. a child)
     phone: iphone_jan
     notify: mobile_app_iphone_jan # (optional) notify.<notify>; without: this person gets no notifications
-    admin: true # (optional, gate and tesla-driveway-lock) also gets the notifications meant for the others;
-    # nobody admin = the first person in this list
+    admin: true # (optional, gate, tesla-driveway-lock and doorbell) also gets the notifications meant for the
+    # others; nobody admin = the first person in this list
+    # (optional, doorbell) Home Assistant user id (32 hex characters): only this user sees "My doorbell
+    # notifications" on the doorbell card, and an admin with a user id is the only one who sees everyone's choices.
+    # doorbell/deploy.py prints it (attribute user_id of the person entity); empty = the person is only in the overview
+    user_id: "0123456789abcdef0123456789abcdef" # quoted: always text
     color: "#E8A571" # (optional, presence) colour on "Our week"; default a colour from the palette
   - key: lien
     name: Lien
@@ -387,7 +391,10 @@ doorbell:
   tv: media_player.living_room_tv # (optional) Google TV with TvOverlay (on/off check); empty = no picture on the TV
   # (required when tv is filled in) IP of the Google TV where TvOverlay listens; give the TV a fixed IP in your router
   tv_ip: 192.0.2.40
-  recipients: # (optional) list of keys from people, e.g. [jan]; empty = everyone with notify
+  # (optional) list of keys from people, e.g. [jan]; empty = everyone with notify. The upper limit: within it every
+  # person chooses on the dashboard when they get the ring and the parcel notifications (always, only when home, only
+  # when away, only on a parcel day, never; see modules/doorbell/README.md, "Who gets a notification")
+  recipients:
   tap_url: # (optional) where a tap on the notification goes, e.g. /lovelace/camera; empty = the camera view
   # (optional) text that comes back on the LCD when the previous text was unknown; empty = "Welcome" (en) / "Welkom" (nl)
   lcd_default: Welkom

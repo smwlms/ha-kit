@@ -15,6 +15,7 @@ cars:
 <% for a in cars %>
   - p: <@ a.prefix @>
     name: <@ a.name | tojson @>
+    called: <@ a.called | tojson @> # the name with its article in a sentence (cars[].article in house.yaml)
 <% if a.get('driver') %>
     driver: <@ a.driver @>
 <% endif %>

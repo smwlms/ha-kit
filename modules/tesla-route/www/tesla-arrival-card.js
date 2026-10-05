@@ -241,7 +241,8 @@
       ),
   };
   class TeslaArrivalCard extends HTMLElement {
-    // cars: [{ p, name, driver, color, badge, entities }] (p = entity prefix of the car, driver = person key);
+    // cars: [{ p, name, called, driver, color, badge, entities }] (p = entity prefix of the car, called = the name
+    // with its article inside a sentence, e.g. "the Red X" (default: the name), driver = person key);
     // people: [{ name, key, tracker }]; home: zone of home (default zone.home); mapbox_token: public pk.* token;
     // routing: auto (default: Mapbox with a token, else OSRM) or none (no route or place-name requests leave the
     // browser; the Tesla's own route is still drawn, grey);
@@ -257,6 +258,7 @@
         const p = a.p;
         return {
           name: a.name || p,
+          called: a.called || a.name || p,
           p,
           // driver: who usually drives this car; named when no phone is seen in the car (see _whoDrives).
           driver: a.driver || null,
@@ -660,7 +662,7 @@ ${home && this._gate ? `<div class="gate"><span class="gic">${I.gate()}</span><s
       st.el.querySelector(".arr-sub").textContent = [
         mode === "trip" && etaOk ? fmt(S.subArrival, { when }) : null,
         riders.length
-          ? fmt(S.subInCar, { car: c.name }) + (usual ? ` ${S.subUsualDriver}` : "")
+          ? fmt(S.subInCar, { car: c.name, the_car: c.called }) + (usual ? ` ${S.subUsualDriver}` : "")
           : null,
         Number.isFinite(km) && mode !== "drive" ? fmt(S.subKmLeft, { km: nf(km) }) : null,
         st.departed ? fmt(S.subDeparted, { time: hhmm(new Date(st.departed)) }) : null,
@@ -832,6 +834,7 @@ ${home && this._gate ? `<div class="gate"><span class="gic">${I.gate()}</span><s
       else if (this._s(c.away) !== "on")
         sub = fmt(S.gateNotAway, {
           car: c.name,
+          the_car: c.called,
           min: nf(this._n(g.awayMin), 0),
           km: nf(this._n(g.far) / 1000),
         });

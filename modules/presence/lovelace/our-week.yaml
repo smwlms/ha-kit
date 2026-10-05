@@ -15,9 +15,9 @@ family: # picking up outside school: zone name (as in the detail "place") and la
 <% else %>
   []
 <% endfor %>
-cars: # without cars: no list of Supercharger sessions
+cars: # without cars: no list of Supercharger sessions; called = the name with its article in a sentence
 <% for a in car_list %>
-  - { name: <@ a.name | tojson @> }
+  - { name: <@ a.name | tojson @>, called: <@ a.called | tojson @> }
 <% else %>
   []
 <% endfor %>

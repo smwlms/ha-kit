@@ -420,9 +420,9 @@ leaving:
 
 # --- Quick action per car: leaving with <@ a.name @> (one button per car on the phone) ---
 leaving_<@ a.prefix @>:
-  alias: "<@ t('leaving_car_alias', car=a.name) @>"
+  alias: "<@ t('leaving_car_alias', the_car=a.called) @>"
   icon: mdi:car-side
-  description: "<@ t('leaving_car_description', car=a.name) @>"
+  description: "<@ t('leaving_car_description', the_car=a.called) @>"
   mode: single
   max_exceeded: silent
   sequence:

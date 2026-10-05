@@ -12,6 +12,11 @@ delimiters, so Home Assistant templates with {{ }} and {% %} pass through untouc
 The context is the whole house.yaml plus `module` (the parsed module.yaml) and `capabilities` (sorted list of what the
 chosen modules declare under provides:, e.g. ['ev-charger', 'tariff']). Undefined values are an error, except the
 optional sections in SECTION_DEFAULTS (entities, people, cars, rooms): missing or empty, they are {} or [].
+Every car with a name also gets `called` (article + name, for inside a sentence: "the Red X", "de Rode X") and
+`Called` (the same with a capital article, for the start of a sentence: "The Red X"). The article is cars[].article
+when set ("" = none), else the default of house.language (CAR_ARTICLES: en "the", nl "de"; none for other
+languages), and none when the name starts with an article itself ("The Blue Comet", "De Lorean", "Het Busje").
+Texts in strings.yaml use {the_car} / {The_car} for these and {car} for the bare name (labels, lists).
 depends_on may name a module or a capability: 'tariff' is met by any chosen module with provides: [tariff] (a region
 module such as tariff-be). At most one chosen module may provide each capability.
 Module folders whose name starts with '_' (e.g. modules/_template/) are skipped unless house.yaml lists them.
@@ -82,6 +87,10 @@ YAML_STR = "tag:yaml.org,2002:str"
 # `entities.get('gate_sensor')` or `for car in cars` works without `is defined`. A module that needs one checks it
 # with fail() (e.g. `<% if not cars %><@ fail(...) @><% endif %>`). A section that is present is used as it is.
 SECTION_DEFAULTS = {"entities": {}, "people": [], "cars": [], "rooms": []}
+# Article before a car name inside a sentence, per house.language (cars[].article overrides it, "" = none).
+CAR_ARTICLES = {"en": "the", "nl": "de"}
+# A name that already starts with an article gets none by default ("The Blue Comet komt thuis", not "De The ...").
+NAME_WITH_ARTICLE = re.compile(r"^(the|de|het)\s", re.IGNORECASE)
 PLACEHOLDER = re.compile(r"\{(\w+)\}")
 
 
@@ -207,6 +216,35 @@ def with_defaults(house: dict) -> dict:
         if out.get(key) is None:
             out[key] = type(default)()
     return out
+
+
+def car_called(car: dict, language: str) -> tuple[str, str]:
+    """(called, Called) of one car: its name with the article for inside a sentence, and the same with a capital
+    article for the start of a sentence. Without an article both are the name as it is."""
+    name = str(car.get("name"))
+    article = car.get("article")
+    if article is None:
+        article = "" if NAME_WITH_ARTICLE.match(name) else CAR_ARTICLES.get(language, "")
+    elif article is False:  # YAML 1.1 reads an unquoted `article: no` as false: no article
+        article = ""
+    article = str(article).strip()
+    if not article:
+        return name, name
+    return f"{article} {name}", f"{article[:1].upper()}{article[1:]} {name}"
+
+
+def with_cars_called(house: dict, language: str) -> dict:
+    """house.yaml with `called` and `Called` (see car_called) on every car that has a name; other cars unchanged."""
+    cars = house.get("cars")
+    if not isinstance(cars, list):
+        return house
+    out = []
+    for car in cars:
+        if isinstance(car, dict) and car.get("name") is not None:
+            called, capital = car_called(car, language)
+            car = {**car, "called": called, "Called": capital}
+        out.append(car)
+    return {**house, "cars": out}
 
 
 def make_env(module_dir: Path, strings: Strings | None = None) -> Environment:
@@ -517,6 +555,7 @@ def main() -> None:
     check_target(target)
     modules = chosen_modules(house)
     language = house_language(house)
+    house = with_cars_called(house, language)
 
     target.mkdir(parents=True, exist_ok=True)
     (target / MARKER).write_text("Output of ha-kit tools/fill.py; safe to delete and regenerate.\n")

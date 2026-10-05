@@ -96,6 +96,10 @@ people:
 cars:
   # prefix      (required) start of the Teslemetry entities of that car (device_tracker.<prefix>_locatie, ...)
   # name        (required) as shown on the cards and in notifications
+  # article     (optional) word before the name inside a sentence: "De Rode X komt thuis", "met de Rode X". Default
+  #             per house.language: en "the", nl "de" (other languages: none); none when the name starts with The,
+  #             De or Het itself ("The Blue Comet komt thuis"). "" = never an article, for a name like Blixem
+  #             ("Blixem komt thuis", "met Blixem")
   # driver      (optional) key from people of the usual driver: gets the notification after an automatic close when
   #             no phone left with the car (gate) and when the car locks (tesla-driveway-lock), is shown on the
   #             arrival card and on a trip in "Our week" when no phone is seen with the car

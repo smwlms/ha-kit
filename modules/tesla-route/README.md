@@ -45,7 +45,7 @@ Overview: the kit's README, section "Privacy & external services".
 
 The commands run from `build/` with `HA_URL` and `HA_TOKEN` set (see the kit's README).
 
-1. **`house.yaml`**: `cars[]` (prefix, name, driver, optionally color, badge, entities), `people[]` (phone) and `teslemetry:` (entity names, see below). Example: the same sections in `house.example.yaml`. Run `tools/fill.py`.
+1. **`house.yaml`**: `cars[]` (prefix, name, driver, optionally article, color, badge, entities), `people[]` (phone) and `teslemetry:` (entity names, see below). Example: the same sections in `house.example.yaml`. Run `tools/fill.py`.
 2. **Enable the Teslemetry sensors:** `tesla-route/deploy.py --dry-run --setup`, then `tesla-route/deploy.py --setup`. Then reload Teslemetry.
 3. **Upload:** `tesla-route/deploy.py`. That puts the integration in `/config/custom_components/teslemetry_route/` and the two cards in `/config/www/`, and registers them as resources.
 4. **Restart** (Settings > System > Restart). Needed for a new integration, and the first time `/config/www` exists.
@@ -64,6 +64,7 @@ Everything comes from the card config; the cards have nothing about your house b
 | Key                                                         | Card     | What                                                                                                                         |
 | ----------------------------------------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `cars[]`: `p`, `name`                                       | both     | prefix and name per car                                                                                                      |
+| `cars[].called`                                             | arrival  | the name with its article in a sentence ("in the Red X"); from `cars[].article` in `house.yaml` (`""` = no article)          |
 | `cars[].driver`                                             | arrival  | key of the usual driver: shown when no phone is seen in the car                                                              |
 | `cars[].color`, `cars[].badge`                              | both     | colour (hex) and badge: `lightning`, `plaid` or your own `<svg>` (48×48). Without: a circle with the initial                 |
 | `cars[].entities`                                           | both     | entity_id per role (see LOGIC.md, "Settings"); the kit fills them all in                                                    |

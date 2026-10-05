@@ -6,7 +6,8 @@
 # Cars and people come from custom_templates/gate.jinja (cars(), people()), filled in from house.yaml.
 # Gate: <@ relay @> gives the pulse (script.gate_pulse is the adapter)<@ ', binary_sensor.gate_open is the end position (on = open)' if gate_sensor else '; no end-position sensor' @>.
 # User-facing texts come from gate/strings.yaml (house.language) and sit in the variable `txt` of each automation;
-# placeholders like {car} are filled in at run time with replace().
+# placeholders like {car} are filled in at run time with replace(): {car} = the name, {the_car} / {The_car} = the
+# name with its article inside / at the start of a sentence (called / Called in cars()).
 
 # --- 1. Automatic opening on approach ----------------------------------------------------------------------
 - id: gate_auto_open
@@ -102,9 +103,11 @@
           {% from 'gate.jinja' import riders %}
           {% set c = ready_car or away_car %}
           {{ (riders(c) | from_json | join(' ' ~ txt.joiner ~ ' ')) if c else '' }}
-        car_name: >
-          {% set c = ready_car or away_car or (in_zone | first | default('')) %}
-          {{ car_list | selectattr('p', 'eq', c) | map(attribute='name') | first | default('') }}
+        # The car the messages are about: ready, else away long enough, else the first in the zone.
+        msg_car: "{{ ready_car or away_car or (in_zone | first | default('')) }}"
+        car_name: "{{ car_list | selectattr('p', 'eq', msg_car) | map(attribute='name') | first | default('') }}"
+        car_called: "{{ car_list | selectattr('p', 'eq', msg_car) | map(attribute='called') | first | default(car_name) }}"
+        car_Called: "{{ car_list | selectattr('p', 'eq', msg_car) | map(attribute='Called') | first | default(car_name) }}"
         destination: >
           {% set b = state_attr('binary_sensor.gate_' ~ away_car ~ '_navigating_home', 'destination') if away_car else none %}
           {{ b if b not in [none, '', 'None', 'unknown', 'unavailable'] else '' }}
@@ -174,6 +177,7 @@
                   title: "{{ ('🧪 ' ~ txt.would_open) if test else txt.opened }}"
                   message: >-
                     {{ ((txt.coming_home_who | replace('{who}', riders_text)) if riders_text else txt.coming_home)
+                       | replace('{the_car}', car_called) | replace('{The_car}', car_Called)
                        | replace('{car}', car_name) }}{{ (' ' ~ txt.test_no_pulse) if test else '' }}
                   data:
                     tag: gate-auto
@@ -205,6 +209,7 @@
                   title: "{{ txt.ask_title }}"
                   message: >-
                     {{ ((txt.ask_destination | replace('{dest}', destination)) if destination else txt.ask_no_navigation)
+                       | replace('{the_car}', car_called) | replace('{The_car}', car_Called)
                        | replace('{car}', car_name) }}{{ (' (' ~ riders_text ~ ')') if riders_text else '' }}
                   data:
                     tag: gate-auto
@@ -458,6 +463,7 @@
         people_list: "{% from 'gate.jinja' import people %}{{ people() | from_json }}"
         car: "{{ trigger.id }}"
         car_name: "{{ car_list | selectattr('p', 'eq', car) | map(attribute='name') | first | default('Tesla') }}"
+        car_called: "{{ car_list | selectattr('p', 'eq', car) | map(attribute='called') | first | default(car_name) }}"
         usual_driver: "{{ car_list | selectattr('p', 'eq', car) | map(attribute='driver') | first | default('') }}"
         distance_m: "{{ states('input_number.gate_close_distance') | float(50) }}"
         test: "{{ is_state('input_boolean.gate_auto_open_dry_run', 'on') }}"
@@ -486,7 +492,9 @@
           data:
             name: "{{ txt.logbook }}"
             entity_id: input_boolean.gate_auto_close_enabled
-            message: "{{ txt.would_close_log | replace('{car}', car_name) | replace('{m}', distance_m | int | string) }}"
+            message: >-
+              {{ txt.would_close_log | replace('{the_car}', car_called) | replace('{car}', car_name)
+                 | replace('{m}', distance_m | int | string) }}
       else:
         - action: script.gate_close_manual
           data:
@@ -534,7 +542,7 @@
                 {{ ('🧪 ' ~ txt.would_close) if test else (txt.closed if closed else txt.not_closed_yet) }}
               message: >-
                 {{ (txt.left_test if test else (txt.left_closed if closed else txt.left_not_closed))
-                   | replace('{car}', car_name) }}
+                   | replace('{the_car}', car_called) | replace('{car}', car_name) }}
               data:
                 tag: gate-departure
                 group: gate

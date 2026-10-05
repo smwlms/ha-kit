@@ -246,7 +246,6 @@ card_legend_help:
 card_calendar_link: { en: calendar ›, nl: agenda › }
 card_unknown_place: { en: unknown place, nl: onbekende plek }
 card_charges_title: { en: Supercharger sessions, nl: Laadbeurten aan de supercharger }
-card_the_car: { en: "the {car} ", nl: "de {car} " }
 card_at_place: { en: "at {place}", nl: "aan {place}" }
 card_at_supercharger: { en: at a Supercharger, nl: aan een supercharger }
 card_tip_charge:

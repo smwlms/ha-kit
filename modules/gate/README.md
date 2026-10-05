@@ -39,6 +39,8 @@ Every step can be tested on its own. The commands run from `build/` with `HA_URL
 
 After a change in `house.yaml` or a kit update: fill in again and run `gate/deploy.py` (without `--setup`). Existing settings stay as they are.
 
+**Car names in sentences.** Notifications and the quick actions put an article before the car's name: `the` in English, `de` in Dutch ("De Rode X komt thuis.", "Vertrekken met de Rode X"). A name that starts with The, De or Het gets none ("The Blue Comet komt thuis."). For a name that reads like a person or pet, set `article: ""` on the car in `house.yaml` ("Blixem komt thuis.", "Je reed weg met Blixem."), or another word with `article: het`. Fill in again and deploy.
+
 **Restart once after the first deploy.** `counter.tesla_commands_today` is a counter, and Home Assistant has no reload service for counters. `deploy.py` reloads the other helpers, finishes the deploy and names the counter when it does not exist yet: `NOTE: restart Home Assistant once to create: counter.tesla_commands_today`. Restart Home Assistant once (Settings > System > Restart); until then the steps that count Tesla commands log an error. `--dry-run` says the same (`not counter: it has no reload service`). Later deploys only need a restart when you change the counter's options.
 
 ## Privacy
@@ -57,6 +59,7 @@ Car position, navigation and charging state come from Teslemetry (cloud); the ch
 | `people[].admin` (optional)                            | also gets the notification when someone else's phone loses its location access. Nobody: the first person |
 | `people[].location_permission` (optional)              | when the sensor is not called `sensor.<phone>_location_permission` (a second registration gets `_2`)      |
 | `cars[]`: `prefix`, `name`, `driver`                   | `driver` = key of the usual driver: gets the notification after closing when no phone left               |
+| `cars[].article` (optional)                            | word before the name in the notifications ("De Rode X komt thuis"); `""` = none (Blixem)                  |
 | `cars[].entities` (optional)                           | an entity that differs per car, e.g. `located_at_home: binary_sensor.garage_<prefix>_located_at_home`     |
 | `entities.gate_relay`                                  | `switch`, `button` or `cover`                                                                             |
 | `entities.gate_sensor` (optional)                      | `binary_sensor` (on = open) or the `cover` itself. Empty = no end-position sensor                         |

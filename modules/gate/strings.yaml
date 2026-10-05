@@ -4,6 +4,9 @@
 # - no double quotes or backslashes: they are inserted between double quotes in YAML;
 # - {car}, {who}, {name}, ... without a value at fill time stay in the text and are filled in by Home Assistant at
 #   run time (replace('{car}', ...) in the automations and scripts); keep them when you translate;
+# - {car} is the bare name of the car (labels, log lines); {the_car} is the name with its article for inside a
+#   sentence ("the Red X", "de Rode X", or "Blixem" with cars[].article: ""), {The_car} the same at the start of a
+#   sentence ("The Red X"). Never write an article before them yourself (see cars[].article in house.example.yaml);
 # - no emoji: the templates add them (a JSON escape of an emoji breaks in YAML).
 
 # --- helper names (package.yaml) ---
@@ -78,15 +81,15 @@ log_car:
 reason_auto_open: { en: "automatic ({car})", nl: "automatisch ({car})" }
 title_would_open: { en: "Gate would open", nl: "Poort zou openen" }
 title_opened: { en: "Gate opened", nl: "Poort geopend" }
-message_coming_home_who: { en: "Coming home in the {car}: {who}.", nl: "{who} komt thuis met de {car}." }
-message_coming_home: { en: "The {car} is coming home.", nl: "De {car} komt thuis." }
+message_coming_home_who: { en: "Coming home in {the_car}: {who}.", nl: "{who} komt thuis met {the_car}." }
+message_coming_home: { en: "{The_car} is coming home.", nl: "{The_car} komt thuis." }
 title_ask_open: { en: "Open the gate?", nl: "Poort openen?" }
 message_ask_destination:
-  en: "The {car} is approaching with destination {dest}, so the gate will not open by itself."
-  nl: "De {car} nadert met als bestemming {dest}, dus de poort gaat niet vanzelf open."
+  en: "{The_car} is approaching with destination {dest}, so the gate will not open by itself."
+  nl: "{The_car} nadert met als bestemming {dest}, dus de poort gaat niet vanzelf open."
 message_ask_no_navigation:
-  en: "The {car} is approaching without navigating home, so the gate will not open by itself."
-  nl: "De {car} nadert zonder navigatie naar huis, dus de poort gaat niet vanzelf open."
+  en: "{The_car} is approaching without navigating home, so the gate will not open by itself."
+  nl: "{The_car} nadert zonder navigatie naar huis, dus de poort gaat niet vanzelf open."
 
 # --- automation gate_notification_action ---
 notification_action_alias: { en: "Gate notification buttons", nl: "Poort meldingsknoppen" }
@@ -158,19 +161,19 @@ close_after_departure_description:
     met de knop 'Open poort'. Schakelaar: input_boolean.gate_auto_close_enabled. In testmodus geen puls, enkel
     de melding 'Poort zou sluiten'.
 log_would_close:
-  en: "WOULD CLOSE (test mode): the {car} is further than {m} m"
-  nl: "ZOU SLUITEN (testmodus): de {car} is verder dan {m} m"
+  en: "WOULD CLOSE (test mode): {the_car} is further than {m} m"
+  nl: "ZOU SLUITEN (testmodus): {the_car} is verder dan {m} m"
 reason_after_departure: { en: "automatic after leaving ({car})", nl: "automatisch na vertrek ({car})" }
 title_would_close: { en: "Gate would close", nl: "Poort zou sluiten" }
 message_left_test:
-  en: "You left in the {car}. Test mode: no pulse given."
-  nl: "Je reed weg met de {car}. Testmodus: geen puls gegeven."
+  en: "You left in {the_car}. Test mode: no pulse given."
+  nl: "Je reed weg met {the_car}. Testmodus: geen puls gegeven."
 message_left_closed:
-  en: "You left in the {car}; the gate closed automatically."
-  nl: "Je reed weg met de {car}; de poort is automatisch dichtgegaan."
+  en: "You left in {the_car}; the gate closed automatically."
+  nl: "Je reed weg met {the_car}; de poort is automatisch dichtgegaan."
 message_left_not_closed:
-  en: "You left in the {car}. The gate got a pulse, but after 1 minute it still does not report closed."
-  nl: "Je reed weg met de {car}. De poort kreeg een puls, maar meldt na 1 minuut nog geen eindstand dicht."
+  en: "You left in {the_car}. The gate got a pulse, but after 1 minute it still does not report closed."
+  nl: "Je reed weg met {the_car}. De poort kreeg een puls, maar meldt na 1 minuut nog geen eindstand dicht."
 
 # --- automation phone_location_permission_watch ---
 location_watch_alias: { en: "Watch phone location access", nl: "Gsm-locatietoegang bewaken" }
@@ -309,7 +312,7 @@ message_cable_not_unlocked:
   en: "No confirmation from the car within 30 s. Try the Tesla app."
   nl: "Geen bevestiging van de auto binnen 30 s. Probeer de Tesla-app."
 
-# --- scripts leaving and leaving_<car>; {car} is filled in at fill time ---
+# --- scripts leaving and leaving_<car>; {the_car} is filled in at fill time ---
 leaving_alias: { en: "Leaving", nl: "Vertrekken" }
 leaving_description:
   en: >-
@@ -318,7 +321,7 @@ leaving_description:
   nl: >-
     Poort openen en de laadkabel ontgrendelen, in één tik. Zonder auto: de Tesla die thuis aan de kabel hangt
     (bij meerdere vraagt een melding welke). Met auto: enkel die auto.
-leaving_car_alias: { en: "Leaving with the {car}", nl: "Vertrekken met de {car}" }
+leaving_car_alias: { en: "Leaving with {the_car}", nl: "Vertrekken met {the_car}" }
 leaving_car_description:
-  en: Open the gate and unlock the charge cable of the {car}, in one tap.
-  nl: Poort openen en de laadkabel van de {car} ontgrendelen, in één tik.
+  en: Open the gate and unlock the charge cable of {the_car}, in one tap.
+  nl: Poort openen en de laadkabel van {the_car} ontgrendelen, in één tik.

@@ -4,7 +4,7 @@
 
 What it does, in this order:
   1. fill.py with house.example.yaml, tests/house.minimal.yaml, tests/house.no-tariff.yaml (the phase-4 modules
-     without a tariff module) and a variant of the example with EVERY module
+     without a tariff module), tests/house.no-entities.yaml (no entities: section) and a variant of the example with EVERY module
      (including modules/_template/) and the optional switches flipped (check_variant: in each module.yaml), once per
      language (en and nl, so both sets of strings.yaml texts are filled in and validated); each into its own build
      folder. When several modules provide the same capability (provides:), the all-modules house keeps the first and
@@ -326,7 +326,8 @@ def main() -> None:
         example = yaml.safe_load((KIT / "house.example.yaml").read_text(encoding="utf-8"))
         everything, alternates = all_modules_house(example)
         houses = {"example": KIT / "house.example.yaml", "minimal": KIT / "tests" / "house.minimal.yaml",
-                  "no-tariff": KIT / "tests" / "house.no-tariff.yaml"}
+                  "no-tariff": KIT / "tests" / "house.no-tariff.yaml",
+                  "no-entities": KIT / "tests" / "house.no-entities.yaml"}
         for lang in languages:
             everything["house"] = {**example["house"], "language": lang}
             all_house = tmp / f"house.all-modules-{lang}.yaml"

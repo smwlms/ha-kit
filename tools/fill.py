@@ -10,7 +10,8 @@ delimiters, so Home Assistant templates with {{ }} and {% %} pass through untouc
   <% for car in cars %>      block
   <# note #>                 comment
 The context is the whole house.yaml plus `module` (the parsed module.yaml) and `capabilities` (sorted list of what the
-chosen modules declare under provides:, e.g. ['ev-charger', 'tariff']). Undefined values are an error.
+chosen modules declare under provides:, e.g. ['ev-charger', 'tariff']). Undefined values are an error, except the
+optional sections in SECTION_DEFAULTS (entities, people, cars, rooms): missing or empty, they are {} or [].
 depends_on may name a module or a capability: 'tariff' is met by any chosen module with provides: [tariff] (a region
 module such as tariff-be). At most one chosen module may provide each capability.
 Module folders whose name starts with '_' (e.g. modules/_template/) are skipped unless house.yaml lists them.
@@ -77,6 +78,10 @@ SKIP_NAMES = {".DS_Store", "house.fragment.yaml", "strings.yaml", "HOUSE-CHANGES
 SKIP_DIRS = {"__pycache__", ".git"}
 LEFTOVER = re.compile(r"<@|<%|<[A-Z][A-Z0-9_]+>")
 YAML_STR = "tag:yaml.org,2002:str"
+# Optional top-level sections of house.yaml: missing or empty (null) they are this value in every template, so
+# `entities.get('gate_sensor')` or `for car in cars` works without `is defined`. A module that needs one checks it
+# with fail() (e.g. `<% if not cars %><@ fail(...) @><% endif %>`). A section that is present is used as it is.
+SECTION_DEFAULTS = {"entities": {}, "people": [], "cars": [], "rooms": []}
 PLACEHOLDER = re.compile(r"\{(\w+)\}")
 
 
@@ -192,6 +197,16 @@ def regex_search(value="", find="", ignorecase=False) -> bool:
 def house_language(house: dict) -> str:
     section = house.get("house") if isinstance(house.get("house"), dict) else {}
     return str(section.get("language") or DEFAULT_LANGUAGE)
+
+
+def with_defaults(house: dict) -> dict:
+    """house.yaml as the templates see it: the optional sections of SECTION_DEFAULTS filled in when missing or empty
+    (a fresh copy per call, so a template cannot change the default of another)."""
+    out = dict(house)
+    for key, default in SECTION_DEFAULTS.items():
+        if out.get(key) is None:
+            out[key] = type(default)()
+    return out
 
 
 def make_env(module_dir: Path, strings: Strings | None = None) -> Environment:
@@ -497,6 +512,7 @@ def main() -> None:
     house = load_yaml(Path(args[0]), args[0]) or {}
     if not isinstance(house, dict):
         sys.exit(f"{args[0]}: expected a YAML mapping at the top")
+    house = with_defaults(house)
     target = Path(args[1]).resolve()
     check_target(target)
     modules = chosen_modules(house)

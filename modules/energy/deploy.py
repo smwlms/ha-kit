@@ -108,7 +108,8 @@ def main() -> None:
     names = cfg["dashboards"]
     if dry:
         print("dry run: nothing sent")
-        print("  upload", PACKAGE.relative_to(HERE.parent), "->", PACKAGE_DST, "+ check_config + reload input_datetime, input_select")
+        print("  upload", PACKAGE.relative_to(HERE.parent), "->", PACKAGE_DST, "+ check_config + reload",
+              ha_api.describe_helper_reload(PACKAGE, ("input_datetime", "input_select")))
         print("  defaults (new helpers only):", ", ".join(f"{k}={v}" for k, v in DEFAULTS.items()) or "none")
         print("  scripts + automations (config API):", HERE.name + "/scripts.yaml,", HERE.name + "/automations.yaml")
         print(f"  bundle {BUNDLE.relative_to(HERE.parent)} (v={version}) -> {ha_api.CONFIG_DIR}/www/{FOLDER}/ + resource")
@@ -129,8 +130,7 @@ def main() -> None:
     before = ha_api.entity_ids()
     editor.save(PACKAGE, PACKAGE_DST)
     ha_api.check_config()
-    for domain in ("input_datetime", "input_select"):
-        ha_api.rest(f"/api/services/{domain}/reload", {})
+    ha_api.reload_helpers(PACKAGE, ("input_datetime", "input_select"))
     ha_api.push_automations_and_scripts(HERE / "automations.yaml", HERE / "scripts.yaml")
     ha_api.set_defaults(DEFAULTS, before)
     for js in [BUNDLE, *CARDS]:

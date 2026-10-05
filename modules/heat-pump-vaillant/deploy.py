@@ -9,7 +9,8 @@ Steps:
      that the mypyllant actions exist (the integration from HACS)
   2. uploads package.yaml -> /config/packages/heat_pump_vaillant.yaml and
      templates/heat_pump_vaillant.yaml -> /config/templates/heat_pump_vaillant.yaml
-  3. checks the configuration, reloads counter, input_number and the template entities
+  3. checks the configuration, reloads input_number and the template entities; counter has no reload service, so a
+     new counter.heat_pump_vaillant_writes_today appears after one restart of Home Assistant (deploy names it)
   4. gives every helper that did not exist before its default from module.yaml (defaults:), once
   5. writes automations.yaml and scripts.yaml through the config API (same as the UI editors)
   --dry-run  prints what it would do, does not connect to Home Assistant
@@ -29,6 +30,9 @@ FILES = {
     HERE / "package.yaml": f"{ha_api.CONFIG_DIR}/packages/heat_pump_vaillant.yaml",
     HERE / "templates" / "heat_pump_vaillant.yaml": f"{ha_api.CONFIG_DIR}/templates/heat_pump_vaillant.yaml",
 }
+PACKAGE = HERE / "package.yaml"
+# Helper domains reloaded on every deploy (plus any other the package defines); never counter (ha_api.reload_helpers).
+HELPERS = ("input_number",)
 DEFAULTS = yaml.safe_load((HERE / "module.yaml").read_text()).get("defaults") or {}
 # myVAILLANT entities derived from house.yaml (heat_pump.system, heat_pump.zones, entities.heat_pump/water_heater).
 REQUIRED = <@ required_entities | tojson @>
@@ -64,7 +68,7 @@ def main() -> None:
         print("  check mypyllant actions:", ", ".join(ACTIONS))
         for src, dst in FILES.items():
             print("  upload", src.relative_to(HERE.parent), "->", dst)
-        print("  check_config, reload: counter, input_number, template")
+        print("  check_config, reload:", ha_api.describe_helper_reload(PACKAGE, HELPERS) + ", template")
         print("  defaults for new helpers:", ", ".join(f"{k}={v}" for k, v in DEFAULTS.items()))
         print("  config API: automations", ", ".join(a["id"] for a in yaml.safe_load(automations.read_text())))
         print("  config API: scripts", ", ".join(yaml.safe_load(scripts.read_text())))
@@ -76,10 +80,9 @@ def main() -> None:
     for src, dst in FILES.items():
         editor.save(src, dst)
     ha_api.check_config()
-    for domain in ("counter", "input_number"):
-        ha_api.rest(f"/api/services/{domain}/reload", {})
+    ha_api.reload_helpers(PACKAGE, HELPERS)
     ha_api.rest("/api/services/template/reload", {})
-    print("helpers and template sensors reloaded")
+    print("template sensors reloaded")
     ha_api.set_defaults(DEFAULTS, before)
     ha_api.push_automations_and_scripts(automations, scripts)
     print("done. Follow the test plan in heat-pump-vaillant/LOGIC.md (the scripts write to the real heat pump).")

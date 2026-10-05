@@ -2,7 +2,8 @@
 # <@ t('key') @> (tools/fill.py picks house.language, default en; a missing language falls back to en with a warning).
 # The cards get them as JSON (<@ t('key') | tojson @> in www/*.js), so any character is allowed.
 # {who}, {car}, {min}, ... stay in the text and are filled in by the card in the browser (fmt()); keep them when
-# you translate.
+# you translate. {the_car} is the car's name with its article ("the Red X", "de Rode X", or just "Blixem" with
+# cars[].article: ""): never write an article before it yourself.
 
 # --- formats ---
 locale: { en: en-GB, nl: nl-BE } # numbers and times on the cards (BCP 47 tag for toLocaleString)
@@ -43,7 +44,7 @@ title_trip_many: { en: "{who} are driving to {dest}", nl: "{who} rijden naar {de
 title_drive_one: { en: "{who} is driving, without navigation", nl: "{who} rijdt, zonder navigatie" }
 title_drive_many: { en: "{who} are driving, without navigation", nl: "{who} rijden, zonder navigatie" }
 sub_arrival: { en: "arrival {when}", nl: "aankomst {when}" }
-sub_in_car: { en: "in the {car}", nl: "in de {car}" }
+sub_in_car: { en: "in {the_car}", nl: "in {the_car}" }
 sub_usual_driver: { en: (usual driver), nl: (vaste bestuurder) }
 sub_km_left: { en: "{km} km to go", nl: "nog {km} km" }
 sub_departed: { en: "left at {time}", nl: "vertrokken {time}" }
@@ -60,8 +61,8 @@ gate_already_open: { en: "Already open: no automatic pulse", nl: "Al open: geen 
 gate_auto_off: { en: Automatic opening is off, nl: Automatisch openen staat uit }
 gate_test_mode: { en: "Test mode: you only get a notification, no pulse", nl: "Testmodus: je krijgt enkel een melding, geen puls" }
 gate_not_away:
-  en: "Will not open by itself: the {car} has not been further than {km} km from home for {min} min yet"
-  nl: "Opent niet zelf: de {car} was nog geen {min} min verder dan {km} km van huis"
+  en: "Will not open by itself: {the_car} has not been further than {km} km from home for {min} min yet"
+  nl: "Opent niet zelf: {the_car} was nog geen {min} min verder dan {km} km van huis"
 gate_opens_at: { en: "Opens by itself at {m} m from home", nl: "Opent vanzelf op {m} m van huis" }
 button_open: { en: Open, nl: Open }
 button_close: { en: Close, nl: Sluit }

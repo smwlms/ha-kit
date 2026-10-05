@@ -1,0 +1,41 @@
+# Test house for tools/check.py WITHOUT an `entities:` section: the modules below must fill in without it (fill.py
+# gives the optional sections entities, people, cars and rooms an empty default). One person, one car, one room.
+# INVENTED: every name, address and entity id is fictitious.
+house:
+  timezone: Europe/Brussels
+  language: en
+  lat: 52.37
+  lon: 5.22
+  address_regex: "dorpstraat\\s*12"
+  home_destinations: [Home]
+modules: [base, tesla-route, presence, shading]
+people:
+  - { key: an, name: An, phone: pixel_an, notify: mobile_app_pixel_an }
+cars:
+  - { prefix: blauwe_y, name: Blauwe Y }
+teslemetry:
+  location: "device_tracker.{p}_location"
+  route: "device_tracker.{p}_route"
+  destination: "sensor.{p}_destination"
+  distance_to_arrival: "sensor.{p}_distance_to_arrival"
+  time_to_arrival: "sensor.{p}_time_to_arrival"
+  traffic_delay: "sensor.{p}_traffic_delay"
+  battery_at_arrival: "sensor.{p}_state_of_charge_at_arrival"
+  shift_state: "sensor.{p}_shift_state"
+  speed: "sensor.{p}_speed"
+  status: "binary_sensor.{p}_status"
+  located_at_home: "binary_sensor.{p}_located_at_home"
+  battery: "sensor.{p}_battery_level"
+  charging_state: "sensor.{p}_charging"
+  charge_switch: "switch.{p}_charge"
+  charge_cable: "binary_sensor.{p}_charge_cable"
+  charge_cable_lock: "lock.{p}_charge_cable_lock"
+  tesla_route: "sensor.{p}_tesla_route"
+  lock: "lock.{p}_lock"
+rooms:
+  - { slug: attic, name: Attic, blind: cover.blind_attic, side: W }
+presence:
+  calendar: calendar.presence
+  stay_calendar: calendar.stays
+shading:
+  sun_protection: false # without entities.weather

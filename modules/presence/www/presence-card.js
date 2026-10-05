@@ -57,7 +57,7 @@
     people: [], // [{ name, key, person, tracker, work, color }]
     school: true, // config: school (false = no school marks or legend item)
     family: [], // config: family [{ name, label }]: pick-up places outside school
-    cars: [], // config: cars [{ name }]; none = no Supercharger list or legend item
+    cars: [], // config: cars [{ name, called }]; none = no Supercharger list or legend item
     nightStart: 23 * 60, // config: sleep_window.start; equal to NIGHT_START in stay.py (both from house.yaml)
     nightEnd: 7 * 60 + 30, // config: sleep_window.end
   };
@@ -67,6 +67,12 @@
     return (
       PRES.family.find((f) => p.includes(String(f.name).toLowerCase())) || null
     );
+  };
+  // A car's name with its article for inside a sentence ("the Red X", from the config), plus a space; the bare name
+  // for a car that is not in the config (e.g. renamed since the event was logged).
+  const theCar = (name) => {
+    const car = PRES.cars.find((c) => c.name === name);
+    return `${(car && car.called) || name} `;
   };
   const hhmmToMin = (s, dflt) => {
     const m = /^(\d{1,2}):(\d{2})/.exec(String(s || ""));
@@ -412,7 +418,7 @@
   };
   // ---- Presence view (own tab "our-week"): a timeline per weekday, little text ---------------------------------
   class PresenceCard extends HTMLElement {
-    // people: [{ name, key, person, tracker, work_zone, color }]; cars: [{ name }]; calendar, stay_calendar:
+    // people: [{ name, key, person, tracker, work_zone, color }]; cars: [{ name, called }]; calendar, stay_calendar:
     // calendar entities; children: how the sentences name the children; school: true|false;
     // family: [{ name, label }]; sleep_window: { start: "23:00", end: "07:30" }.
     setConfig(config) {
@@ -576,7 +582,7 @@ ${PRES.cars.length ? item(`<i class="g-chg"></i>`, esc(<@ t('card_legend_superch
             : UNKNOWN_PLACE;
           const tip = fmt(<@ t('card_tip_charge') | tojson @>, {
             who: e.who.join(AND),
-            car: e.det.car ? fmt(<@ t('card_the_car') | tojson @>, { car: e.det.car }) : "",
+            car: e.det.car ? theCar(e.det.car) : "",
             day: `${DAYS_FULL[e.t.getDay()]} ${e.t.getDate()}/${e.t.getMonth() + 1}`,
             where: known
               ? fmt(<@ t('card_at_place') | tojson @>, { place: e.det.place })
@@ -829,7 +835,7 @@ ${blocks || `<span class="small muted">${esc(<@ t('card_no_data') | tojson @>)}<
         charge: () =>
           fmt(<@ t('card_tip_charge') | tojson @>, {
             who: n,
-            car: det.car ? fmt(<@ t('card_the_car') | tojson @>, { car: det.car }) : "",
+            car: det.car ? theCar(det.car) : "",
             day: v.day,
             where: isKnown(det.place)
               ? fmt(<@ t('card_at_place') | tojson @>, { place: det.place })

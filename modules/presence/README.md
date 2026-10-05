@@ -47,7 +47,7 @@ Example with invented values: section `presence:` in `house.example.yaml`. The m
 
 - `house.timezone` and `house.language` (texts in the calendar, the logbook and on the card);
 - `people[]`: `key`, `name`, `person` (optional), `phone`, and the optional field `color`. **Only people with a `phone` take part**;
-- `cars[]`: `prefix`, `name`, `driver` (optional) and `teslemetry:` with the roles `location`, `route`, `destination`, `battery`, `charging_state`.
+- `cars[]`: `prefix`, `name`, `driver` (optional), `article` (optional: the word before the name in the card's sentences, "laadde de Rode X"; default `the` / `de`, `""` = none) and `teslemetry:` with the roles `location`, `route`, `destination`, `battery`, `charging_state`.
 
 | Field in `presence:` | What                                                                                                                                                 |
 | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |

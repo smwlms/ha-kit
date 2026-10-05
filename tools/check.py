@@ -4,12 +4,13 @@
 
 What it does, in this order:
   1. fill.py with house.example.yaml, tests/house.minimal.yaml, tests/house.no-tariff.yaml (the phase-4 modules
-     without a tariff module) and a variant of the example with EVERY module
+     without a tariff module), tests/house.no-entities.yaml (no entities: section) and a variant of the example with EVERY module
      (including modules/_template/) and the optional switches flipped (check_variant: in each module.yaml), once per
      language (en and nl, so both sets of strings.yaml texts are filled in and validated); each into its own build
      folder. When several modules provide the same capability (provides:), the all-modules house keeps the first and
      one extra house per other provider swaps it in (language en)
-  2. fill.py with tests/house.broken.yaml must FAIL (a dependency that is not in modules:)
+  2. fill.py with tests/house.broken.yaml must FAIL (a dependency that is not in modules:); the article before car
+     names (cars[].article, fill.car_called) gives the expected sentences
   3. every .yaml of every build parses (Home Assistant and ESPHome tags allowed)
   4. every Home Assistant template in that YAML, and every custom_templates/*.jinja, compiles with Jinja2 (HA filters
      and tests stubbed, so a typo in a filter name fails)
@@ -142,6 +143,29 @@ def fill(house: Path, out: Path) -> bool:
     print(f"  {house.name}: filled in ({sum(1 for _ in out.rglob('*') if _.is_file())} files"
           f"{', ' + str(len(warnings)) + ' translation warnings' if warnings else ''})")
     return True
+
+
+# (car, language) -> (called, Called): default article, a name with its own article, no article, an own article.
+CAR_ARTICLE_CASES = [
+    ({"name": "Rode X"}, "nl", ("de Rode X", "De Rode X")),
+    ({"name": "Red X"}, "en", ("the Red X", "The Red X")),
+    ({"name": "The Blue Comet"}, "nl", ("The Blue Comet", "The Blue Comet")),
+    ({"name": "de Kever"}, "en", ("de Kever", "de Kever")),
+    ({"name": "Blixem", "article": ""}, "nl", ("Blixem", "Blixem")),
+    ({"name": "Busje", "article": "het"}, "nl", ("het Busje", "Het Busje")),
+    ({"name": "Rode X"}, "fr", ("Rode X", "Rode X")),
+]
+
+
+def check_car_articles() -> None:
+    sys.path.insert(0, str(TOOLS))
+    import fill  # noqa: E402
+
+    for car, language, expected in CAR_ARTICLE_CASES:
+        got = fill.car_called(car, language)
+        if got != expected:
+            fail(f"fill.car_called({car}, {language!r}) = {got}, expected {expected}")
+    print(f"  car articles: {len(CAR_ARTICLE_CASES)} cases")
 
 
 def check_yaml_and_templates(builds: list[Path]) -> None:
@@ -326,7 +350,8 @@ def main() -> None:
         example = yaml.safe_load((KIT / "house.example.yaml").read_text(encoding="utf-8"))
         everything, alternates = all_modules_house(example)
         houses = {"example": KIT / "house.example.yaml", "minimal": KIT / "tests" / "house.minimal.yaml",
-                  "no-tariff": KIT / "tests" / "house.no-tariff.yaml"}
+                  "no-tariff": KIT / "tests" / "house.no-tariff.yaml",
+                  "no-entities": KIT / "tests" / "house.no-entities.yaml"}
         for lang in languages:
             everything["house"] = {**example["house"], "language": lang}
             all_house = tmp / f"house.all-modules-{lang}.yaml"
@@ -349,6 +374,7 @@ def main() -> None:
             fail("fill.py tests/house.broken.yaml succeeded, expected an error")
         else:
             print("  stopped as expected:", (r.stdout + r.stderr).strip().splitlines()[-1][:120])
+        check_car_articles()
 
         step("3+4. YAML and Home Assistant templates")
         check_yaml_and_templates(builds)

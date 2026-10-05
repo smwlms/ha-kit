@@ -68,7 +68,8 @@ def main() -> None:
         for src, dst in FILES.items():
             print("  upload", src.relative_to(HERE.parent), "->", dst)
         print("  upload", JS.relative_to(HERE.parent), "->", JS_DST)
-        print("  check_config, reload: input_number, input_boolean, custom templates, template")
+        print("  check_config, reload:", ha_api.describe_helper_reload(HERE / "package.yaml", ("input_number", "input_boolean"))
+              + ", custom templates, template")
         print("  defaults for new helpers:", ", ".join(f"{k}={v}" for k, v in DEFAULTS.items()))
         if automations:
             print("  config API: automations", ", ".join(a["id"] for a in automations))
@@ -85,11 +86,10 @@ def main() -> None:
     for src, dst in FILES.items():
         editor.save(src, dst)
     ha_api.check_config()
-    for domain in ("input_number", "input_boolean"):
-        ha_api.rest(f"/api/services/{domain}/reload", {})
+    ha_api.reload_helpers(HERE / "package.yaml", ("input_number", "input_boolean"))
     ha_api.rest("/api/services/homeassistant/reload_custom_templates", {})
     ha_api.rest("/api/services/template/reload", {})
-    print("helpers, custom templates and template sensors reloaded")
+    print("custom templates and template sensors reloaded")
     after = ha_api.entity_ids()
     ha_api.set_defaults(DEFAULTS, before, after)
     if automations:

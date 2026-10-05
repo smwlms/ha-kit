@@ -44,7 +44,8 @@ def main() -> None:
         print("dry run: nothing sent")
         for src, dst in FILES.items():
             print("  upload", src.relative_to(HERE.parent), "->", dst)
-        print("  check_config, reload: input_boolean, input_number, template")
+        print("  check_config, reload:", ha_api.describe_helper_reload(HERE / "package.yaml", ("input_boolean", "input_number"))
+              + ", template")
         print("  defaults for new helpers:", ", ".join(f"{k}={v}" for k, v in DEFAULTS.items()))
         print("  config API: scripts", ", ".join(scripts))
         if autos:
@@ -58,10 +59,9 @@ def main() -> None:
     for src, dst in FILES.items():
         editor.save(src, dst)
     ha_api.check_config()
-    for domain in ("input_boolean", "input_number"):
-        ha_api.rest(f"/api/services/{domain}/reload", {})
+    ha_api.reload_helpers(HERE / "package.yaml", ("input_boolean", "input_number"))
     ha_api.rest("/api/services/template/reload", {})
-    print("helpers and template entities reloaded")
+    print("template entities reloaded")
     ha_api.set_defaults(DEFAULTS, before)
     ha_api.push_automations_and_scripts(HERE / "automations.yaml" if autos else None, HERE / "scripts.yaml")
     if not autos:

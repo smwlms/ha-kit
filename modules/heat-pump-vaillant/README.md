@@ -100,6 +100,8 @@ myVAILLANT is a cloud API with a limit on commands; too many calls block the acc
 
 After a change in `house.yaml` or a kit update: fill in again and run `deploy.py` again. Your write limit stays as you set it.
 
+**Restart once after the first deploy.** `counter.heat_pump_vaillant_writes_today` is a counter, and Home Assistant has no reload service for counters: `deploy.py` finishes the deploy and prints `NOTE: restart Home Assistant once to create: counter.heat_pump_vaillant_writes_today`. Restart Home Assistant once (Settings > System > Restart) before you run the scripts: until then the write budget has no counter to read or increment.
+
 ## Writing an adapter for another heat pump
 
 A second brand is a new module `heat-pump-<brand>` with `provides: [heat-pump, hot-water-heater]` (or only one of them: a heat pump without a tank provides `heat-pump`, a separate boiler provides `hot-water-heater`). Keep this module out of `modules:`; `fill.py` refuses two providers of the same capability. Copy this module as a start and replace the brand part. What the core modules need, exactly:

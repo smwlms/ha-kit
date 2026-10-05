@@ -14,7 +14,7 @@ ask:
     question: Do you have a Tesla connected to Home Assistant through Teslemetry?
 # Fields of house.yaml this module reads (example: house.example.yaml in the kit root).
 house_fields:
-  - cars[].prefix, name, driver, color (optional), badge (optional, lightning or plaid or an own svg), entities (optional)
+  - cars[].prefix, name, driver, article (optional), color (optional), badge (optional, lightning or plaid or an own svg), entities (optional)
   - people[].key, name, phone
   - teslemetry.*
   - house.language (texts, number and time format of the cards)

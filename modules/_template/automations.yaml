@@ -1,6 +1,6 @@
 <# Roles, not entity ids: the light comes from house.yaml entities.template_light (optional). #>
-<% set light = (entities.get('template_light') if entities is defined else none) or none %>
-<% if people is not defined or not people %><@ fail('house.yaml has no people (the module _template greets the first person)') @><% endif %>
+<% set light = entities.get('template_light') or none %>
+<% if not people %><@ fail('house.yaml has no people (the module _template greets the first person)') @><% endif %>
 - id: ha_kit_template_switch_on
   alias: "<@ t('automation_alias') @>"
   description: Example automation of the kit's template module. See _template/LOGIC.md.

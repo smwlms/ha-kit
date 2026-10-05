@@ -21,7 +21,7 @@ ask:
 house_fields:
   - house.timezone
   - people[].key, name, person, phone, color (optional); only people with a phone take part
-  - cars[].prefix, name, driver (optional), entities (optional); teslemetry.location, route, destination,
+  - cars[].prefix, name, driver (optional), article (optional), entities (optional); teslemetry.location, route, destination,
     battery, charging_state
   - presence.calendar, stay_calendar, children, places, school_windows, sleep_window, arrival_defaults,
     previous_phones

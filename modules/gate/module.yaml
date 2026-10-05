@@ -19,7 +19,7 @@ ask:
 house_fields:
   - house.lat, house.lon, house.address_regex, house.home_destinations
   - people[].key, name, person, phone, notify, admin (optional), location_permission (optional)
-  - cars[].prefix, name, driver, entities (optional)
+  - cars[].prefix, name, driver, article (optional), entities (optional)
   - entities.gate_relay, entities.gate_sensor (optional), entities.gate_sensor_inverted
   - teslemetry.*
 # Defaults that deploy.py sets ONCE, when the helper (or zone) does not exist yet. Afterwards the value is yours:

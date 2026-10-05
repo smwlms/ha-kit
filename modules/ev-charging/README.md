@@ -117,6 +117,8 @@ uv run --with-requirements requirements.txt python ev-charging/deploy.py
 
 After a change in `house.yaml` or a kit update: fill in again and run `deploy.py` again. Existing helper values stay; automations of a car that lost its plan are removed.
 
+Without `gate`, this module defines `counter.tesla_commands_today` itself. Home Assistant has no reload service for counters: on the first deploy `deploy.py` prints `NOTE: restart Home Assistant once to create: counter.tesla_commands_today` and finishes the rest. Restart Home Assistant once.
+
 ## Migrating from a hand-made setup
 
 The module replaces four automations that each wrote the charger mode (smart charging, cheap power, charge plan, car current) and their text markers and pause flag. Turn the old automations off before the first deploy: two writers fight over the charger. What becomes what:

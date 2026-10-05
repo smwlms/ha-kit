@@ -118,7 +118,7 @@ def check_resources(resources: list[dict]) -> None:
 
 def plan() -> None:
     print("  upload", PACKAGE.relative_to(HERE.parent), "->", PACKAGE_DST)
-    print("  check_config, reload: input_number, input_boolean")
+    print("  check_config, reload:", ha_api.describe_helper_reload(PACKAGE, ("input_number", "input_boolean")))
     print("  defaults for new helpers:", ", ".join(f"{k}={v}" for k, v in DEFAULTS.items()) or "none")
     ids = [a["id"] for a in automations()]
     print("  config API: automations", ", ".join(ids) if ids else "none (no e_ink_display.charger_relay)")
@@ -159,8 +159,7 @@ def main() -> None:
     before_ids = ha_api.entity_ids()
     ha_api.FileEditor().save(PACKAGE, PACKAGE_DST)
     ha_api.check_config()
-    ha_api.rest("/api/services/input_number/reload", {})
-    ha_api.rest("/api/services/input_boolean/reload", {})
+    ha_api.reload_helpers(PACKAGE, ("input_number", "input_boolean"))
     ha_api.set_defaults(DEFAULTS, before_ids)
     if automations():
         ha_api.push_automations_and_scripts(AUTOMATIONS, None)

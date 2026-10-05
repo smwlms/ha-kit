@@ -41,7 +41,9 @@ EXPECTED = {
     <@ doorbell.calendar | tojson @>: "Local Calendar for the doorbell visits",
     <@ doorbell.tts | tojson @>: "Google Translate TTS",
 }
-RELOADS = ("input_text", "command_line")
+PACKAGE = HERE / "package.yaml"
+HELPERS = ("input_text",)
+RELOADS = ("command_line",)
 
 
 def exists(entity_id: str) -> bool:
@@ -74,7 +76,7 @@ def main() -> None:
         print("dry run: nothing sent")
         for src, dst in UPLOADS:
             print("  upload", src.relative_to(HERE.parent), "->", dst)
-        print("  check_config + reload", ", ".join(RELOADS))
+        print("  check_config + reload", ha_api.describe_helper_reload(PACKAGE, HELPERS) + ",", ", ".join(RELOADS))
         print("  automations:", ", ".join(a["id"] for a in _load(automations)))
         print("  scripts:", ", ".join(_load(scripts)))
         print("  upload", CARD.relative_to(HERE.parent), "->", f"{ha_api.CONFIG_DIR}/www/{CARD.name}",
@@ -87,6 +89,7 @@ def main() -> None:
     for src, dst in UPLOADS:
         editor.save(src, dst)
     ha_api.check_config()
+    ha_api.reload_helpers(PACKAGE, HELPERS)
     for domain in RELOADS:
         ha_api.rest(f"/api/services/{domain}/reload", {})
         print("reloaded:", domain)

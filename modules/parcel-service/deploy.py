@@ -25,7 +25,7 @@ import ha_api  # noqa: E402
 
 MODULE = "parcel_service"
 PACKAGE_DST = f"{ha_api.CONFIG_DIR}/packages/{MODULE}.yaml"
-RELOADS = ("input_number", "input_text", "input_datetime")
+HELPERS = ("input_number", "input_text", "input_datetime")
 # helper -> default, set once when the helper is new (ha_api.set_defaults); 2000-01-01 = no parcel day expected.
 DEFAULTS = {
     "input_number.parcel_service_ajar": <@ parcel_service.ajar_s | float | tojson @>,
@@ -97,7 +97,7 @@ def main() -> None:
         print("dry run: nothing sent")
         print("  check:", ", ".join(NEEDS), "(+ parcel-service steps in script.doorbell_reply)")
         print("  upload", (HERE / "package.yaml").relative_to(HERE.parent), "->", PACKAGE_DST)
-        print("  check_config + reload", ", ".join(RELOADS))
+        print("  check_config + reload", ha_api.describe_helper_reload(HERE / "package.yaml", HELPERS))
         print("  defaults for new helpers:", ", ".join(f"{k}={v}" for k, v in DEFAULTS.items()))
         ids = [a["id"] for a in yaml.safe_load(automations.read_text())]
         print("  automations:", ", ".join(ids))
@@ -115,9 +115,7 @@ def main() -> None:
     new_automations = [aid for aid in OFF_WHEN_NEW if aid in ids and not automation_exists(aid)]
     ha_api.FileEditor().save(HERE / "package.yaml", PACKAGE_DST)
     ha_api.check_config()
-    for domain in RELOADS:
-        ha_api.rest(f"/api/services/{domain}/reload", {})
-        print("reloaded:", domain)
+    ha_api.reload_helpers(HERE / "package.yaml", HELPERS)
     ha_api.set_defaults(DEFAULTS, before)
     ha_api.push_automations_and_scripts(automations, scripts)
     for aid in new_automations:

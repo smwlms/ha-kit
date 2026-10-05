@@ -32,8 +32,9 @@ UPLOADS = [
     (HERE / "package.yaml", f"{ha_api.CONFIG_DIR}/packages/{MODULE}.yaml"),
     (HERE / "templates" / f"{MODULE}.yaml", f"{ha_api.CONFIG_DIR}/templates/{MODULE}.yaml"),
 ]
-RELOADS = ["homeassistant/reload_custom_templates", "input_boolean/reload", "input_number/reload",
-           "input_datetime/reload", "template/reload"]
+PACKAGE = HERE / "package.yaml"
+HELPERS = ("input_boolean", "input_number", "input_datetime")
+RELOADS = ["homeassistant/reload_custom_templates", "template/reload"]
 DEFAULTS = yaml.safe_load((HERE / "module.yaml").read_text()).get("defaults") or {}
 # What this module calls and reads from other modules. Missing REQUIRED = stop; missing OPTIONAL = a note.
 REQUIRED = ["script.hot_water_heat", "script.hot_water_normal", "sensor.hot_water_temperature",
@@ -89,7 +90,7 @@ def main() -> None:
         print("  check optional entities:", ", ".join(OPTIONAL))
         for src, dst in UPLOADS:
             print("  upload", src.relative_to(HERE.parent), "->", dst)
-        print("  check_config, reload:", ", ".join(RELOADS))
+        print("  check_config, reload:", ha_api.describe_helper_reload(PACKAGE, HELPERS) + ",", ", ".join(RELOADS))
         print("  defaults for new helpers:", ", ".join(f"{k}={v}" for k, v in DEFAULTS.items()))
         print("  config API: automations", ", ".join(ids))
         print("  check entities:", ", ".join(PROVIDED))
@@ -101,6 +102,7 @@ def main() -> None:
     for src, dst in UPLOADS:
         editor.save(src, dst)
     ha_api.check_config()
+    ha_api.reload_helpers(PACKAGE, HELPERS)
     for service in RELOADS:
         ha_api.rest(f"/api/services/{service}", {})
         print("reloaded:", service)

@@ -20,7 +20,11 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
 import ha_api  # noqa: E402
 
-FILES = {HERE / "package.yaml": f"{ha_api.CONFIG_DIR}/packages/ha_kit_template.yaml"}
+PACKAGE = HERE / "package.yaml"
+FILES = {PACKAGE: f"{ha_api.CONFIG_DIR}/packages/ha_kit_template.yaml"}
+# Helper domains reloaded on every deploy (plus any other the package defines). Never reload counter yourself: it has
+# no reload service; ha_api.reload_helpers names a new counter (it appears after one restart of Home Assistant).
+HELPERS = ("input_boolean",)
 DEFAULTS = yaml.safe_load((HERE / "module.yaml").read_text()).get("defaults") or {}
 
 
@@ -31,7 +35,7 @@ def main() -> None:
         print("dry run: nothing sent")
         for src, dst in FILES.items():
             print("  upload", src.relative_to(HERE.parent), "->", dst)
-        print("  check_config, reload: input_boolean")
+        print("  check_config, reload:", ha_api.describe_helper_reload(PACKAGE, HELPERS))
         print("  defaults for new helpers:", ", ".join(f"{k}={v}" for k, v in DEFAULTS.items()))
         print("  config API: automations", ", ".join(ids))
         return
@@ -41,7 +45,7 @@ def main() -> None:
     for src, dst in FILES.items():
         editor.save(src, dst)
     ha_api.check_config()
-    ha_api.rest("/api/services/input_boolean/reload", {})
+    ha_api.reload_helpers(PACKAGE, HELPERS)
     ha_api.set_defaults(DEFAULTS, before)
     ha_api.push_automations_and_scripts(automations, None)
     print("done. Follow the test plan in _template/LOGIC.md.")

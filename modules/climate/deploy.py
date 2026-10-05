@@ -59,7 +59,8 @@ UPLOADS = [
 ]
 if WITH_PACKAGE:
     UPLOADS.insert(0, (PACKAGE, f"{ha_api.CONFIG_DIR}/packages/{MODULE}.yaml"))
-RELOADS = ("input_boolean", "input_number", "input_select", "input_datetime", "input_text", "template", "command_line")
+HELPERS = ("input_boolean", "input_number", "input_select", "input_datetime", "input_text")
+RELOADS = ("template", "command_line")
 DEFAULTS = yaml.safe_load((HERE / "module.yaml").read_text(encoding="utf-8")).get("defaults") or {}
 CARD = HERE / "www" / "climate-screen.js"
 CARD_FOLDER = "ha-kit/climate"
@@ -115,7 +116,8 @@ def main() -> None:
             print("  upload", src.relative_to(HERE.parent), "->", dst)
         if not WITH_PACKAGE:
             print("  no helpers for this house: package.yaml is not uploaded")
-        print("  check_config, reload:", ", ".join(RELOADS) + ", custom templates")
+        print("  check_config, reload:", ha_api.describe_helper_reload(PACKAGE, HELPERS) + ",",
+              ", ".join(RELOADS) + ", custom templates")
         print("  defaults for new helpers:", ", ".join(f"{k}={v}" for k, v in DEFAULTS.items()))
         print("  config API: automations", ", ".join(ids) or "none")
         print("  upload", CARD.relative_to(HERE.parent), "->", f"{ha_api.CONFIG_DIR}/www/{CARD_FOLDER}/{CARD.name}",
@@ -132,6 +134,7 @@ def main() -> None:
     for src, dst in UPLOADS:
         editor.save(src, dst)
     ha_api.check_config()
+    ha_api.reload_helpers(PACKAGE, HELPERS)
     for domain in RELOADS:
         try:
             ha_api.rest(f"/api/services/{domain}/reload", {})

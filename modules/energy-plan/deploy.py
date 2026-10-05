@@ -34,8 +34,9 @@ UPLOADS = [
     (HERE / "command_line" / f"{MODULE}.yaml", f"{ha_api.CONFIG_DIR}/command_line/{MODULE}.yaml"),
     (HERE / f"{MODULE}.py", f"{ha_api.CONFIG_DIR}/energy-plan/{MODULE}.py"),
 ]
-RELOADS = ["input_number/reload", "homeassistant/reload_custom_templates", "template/reload", "statistics/reload",
-           "command_line/reload"]
+PACKAGE = HERE / "package.yaml"
+HELPERS = ("input_number",)
+RELOADS = ["homeassistant/reload_custom_templates", "template/reload", "statistics/reload", "command_line/reload"]
 DEFAULTS = yaml.safe_load((HERE / "module.yaml").read_text()).get("defaults") or {}
 # Statistic ids the day-plan script reads (5-minute statistics of the recorder), from house.yaml.
 STATISTICS = <@ stats | tojson @>
@@ -79,7 +80,7 @@ def main() -> None:
         print("dry run: nothing sent")
         for src, dst in UPLOADS:
             print("  upload", src.relative_to(HERE.parent), "->", dst)
-        print("  check_config, reload:", ", ".join(RELOADS))
+        print("  check_config, reload:", ha_api.describe_helper_reload(PACKAGE, HELPERS) + ",", ", ".join(RELOADS))
         print("  defaults for new helpers:", ", ".join(f"{k}={v}" for k, v in DEFAULTS.items()))
         print("  check recorder statistics:", ", ".join(STATISTICS))
         print("  check entities:", ", ".join(PROVIDED))
@@ -90,6 +91,7 @@ def main() -> None:
     for src, dst in UPLOADS:
         editor.save(src, dst)
     ha_api.check_config()
+    ha_api.reload_helpers(PACKAGE, HELPERS)
     for service in RELOADS:
         ha_api.rest(f"/api/services/{service}", {})
         print("reloaded:", service)

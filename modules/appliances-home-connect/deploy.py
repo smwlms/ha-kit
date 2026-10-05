@@ -50,7 +50,8 @@ FILES = {
     HERE / "package.yaml": f"{ha_api.CONFIG_DIR}/packages/{MODULE}.yaml",
     HERE / "custom_templates" / "appliances.jinja": f"{ha_api.CONFIG_DIR}/custom_templates/appliances.jinja",
 }
-RELOADS = ("input_boolean", "input_datetime", "input_select", "input_number")
+PACKAGE = HERE / "package.yaml"
+HELPERS = ("input_boolean", "input_datetime", "input_select", "input_number")
 # Start values, set once when the helper is new: module.yaml defaults: (input_select.appliance_*_ready_by matches one
 # helper per appliance in ha_api.set_defaults) + the duration per appliance.
 DEFAULTS = {**(yaml.safe_load((HERE / "module.yaml").read_text()).get("defaults") or {}),
@@ -120,7 +121,7 @@ def main() -> None:
         print("dry run: nothing sent")
         for src, dst in FILES.items():
             print("  upload", src.relative_to(HERE.parent), "->", dst)
-        print("  check_config, reload:", ", ".join(RELOADS) + ", custom templates")
+        print("  check_config, reload:", ha_api.describe_helper_reload(PACKAGE, HELPERS) + ", custom templates")
         print("  defaults for new helpers:", ", ".join(f"{k}={v}" for k, v in DEFAULTS.items()))
         print("  config API: scripts", ", ".join(yaml.safe_load(scripts.read_text())))
         print("  config API: automations", ", ".join(a["id"] for a in yaml.safe_load(automations.read_text())))
@@ -136,10 +137,9 @@ def main() -> None:
     for src, dst in FILES.items():
         editor.save(src, dst)
     ha_api.check_config()
-    for domain in RELOADS:
-        ha_api.rest(f"/api/services/{domain}/reload", {})
+    ha_api.reload_helpers(PACKAGE, HELPERS)
     ha_api.rest("/api/services/homeassistant/reload_custom_templates", {})
-    print("helpers and macros reloaded")
+    print("macros reloaded")
     ha_api.set_defaults(DEFAULTS, before)
     ha_api.push_automations_and_scripts(None, scripts)
     ha_api.push_automations_and_scripts(automations, None)

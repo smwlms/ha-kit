@@ -5,7 +5,9 @@ Run from the filled-in folder (output of tools/fill.py), with HA_URL and HA_TOKE
 
 Steps:
   1. uploads package.yaml -> /config/packages/gate.yaml, custom_templates/gate.jinja and templates/gate.yaml
-  2. checks the configuration, reloads the helpers, the custom templates and the template sensors
+  2. checks the configuration, reloads the helpers (not counter.tesla_commands_today: counter has no reload service,
+     a new counter appears after one restart of Home Assistant; deploy names it), the custom templates and the
+     template sensors
   3. gives every helper that did not exist before its default from module.yaml (defaults:), once;
      that is how the test mode (input_boolean.gate_auto_open_dry_run) starts ON
   4. writes automations.yaml and scripts.yaml through the config API (same as the UI editors)
@@ -40,6 +42,9 @@ OLD_FILES = [
     f"{ha_api.CONFIG_DIR}/custom_templates/poort.jinja",
     f"{ha_api.CONFIG_DIR}/templates/poort.yaml",
 ]
+PACKAGE = HERE / "package.yaml"
+# Helper domains reloaded on every deploy (plus any other the package defines); never counter (ha_api.reload_helpers).
+HELPERS = ("input_boolean", "input_number", "input_datetime")
 DEFAULTS = yaml.safe_load((HERE / "module.yaml").read_text()).get("defaults") or {}
 ZONE = "zone.gate_approach"
 ZONE_NAME = <@ t('zone_approach_name') | tojson @>
@@ -108,7 +113,7 @@ def main() -> None:
         print("  stop when an old file exists:", ", ".join(OLD_FILES))
         for src, dst in FILES.items():
             print("  upload", src.relative_to(HERE.parent), "->", dst)
-        print("  check_config, reload: input_boolean, input_number, input_datetime, counter, custom templates, template")
+        print("  check_config, reload:", ha_api.describe_helper_reload(PACKAGE, HELPERS) + ", custom templates, template")
         print("  defaults for new helpers:", ", ".join(f"{k}={v}" for k, v in DEFAULTS.items()))
         print("  config API: automations", ", ".join(a["id"] for a in yaml.safe_load((HERE / "automations.yaml").read_text())))
         print("  config API: scripts", ", ".join(yaml.safe_load((HERE / "scripts.yaml").read_text())))
@@ -125,11 +130,10 @@ def main() -> None:
     for src, dst in FILES.items():
         editor.save(src, dst)
     ha_api.check_config()
-    for domain in ("input_boolean", "input_number", "input_datetime", "counter"):
-        ha_api.rest(f"/api/services/{domain}/reload", {})
+    ha_api.reload_helpers(PACKAGE, HELPERS)
     ha_api.rest("/api/services/homeassistant/reload_custom_templates", {})
     ha_api.rest("/api/services/template/reload", {})
-    print("helpers, custom templates and template sensors reloaded")
+    print("custom templates and template sensors reloaded")
     ha_api.set_defaults(DEFAULTS, before)
     ha_api.push_automations_and_scripts(HERE / "automations.yaml", HERE / "scripts.yaml")
     print("done. Test mode is on after a first install: follow the test plan in gate/LOGIC.md.")

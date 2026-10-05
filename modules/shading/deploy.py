@@ -34,7 +34,9 @@ if WITH_SUN:
     FILES[HERE / "custom_templates" / "shading.jinja"] = f"{ha_api.CONFIG_DIR}/custom_templates/shading.jinja"
     FILES[HERE / "templates" / "shading.yaml"] = f"{ha_api.CONFIG_DIR}/templates/shading.yaml"
 DEFAULTS = yaml.safe_load((HERE / "module.yaml").read_text()).get("defaults") or {}
-RELOADS = ("input_boolean", "input_number", "input_datetime", "group")
+PACKAGE = HERE / "package.yaml"
+HELPERS = ("input_boolean", "input_number", "input_datetime")
+RELOADS = ("group",)
 # Names of the cover groups in the install language; Home Assistant derives their entity ids from these names.
 GROUP_NAMES = json.loads(r'''<@ group_names | tojson @>''')
 # Entities from house.yaml that come from integrations (only reported when missing).
@@ -69,7 +71,8 @@ def main() -> None:
         print("  check (only reported when missing):", ", ".join(EXPECTED))
         for src, dst in FILES.items():
             print("  upload", src.relative_to(HERE.parent), "->", dst)
-        print("  check_config, reload:", ", ".join(RELOADS) + (", custom templates, template" if WITH_SUN else ""))
+        print("  check_config, reload:", ha_api.describe_helper_reload(PACKAGE, HELPERS) + ",",
+              ", ".join(RELOADS) + (", custom templates, template" if WITH_SUN else ""))
         print("  defaults for new helpers:", ", ".join(f"{k}={v}" for k, v in DEFAULTS.items()))
         print("  cover groups:", ", ".join(groups) or "none")
         print("  config API: automations", ", ".join(ids))
@@ -84,6 +87,7 @@ def main() -> None:
     for src, dst in FILES.items():
         editor.save(src, dst)
     ha_api.check_config()
+    ha_api.reload_helpers(PACKAGE, HELPERS)
     for domain in RELOADS:
         try:
             ha_api.rest(f"/api/services/{domain}/reload", {})
@@ -92,7 +96,7 @@ def main() -> None:
     if WITH_SUN:
         ha_api.rest("/api/services/homeassistant/reload_custom_templates", {})
         ha_api.rest("/api/services/template/reload", {})
-    print("helpers, groups" + (", macros and sun sensors" if WITH_SUN else "") + " reloaded")
+    print("groups" + (", macros and sun sensors" if WITH_SUN else "") + " reloaded")
     after = set(states())
     ha_api.set_defaults(DEFAULTS, before, after)
     for e in groups:

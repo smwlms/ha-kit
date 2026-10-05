@@ -44,8 +44,11 @@ ZONE = "zone.driveway"
 ZONE_NAME = <@ t('zone_name') | tojson @>
 # Start of the driveway zone: house.lat/lon. Usually the middle of zone.home, NOT the driveway: move it after --setup.
 HOME = {"latitude": <@ house.lat | float | tojson @>, "longitude": <@ house.lon | float | tojson @>}
-RELOADS = ("input_boolean", "input_number") + (("input_text",) if WITH_PHOTO else ())
-NEEDS = {"counter.tesla_commands_today": "module gate (gate/deploy.py)"}
+PACKAGE = HERE / "package.yaml"
+# Helper domains reloaded on every deploy (plus any other the package defines); never counter (ha_api.reload_helpers).
+HELPERS = ("input_boolean", "input_number") + (("input_text",) if WITH_PHOTO else ())
+NEEDS = {"counter.tesla_commands_today": "module gate (gate/deploy.py; a new counter appears after one restart of "
+                                         "Home Assistant)"}
 # Entities from integrations (only reported when missing).
 EXPECTED = [
 <% for a in car_list %>
@@ -102,7 +105,7 @@ def main() -> None:
             print(f"  create {ZONE} when missing: {HOME}, radius {DEFAULTS.get(ZONE, 10)} m, passive, name {ZONE_NAME}")
         for src, dst in FILES.items():
             print("  upload", src.relative_to(HERE.parent), "->", dst)
-        print("  check_config, reload:", ", ".join(RELOADS) + ", template")
+        print("  check_config, reload:", ha_api.describe_helper_reload(PACKAGE, HELPERS) + ", template")
         print("  defaults for new helpers:", ", ".join(f"{k}={v}" for k, v in DEFAULTS.items()))
         print("  config API: automations", ", ".join(a["id"] for a in yaml.safe_load(automations.read_text())))
         return
@@ -129,10 +132,9 @@ def main() -> None:
     for src, dst in FILES.items():
         editor.save(src, dst)
     ha_api.check_config()
-    for domain in RELOADS:
-        ha_api.rest(f"/api/services/{domain}/reload", {})
+    ha_api.reload_helpers(PACKAGE, HELPERS)
     ha_api.rest("/api/services/template/reload", {})
-    print("helpers and template sensors reloaded")
+    print("template sensors reloaded")
     ha_api.set_defaults(DEFAULTS, current)
     ha_api.push_automations_and_scripts(automations, None)
     print("done. The master switch is off after a first install: follow the test plan in LOGIC.md first.")

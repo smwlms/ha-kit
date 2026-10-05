@@ -129,7 +129,7 @@ No helper has `initial`; `deploy.py` sets the default once, when the helper is n
 
 On a real Home Assistant with myVAILLANT. Watch Settings > Logbook (entity "Heat pump state" / "Hot water temperature") and the counter. Each step writes to the real heat pump: do it on a mild day.
 
-1. `deploy.py --dry-run`, then `deploy.py`: no missing required entities; note the optional ones it names. `input_number.heat_pump_vaillant_max_writes_per_day` = 40, counter 0.
+1. `deploy.py --dry-run`, then `deploy.py`: no missing required entities; note the optional ones it names. On the first deploy it names `counter.heat_pump_vaillant_writes_today` (counter has no reload service): restart Home Assistant once. `input_number.heat_pump_vaillant_max_writes_per_day` = 40, counter 0.
 2. Developer tools > States: `sensor.heat_pump_state` follows the energy manager state (`idle` in STANDBY); `sensor.heat_pump_power_estimated` matches; `sensor.hot_water_temperature` equals the water heater's temperature; attributes `zones` and `main_zone` hold your climate entities.
 3. **Band, heating.** Note the heating time program in the app. Run `script.heat_pump_set_floor_band` with `low` = current slot setpoint + 0.5 and no `high`. Expected: one write, logbook "heating … written", after the next refresh every slot shows the new value in the app and the attribute `time_program_heating`. Times of the slots unchanged. Run it again: "unchanged", counter does not rise.
 4. **Band, cooling** (only with `cooling: true`): `high` = current cooling setpoint + 1. Expected: `sensor.<zone>_desired_cooling_temperature` follows; the zone does not get a quick veto (attribute `quick_veto_end_date_time` stays empty).

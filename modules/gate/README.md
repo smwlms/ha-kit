@@ -39,6 +39,8 @@ Every step can be tested on its own. The commands run from `build/` with `HA_URL
 
 After a change in `house.yaml` or a kit update: fill in again and run `gate/deploy.py` (without `--setup`). Existing settings stay as they are.
 
+**Restart once after the first deploy.** `counter.tesla_commands_today` is a counter, and Home Assistant has no reload service for counters. `deploy.py` reloads the other helpers, finishes the deploy and names the counter when it does not exist yet: `NOTE: restart Home Assistant once to create: counter.tesla_commands_today`. Restart Home Assistant once (Settings > System > Restart); until then the steps that count Tesla commands log an error. `--dry-run` says the same (`not counter: it has no reload service`). Later deploys only need a restart when you change the counter's options.
+
 ## Privacy
 
 Car position, navigation and charging state come from Teslemetry (cloud); the charge-cable command goes through Teslemetry to the car. Overview: the kit's README, section "Privacy & external services".

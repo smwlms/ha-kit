@@ -7,8 +7,9 @@ Run from the filled-in folder (output of tools/fill.py), with HA_URL and HA_TOKE
 Steps:
   1. uploads package.yaml -> /config/packages/ev_charging.yaml, templates/ev_charging.yaml and templates/ev_plan.yaml
      -> /config/templates/, custom_templates/ev_charging.jinja -> /config/custom_templates/
-  2. checks the configuration, reloads the helpers, the counter, the custom templates, the template entities and
-     the statistics sensors
+  2. checks the configuration, reloads the helpers, the custom templates, the template entities and the statistics
+     sensors; counter has no reload service, so when this module defines counter.tesla_commands_today (no gate) a new
+     one appears after one restart of Home Assistant (deploy names it)
   3. gives every helper that did not exist before its default from module.yaml (defaults:), once; a '*' anywhere
      in a key (input_number.ev_plan_*_target) matches every new helper of that pattern (ha_api.set_defaults)
   4. writes scripts.yaml (script.ev_charging_manual_mode) and automations.yaml through the config API (same as the
@@ -35,11 +36,10 @@ UPLOADS = [
     (HERE / "templates" / "ev_plan.yaml", f"{ha_api.CONFIG_DIR}/templates/ev_plan.yaml"),
     (HERE / "custom_templates" / "ev_charging.jinja", f"{ha_api.CONFIG_DIR}/custom_templates/ev_charging.jinja"),
 ]
-RELOADS = ["input_boolean/reload", "input_number/reload", "input_select/reload", "input_datetime/reload",
-           "homeassistant/reload_custom_templates", "template/reload", "statistics/reload"]
-<% if own_counter %>
-RELOADS.insert(4, "counter/reload")
-<% endif %>
+PACKAGE = HERE / "package.yaml"
+# Helper domains reloaded on every deploy (plus any other the package defines); never counter (ha_api.reload_helpers).
+HELPERS = ("input_boolean", "input_number", "input_select", "input_datetime")
+RELOADS = ["homeassistant/reload_custom_templates", "template/reload", "statistics/reload"]
 DEFAULTS = yaml.safe_load((HERE / "module.yaml").read_text()).get("defaults") or {}
 # Automations of this module: fixed ids, plus one ev_plan_<car>_limit per plan car with a charge limit.
 OWN_FIXED = ["ev_charging_apply", "ev_charging_car_amps", "ev_plan_target_reset", "ev_charging_notify",
@@ -84,7 +84,7 @@ def main() -> None:
         print("dry run: nothing sent")
         for src, dst in UPLOADS:
             print("  upload", src.relative_to(HERE.parent), "->", dst)
-        print("  check_config, reload:", ", ".join(RELOADS))
+        print("  check_config, reload:", ha_api.describe_helper_reload(PACKAGE, HELPERS) + ",", ", ".join(RELOADS))
         print("  defaults for new helpers:", ", ".join(f"{k}={v}" for k, v in DEFAULTS.items()))
         if PLAN_HELPERS:
             print("  charge plan helpers for:", ", ".join(PLAN_HELPERS))
@@ -99,6 +99,7 @@ def main() -> None:
     for src, dst in UPLOADS:
         editor.save(src, dst)
     ha_api.check_config()
+    ha_api.reload_helpers(PACKAGE, HELPERS)
     for service in RELOADS:
         ha_api.rest(f"/api/services/{service}", {})
         print("reloaded:", service)

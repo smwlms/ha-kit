@@ -29,7 +29,8 @@ FILES = {HERE / "custom_templates" / "notifications.jinja": f"{ha_api.CONFIG_DIR
 if HAS_HELPERS:
     FILES[HERE / "package.yaml"] = f"{ha_api.CONFIG_DIR}/packages/{MODULE}.yaml"
 DEFAULTS = yaml.safe_load((HERE / "module.yaml").read_text()).get("defaults") or {}
-RELOADS = ("input_number", "input_datetime")
+PACKAGE = HERE / "package.yaml"
+HELPERS = ("input_number", "input_datetime")
 # Sensors from house.yaml (role -> entity_id); only reported when missing.
 EXPECTED = {
 <% for role, eid in [('price_import', price_import), ('price_export', price_export), ('grid_export_w', grid_export), ('ventilation_filter_days', filter_days)] if eid %>
@@ -60,7 +61,7 @@ def main() -> None:
         print("  check (report only):", ", ".join(f"{k}={v}" for k, v in EXPECTED.items()))
         for src, dst in FILES.items():
             print("  upload", src.relative_to(HERE.parent), "->", dst)
-        print("  check_config, reload:", ", ".join(RELOADS) + ", custom templates")
+        print("  check_config, reload:", ha_api.describe_helper_reload(PACKAGE, HELPERS) + ", custom templates")
         print("  defaults for new helpers:", ", ".join(f"{k}={v}" for k, v in DEFAULTS.items()))
         print("  config API: scripts", ", ".join(yaml.safe_load(scripts.read_text())))
         print("  config API: automations", ", ".join(a["id"] for a in yaml.safe_load(automations.read_text()) or []))
@@ -72,10 +73,9 @@ def main() -> None:
     for src, dst in FILES.items():
         editor.save(src, dst)
     ha_api.check_config()
-    for domain in RELOADS:
-        ha_api.rest(f"/api/services/{domain}/reload", {})
+    ha_api.reload_helpers(PACKAGE, HELPERS)
     ha_api.rest("/api/services/homeassistant/reload_custom_templates", {})
-    print("helpers and macros reloaded")
+    print("macros reloaded")
     ha_api.set_defaults(DEFAULTS, set(current))
     ha_api.push_automations_and_scripts(None, scripts)
     ha_api.push_automations_and_scripts(automations, None)

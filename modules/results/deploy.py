@@ -129,7 +129,8 @@ def check_resources(resources: list[dict]) -> None:
 def summary(automations: list[dict]) -> None:
     for src, dst in FILES.items():
         print("  upload", src.relative_to(HERE.parent), "->", dst)
-    print("  check_config, reload: input_number, custom templates, template")
+    print("  check_config, reload:", ha_api.describe_helper_reload(HERE / "package.yaml", ("input_number",))
+          + ", custom templates, template")
     print("  defaults for new helpers:", ", ".join(f"{k}={v}" for k, v in DEFAULTS.items()))
     print("  config API: automations", ", ".join(a["id"] for a in automations) or "none")
     print("  saving sensors:", ", ".join(f"sensor.results_saving_{k}" for k in KINDS) or "none (no producer installed)")
@@ -170,10 +171,10 @@ def main() -> None:
     for src, dst in FILES.items():
         editor.save(src, dst)
     ha_api.check_config()
-    ha_api.rest("/api/services/input_number/reload", {})
+    ha_api.reload_helpers(HERE / "package.yaml", ("input_number",))
     ha_api.rest("/api/services/homeassistant/reload_custom_templates", {})
     ha_api.rest("/api/services/template/reload", {})
-    print("helpers, custom templates and template sensors reloaded")
+    print("custom templates and template sensors reloaded")
     ha_api.set_defaults(DEFAULTS, before_ids)
     if automations:
         ha_api.push_automations_and_scripts(AUTOMATIONS, None)

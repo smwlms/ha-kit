@@ -219,6 +219,89 @@ def entity_ids() -> set[str]:
     return {s["entity_id"] for s in rest("/api/states")}
 
 
+# YAML helper domains with a reload service, in the order they are reloaded. `counter` is deliberately not here: it
+# has no reload service (POST /api/services/counter/reload answers 400), so a counter that is new in a package only
+# appears after one restart of Home Assistant. An existing counter keeps working (and its value) meanwhile.
+RELOADABLE_HELPERS = ("input_boolean", "input_number", "input_datetime", "input_text", "input_select",
+                      "input_button", "timer", "schedule")
+NOT_RELOADABLE_HELPERS = ("counter",)
+
+
+def package_helpers(package: Path) -> dict[str, list[str]]:
+    """{domain: [entity_id, ...]} of the YAML helpers a package file defines (the domains in RELOADABLE_HELPERS and
+    NOT_RELOADABLE_HELPERS); tags such as !secret or !include are accepted and ignored. Empty when the file is
+    missing or empty."""
+    import yaml
+
+    class _Loader(yaml.SafeLoader):
+        pass
+
+    _Loader.add_multi_constructor("!", lambda loader, suffix, node: None)
+    if not package.is_file():
+        return {}
+    data = yaml.load(package.read_text(encoding="utf-8"), Loader=_Loader) or {}
+    if not isinstance(data, dict):
+        return {}
+    out: dict[str, list[str]] = {}
+    for domain in RELOADABLE_HELPERS + NOT_RELOADABLE_HELPERS:
+        items = data.get(domain)
+        if isinstance(items, dict) and items:
+            out[domain] = [f"{domain}.{key}" for key in items]
+    return out
+
+
+def helper_reload_plan(package: Path, domains=()) -> tuple[list[str], list[str]]:
+    """(domains to reload, counters) for a package: the reloadable helper domains it defines plus `domains` (the ones
+    a module always reloads, e.g. so helpers it no longer renders disappear), in the order of RELOADABLE_HELPERS;
+    counters are never reloaded, they are returned so the caller can check that they exist."""
+    defined = package_helpers(package)
+    wanted = set(defined) | {d for d in domains if d in RELOADABLE_HELPERS}
+    unknown = [d for d in domains if d not in RELOADABLE_HELPERS]
+    if unknown:
+        raise ValueError(f"no reloadable helper domain: {', '.join(unknown)} (see ha_api.RELOADABLE_HELPERS)")
+    return [d for d in RELOADABLE_HELPERS if d in wanted], defined.get("counter", [])
+
+
+def describe_helper_reload(package: Path, domains=()) -> str:
+    """The helper part of a --dry-run line: 'input_boolean, input_number' plus a note when the package has counters."""
+    reload, counters = helper_reload_plan(package, domains)
+    text = ", ".join(reload) or "no helpers"
+    if counters:
+        text += (f" (not counter: it has no reload service; a new {', '.join(counters)} needs one restart of "
+                 "Home Assistant)")
+    return text
+
+
+def reload_helpers(package: Path, domains=()) -> list[str]:
+    """Reload the helper domains of a package (see helper_reload_plan) after uploading it and check_config(). Never
+    calls counter.reload (it does not exist). Returns the helpers of the package that still do not exist afterwards
+    (a new counter, or the helpers of a domain whose reload failed) and names them: restart Home Assistant once to
+    create them. The deploy continues: set_defaults() only touches helpers that exist, so it skips them."""
+    import urllib.error
+
+    reload, counters = helper_reload_plan(package, domains)
+    failed: list[str] = []
+    for domain in reload:
+        try:
+            rest(f"/api/services/{domain}/reload", {})
+        except urllib.error.HTTPError as e:
+            print(f"reloading {domain} failed ({e.code})")
+            failed.append(domain)
+    if reload:
+        print("helpers reloaded:", ", ".join(d for d in reload if d not in failed) or "none")
+    defined = package_helpers(package)
+    check = counters + [e for d in failed for e in defined.get(d, [])]
+    if not check:
+        return []
+    present = entity_ids()
+    missing = [e for e in check if e not in present]
+    if missing:
+        print("NOTE: restart Home Assistant once to create: " + ", ".join(missing))
+        print("      (Home Assistant has no reload service for counter" + (", and reloading failed" if failed else "")
+              + "; the rest of this deploy continues, the automations that use them work after the restart)")
+    return missing
+
+
 def _hms(text: str) -> str:
     """'7:30' / '07:30' / '07:30:00' -> '07:30:00'."""
     parts = text.split(":") + ["00"]
@@ -268,6 +351,7 @@ def set_defaults(values: dict, before: set[str], after: set[str] | None = None) 
               input_select an option · input_datetime "HH:MM[:SS]", "YYYY-MM-DD", "YYYY-MM-DD HH:MM" or service data.
             Other domains (e.g. zone.*: a radius used by --setup) are skipped.
     after   the entity ids after reloading; fetched when not given.
+    A helper that does not exist (yet), e.g. a new counter before the restart (see reload_helpers), is skipped.
     Returns the helpers that got their default."""
     after = entity_ids() if after is None else after
     new = sorted(after - before)

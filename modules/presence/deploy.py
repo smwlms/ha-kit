@@ -66,7 +66,9 @@ UPLOADS = [
     (HERE / "package.yaml", f"{ha_api.CONFIG_DIR}/packages/{MODULE}.yaml"),
     (HERE / "command_line" / f"{MODULE}.yaml", f"{ha_api.CONFIG_DIR}/command_line/{MODULE}.yaml"),
 ] + [(HERE / name, f"{ha_api.CONFIG_DIR}/{MODULE}/{name}") for name in ("settings.py", "stay.py", "workday.py")]
-RELOADS = ("input_datetime", "input_number", "input_text", "command_line")
+PACKAGE = HERE / "package.yaml"
+HELPERS = ("input_datetime", "input_number", "input_text")
+RELOADS = ("command_line",)
 CARD = HERE / "www" / "presence-card.js"
 VIEW_PATH = "our-week"
 VIEW_TITLE = <@ t('view_title') | tojson @>
@@ -176,7 +178,7 @@ def main() -> None:
                       f"{', passive' if z['passive'] else ''} ({where})")
         for src, dst in UPLOADS:
             print("  upload", src.relative_to(HERE.parent), "->", dst)
-        print("  check_config + reload", ", ".join(RELOADS))
+        print("  check_config + reload", ha_api.describe_helper_reload(PACKAGE, HELPERS) + ",", ", ".join(RELOADS))
         print("  start value for new helpers:", ", ".join(f"{k}={v}" for k, v in ARRIVAL.items()))
         for s in SCHEDULES:
             print(f"  create schedule when missing: {s['entity']} '{s['name']}' {schedule_days(s['window'])}")
@@ -197,6 +199,7 @@ def main() -> None:
     for src, dst in UPLOADS:
         editor.save(src, dst)
     ha_api.check_config()
+    ha_api.reload_helpers(PACKAGE, HELPERS)
     for domain in RELOADS:
         ha_api.rest(f"/api/services/{domain}/reload", {})
         print("reloaded:", domain)

@@ -13,11 +13,13 @@
 helper_auto_open_enabled: { en: "Gate: open automatically", nl: "Poort automatisch openen" }
 helper_dry_run: { en: "Gate test mode", nl: "Poort testmodus" }
 helper_auto_close_enabled: { en: "Gate: close automatically after leaving", nl: "Poort automatisch sluiten bij vertrek" }
+helper_closed_notify: { en: "Gate: notify when closed (with photo)", nl: "Poort: melden als ze dicht is (met foto)" }
 helper_away_minutes: { en: "Gate minimum time away", nl: "Poort minimaal weg" }
 helper_far_distance: { en: "Gate far-enough distance", nl: "Poort ver genoeg afstand" }
 helper_nav_home_tolerance: { en: "Gate home destination tolerance", nl: "Poort tolerantie bestemming thuis" }
 helper_open_alert_minutes: { en: "Gate open alert after", nl: "Poort open-melding na" }
 helper_close_distance: { en: "Gate close after leaving at", nl: "Poort sluiten na vertrek op" }
+helper_travel_time: { en: "Gate travel time", nl: "Poort looptijd" }
 helper_last_pulse: { en: "Gate last pulse", nl: "Poort laatste puls" }
 helper_last_auto_open: { en: "Gate last automatic opening", nl: "Poort laatst automatisch geopend" }
 helper_tesla_commands_today: { en: "Tesla commands today", nl: "Tesla-commando's vandaag" }
@@ -33,6 +35,8 @@ sensor_auto_open_ready: { en: "Gate ready to open automatically", nl: "Poort kla
 sensor_update_interval: { en: "Gate update interval {name}", nl: "Poort updatetempo {name}" }
 sensor_phone_of: { en: "phone {name}", nl: "gsm {name}" }
 sensor_gate_open: { en: "Gate open", nl: "Poort open" }
+sensor_gate_moving_until: { en: "Gate moving until", nl: "Poort beweegt tot" }
+sensor_gate_moving: { en: "Gate moving", nl: "Poort beweegt" }
 
 # --- shared words ---
 and: { en: "and", nl: "en" }
@@ -53,7 +57,8 @@ auto_open_description:
     Trigger: a Tesla (or a phone) enters zone.gate_approach.
     Per car: A = binary_sensor.gate_<car>_away_long_enough (was far away long enough),
     C = binary_sensor.gate_<car>_navigating_home (destination home).
-    When the car does not navigate home, the gate does not open but a notification asks.
+    When the car does not navigate home, or navigates home after a short trip (C without A), the gate does not
+    open but a notification asks.
     Guards: the car is in the approach zone, the gate is not open, at most once per 5 min
     (input_datetime.gate_last_auto_open), master switch input_boolean.gate_auto_open_enabled,
     test mode input_boolean.gate_auto_open_dry_run. Every evaluation goes into the logbook.
@@ -62,7 +67,8 @@ auto_open_description:
     Trigger: een Tesla (of een gsm) komt zone.gate_approach binnen.
     Per auto: A = binary_sensor.gate_<auto>_away_long_enough (lang genoeg ver weg geweest),
     C = binary_sensor.gate_<auto>_navigating_home (bestemming thuis).
-    Navigeert de auto niet naar huis, dan opent de poort niet maar vraagt een melding het.
+    Navigeert de auto niet naar huis, of navigeert ze naar huis na een korte rit (C zonder A), dan opent de poort
+    niet maar vraagt een melding het.
     Bewakingen: de auto staat in de naderingszone, de poort staat niet open, max 1x per 5 min
     (input_datetime.gate_last_auto_open), hoofdschakelaar input_boolean.gate_auto_open_enabled,
     testmodus input_boolean.gate_auto_open_dry_run. Elke evaluatie komt in het logboek.
@@ -90,6 +96,9 @@ message_ask_destination:
 message_ask_no_navigation:
   en: "{The_car} is approaching without navigating home, so the gate will not open by itself."
   nl: "{The_car} nadert zonder navigatie naar huis, dus de poort gaat niet vanzelf open."
+message_ask_short_trip:
+  en: "{The_car} is navigating home after a short trip, so the gate will not open by itself."
+  nl: "{The_car} navigeert naar huis na een korte rit, dus de poort gaat niet vanzelf open."
 
 # --- automation gate_notification_action ---
 notification_action_alias: { en: "Gate notification buttons", nl: "Poort meldingsknoppen" }
@@ -100,23 +109,25 @@ notification_action_description:
     Knoppen 'Sluit poort' (GATE_CLOSE) en 'Open poort' (GATE_OPEN) uit de poortmeldingen, op elke gsm.
 notification_action_description_sensor:
   en: >-
-    Closing only pulses when binary_sensor.gate_open reports open (a pulse on a closed gate opens it);
-    then whoever pressed gets 'Gate is closed' as soon as the end position is closed (or a warning after 1 min).
+    Close runs script.gate_close_manual (close until it is closed: no pulse while the gate moves, at most 2 pulses)
+    only when binary_sensor.gate_open reports open (a pulse on a closed gate opens it); then whoever pressed gets
+    'Gate is closed' or 'not closed yet' (with a garage camera: 'closed' comes from automation.gate_closed_photo).
   nl: >-
-    Sluiten geeft enkel een puls als binary_sensor.gate_open 'open' meldt (een puls op een dichte poort opent ze);
-    daarna krijgt wie drukte 'Poort is dicht' zodra de eindstand dicht is (of een waarschuwing na 1 min).
+    Sluiten start script.gate_close_manual (sluiten tot ze dicht is: geen puls zolang de poort beweegt, max. 2
+    pulsen), enkel als binary_sensor.gate_open 'open' meldt (een puls op een dichte poort opent ze); daarna krijgt
+    wie drukte 'Poort is dicht' of 'nog niet dicht' (met een garagecamera komt 'dicht' van automation.gate_closed_photo).
 notification_action_description_no_sensor:
   en: Without a gate sensor closing always pulses and whoever pressed only gets 'Pulse given'.
   nl: Zonder poortsensor geeft sluiten altijd een puls en krijgt wie drukte enkel 'Puls gegeven'.
 notification_action_description_parallel:
-  en: Parallel, so two people pressing both get an answer; gate_pulse ignores the second pulse (30 s).
-  nl: Parallel, zodat twee mensen die drukken allebei antwoord krijgen; gate_pulse negeert de tweede puls (30 s).
+  en: Parallel, so two people pressing both get an answer; the second waits for the first closing and gives no pulse.
+  nl: Parallel, zodat twee mensen die drukken allebei antwoord krijgen; de tweede wacht op de eerste sluiting en geeft geen puls.
 title_already_closed: { en: "Gate already closed", nl: "Poort is al dicht" }
 reason_close_notification: { en: "close from notification", nl: "sluiten via melding" }
 message_closed_at: { en: "Closed at {time}.", nl: "Gesloten om {time}." }
-message_not_closed_after_minute:
-  en: "After 1 minute the gate still does not report closed. Please check."
-  nl: "Na 1 minuut meldt de poort nog geen eindstand dicht. Kijk even na."
+message_not_closed_after_tries:
+  en: "Home Assistant tried to close the gate (at most {pulses} pulses), but it still does not report closed. Please check."
+  nl: "Home Assistant probeerde de poort te sluiten (max. {pulses} pulsen), maar ze meldt nog geen eindstand dicht. Kijk even na."
 title_pulse_given: { en: "Pulse given", nl: "Puls gegeven" }
 message_pulse_given_no_sensor:
   en: "At {time}. Without a gate sensor Home Assistant does not know whether the gate is closed."
@@ -127,12 +138,12 @@ open_too_long_alias: { en: "Gate open too long", nl: "Poort staat te lang open" 
 open_too_long_description:
   en: >-
     Notifies everyone when binary_sensor.gate_open has been open longer than input_number.gate_open_alert_minutes,
-    with the button 'Close gate' (GATE_CLOSE). Repeats while the gate stays open (at most 6 times). When the gate
-    closes, the notification disappears.
+    with the button 'Close gate' (GATE_CLOSE) and a photo of that moment when entities.garage_camera is filled in.
+    Repeats while the gate stays open (at most 6 times). When the gate closes, the notification disappears.
   nl: >-
     Meldt aan iedereen als binary_sensor.gate_open langer dan input_number.gate_open_alert_minutes open staat, met
-    de knop 'Sluit poort' (GATE_CLOSE). Herhaalt zolang de poort open blijft (max. 6 keer). Gaat de poort dicht,
-    dan verdwijnt de melding.
+    de knop 'Sluit poort' (GATE_CLOSE) en een foto van dat moment als entities.garage_camera ingevuld is. Herhaalt
+    zolang de poort open blijft (max. 6 keer). Gaat de poort dicht, dan verdwijnt de melding.
 open_too_long_description_parcel:
   en: >-
     Stays silent while script.parcel_garage (module parcel-service) holds the gate open: that script reports
@@ -143,23 +154,47 @@ open_too_long_description_parcel:
 title_open_minutes: { en: "Gate has been open for {minutes} min", nl: "Poort staat al {minutes} min open" }
 message_open_since: { en: "Open since {time}.", nl: "Open sinds {time}." }
 
+# --- automation gate_closed_photo (gate sensor and garage camera); {camera} is filled in at fill time ---
+closed_photo_alias: { en: "Gate closed: notification with photo", nl: "Poort dicht: melding met foto" }
+closed_photo_description:
+  en: >-
+    When binary_sensor.gate_open goes from open to closed, whatever closed it (Home Assistant, the remote, Google
+    Home, the wall button): a photo of that moment from {camera} and the notification 'Gate is closed' to everyone,
+    with the button 'Open gate'. Fixed tag gate-closed, so the newest replaces the previous one. Switch:
+    input_boolean.gate_closed_notify. While it is on, the closing flows of Home Assistant send no closed message.
+  nl: >-
+    Als binary_sensor.gate_open van open naar dicht gaat, wat ze ook sloot (Home Assistant, de afstandsbediening,
+    Google Home, de wandknop): een foto van dat moment van {camera} en de melding 'Poort is dicht' aan iedereen, met
+    de knop 'Open poort'. Vaste tag gate-closed, zodat de nieuwste de vorige vervangt. Schakelaar:
+    input_boolean.gate_closed_notify. Zolang die aan staat, sturen de sluitflows van Home Assistant zelf geen
+    dicht-melding.
+closed_photo_description_parcel:
+  en: Silent while script.parcel_garage (module parcel-service) runs; that script sends its own proof photo.
+  nl: Zwijgt zolang script.parcel_garage (module parcel-service) loopt; dat script stuurt zelf een bewijsfoto.
+
 # --- automation gate_close_after_departure ---
 close_after_departure_alias: { en: "Gate: close after leaving", nl: "Poort sluiten na vertrek" }
 close_after_departure_description:
   en: >-
     A Tesla drives off and gets further than input_number.gate_close_distance from zone.home while
-    binary_sensor.gate_open reports open: the gate closes automatically (script.gate_close_manual), so you see it
-    close. When another Tesla is leaving too (near home and in D/R or speed > 2 km/h), it waits until that one is
-    out as well (at most 3 min, otherwise nothing). Then a notification to whoever left (phones, else the usual
-    driver) with the button 'Open gate'. Switch: input_boolean.gate_auto_close_enabled. In test mode no pulse, only
-    the notification 'Gate would close'.
+    binary_sensor.gate_open reports open. When another Tesla is leaving too (near home and in D/R or speed > 2 km/h),
+    it waits until that one is out as well (at most 3 min, otherwise nothing). Then: is the gate moving
+    (binary_sensor.gate_moving: a pulse or an opening less than the travel time ago, also from a remote, Google Home
+    or the relay's app)? No pulse, wait for closed. Otherwise, with a garage camera and an AI service, two photos
+    decide (script.gate_photo_check): closing = wait; open or half open = close; opening, closed or unsure = no pulse.
+    Without camera or AI: close. Closing = script.gate_close_manual (close until it is closed). Then a notification
+    to whoever left (phones, else the usual driver), with a photo of that moment when there is a camera.
+    Switch: input_boolean.gate_auto_close_enabled. In test mode no pulse: 'Gate would close'.
   nl: >-
     Een Tesla rijdt weg en komt verder dan input_number.gate_close_distance van zone.home terwijl
-    binary_sensor.gate_open 'open' meldt: de poort gaat automatisch dicht (script.gate_close_manual), zodat je ze
-    ziet sluiten. Rijdt een andere Tesla ook weg (bij huis en in D/R of snelheid > 2 km/u), dan wacht ze tot die ook
-    buiten is (max. 3 min, anders niets). Daarna een melding aan wie vertrok (gsm's, anders de vaste bestuurder)
-    met de knop 'Open poort'. Schakelaar: input_boolean.gate_auto_close_enabled. In testmodus geen puls, enkel
-    de melding 'Poort zou sluiten'.
+    binary_sensor.gate_open 'open' meldt. Rijdt een andere Tesla ook weg (bij huis en in D/R of snelheid > 2 km/u),
+    dan wacht ze tot die ook buiten is (max. 3 min, anders niets). Dan: beweegt de poort (binary_sensor.gate_moving:
+    een puls of een opening minder dan de looptijd geleden, ook via afstandsbediening, Google Home of de app van het
+    relais)? Geen puls, wachten op dicht. Anders beslissen, met een garagecamera en een AI-dienst, twee foto's
+    (script.gate_photo_check): sluit = wachten; open of half open = sluiten; opent, dicht of onzeker = geen puls.
+    Zonder camera of AI: sluiten. Sluiten = script.gate_close_manual (sluiten tot ze dicht is). Daarna een melding
+    aan wie vertrok (gsm's, anders de vaste bestuurder), met een foto van dat moment als er een camera is.
+    Schakelaar: input_boolean.gate_auto_close_enabled. In testmodus geen puls: 'Poort zou sluiten'.
 log_would_close:
   en: "WOULD CLOSE (test mode): {the_car} is further than {m} m"
   nl: "ZOU SLUITEN (testmodus): {the_car} is verder dan {m} m"
@@ -171,9 +206,38 @@ message_left_test:
 message_left_closed:
   en: "You left in {the_car}; the gate closed automatically."
   nl: "Je reed weg met {the_car}; de poort is automatisch dichtgegaan."
+message_left_closed_itself:
+  en: "You left in {the_car}; the gate was already closing and is closed. No pulse needed."
+  nl: "Je reed weg met {the_car}; de poort was al aan het sluiten en is dicht. Geen puls nodig."
 message_left_not_closed:
-  en: "You left in {the_car}. The gate got a pulse, but after 1 minute it still does not report closed."
-  nl: "Je reed weg met {the_car}. De poort kreeg een puls, maar meldt na 1 minuut nog geen eindstand dicht."
+  en: "You left in {the_car}. Home Assistant tried to close the gate, but it still does not report closed."
+  nl: "Je reed weg met {the_car}. Home Assistant probeerde de poort te sluiten, maar ze meldt nog geen eindstand dicht."
+message_left_moving_not_closed:
+  en: "You left in {the_car}. The gate was moving, so no pulse, but it does not report closed."
+  nl: "Je reed weg met {the_car}. De poort bewoog, dus geen puls, maar ze meldt geen eindstand dicht."
+message_left_opening:
+  en: "You left in {the_car}. On the photo the gate is opening ({why}): someone opens it, so no pulse."
+  nl: "Je reed weg met {the_car}. Op de foto gaat de poort open ({why}): iemand opent ze, dus geen puls."
+message_left_photo_closed:
+  en: "You left in {the_car}. The photo looks closed ({why}), but the sensor still reports open. No pulse given."
+  nl: "Je reed weg met {the_car}. De foto ziet er dicht uit ({why}), maar de sensor meldt nog open. Geen puls gegeven."
+message_left_unsure:
+  en: "You left in {the_car}. From the photo it is not clear what the gate does ({why}), so no pulse."
+  nl: "Je reed weg met {the_car}. Op de foto is niet duidelijk wat de poort doet ({why}), dus geen puls."
+log_departure_decision:
+  en: "{the_car} left; gate: {verdict} ({why}); {action}"
+  nl: "{the_car} vertrokken; poort: {verdict} ({why}); {action}"
+log_action_close: { en: "closes until it is closed", nl: "sluit tot ze dicht is" }
+log_action_test: { en: "would close (test mode)", nl: "zou sluiten (testmodus)" }
+log_action_none: { en: "no pulse", nl: "geen puls" }
+verdict_moving: { en: "moving", nl: "beweegt" }
+verdict_closing: { en: "closing (photo)", nl: "sluit (foto)" }
+verdict_opening: { en: "opening (photo)", nl: "opent (foto)" }
+verdict_open: { en: "open (photo)", nl: "open (foto)" }
+verdict_half_open: { en: "half open (photo)", nl: "half open (foto)" }
+verdict_closed: { en: "closed (photo)", nl: "dicht (foto)" }
+verdict_unsure: { en: "unsure (photo)", nl: "onzeker (foto)" }
+verdict_none: { en: "no photo check", nl: "geen fotocheck" }
 
 # --- automation phone_location_permission_watch ---
 location_watch_alias: { en: "Watch phone location access", nl: "Gsm-locatietoegang bewaken" }
@@ -195,6 +259,24 @@ message_location_lost:
   nl: >-
     Nu: {state}. HA ziet {name} niet meer vertrekken of thuiskomen (poort, aankomstkaart). Op de gsm van {name}:
     Instellingen, Privacy en beveiliging, Locatievoorzieningen, Home Assistant, Altijd.
+
+# --- automation gate_relay_seen ---
+relay_seen_alias: { en: "Gate: relay click seen", nl: "Poort: relaisklik gezien" }
+relay_seen_description:
+  en: >-
+    Every click of {relay} that does not come from script.gate_pulse (the Home Assistant interface, the relay's own
+    app, Google Home, a cloud service) moves the gate too. Sets input_datetime.gate_last_pulse for it, so the pulse
+    block and binary_sensor.gate_moving count it, and writes it in the logbook.
+  nl: >-
+    Elke klik van {relay} die niet van script.gate_pulse komt (de Home Assistant-interface, de app van het relais,
+    Google Home, een clouddienst) beweegt de poort ook. Zet input_datetime.gate_last_pulse ervoor, zodat de
+    pulsblokkade en binary_sensor.gate_moving ze meetellen, en schrijft ze in het logboek.
+log_pulse_outside:
+  en: "pulse outside Home Assistant's gate scripts ({source}); counts as last pulse"
+  nl: "puls buiten de poortscripts van Home Assistant om ({source}); telt als laatste puls"
+source_ha_user: { en: "Home Assistant interface, {name}", nl: "Home Assistant-interface, {name}" }
+source_automation: { en: "another automation or script", nl: "een andere automatisering of script" }
+source_outside: { en: "relay app, Google Home, cloud or the device itself", nl: "app van het relais, Google Home, cloud of het toestel zelf" }
 
 # --- automation tesla_commands_counter_reset ---
 counter_reset_alias: { en: "Reset Tesla command counter", nl: "Tesla-commandoteller op nul" }
@@ -219,18 +301,20 @@ pulse_description_cover:
   nl: "Eén bediening van {relay} (cover): openen als ze dicht is, anders sluiten."
 pulse_description_common:
   en: >-
-    A new pulse within 30 s of the previous one is ignored (input_datetime.gate_last_pulse), unless force: true:
-    two pulses shortly after each other make the gate stop or reverse.
+    A new pulse within the travel time (input_number.gate_travel_time) of the previous one is ignored
+    (input_datetime.gate_last_pulse, also set by automation.gate_relay_seen for a click from elsewhere), unless
+    force: true: two pulses shortly after each other make the gate stop or reverse.
   nl: >-
-    Een nieuwe puls binnen 30 s na de vorige wordt genegeerd (input_datetime.gate_last_pulse), tenzij force: true:
-    twee pulsen kort na elkaar laten de poort stoppen of keren.
+    Een nieuwe puls binnen de looptijd (input_number.gate_travel_time) na de vorige wordt genegeerd
+    (input_datetime.gate_last_pulse, ook gezet door automation.gate_relay_seen bij een klik van elders), tenzij
+    force: true: twee pulsen kort na elkaar laten de poort stoppen of keren.
 field_reason_name: { en: "Reason", nl: "Reden" }
 field_reason_description: { en: "Goes into the logbook.", nl: "Komt in het logboek." }
 field_reason_example: { en: "manual", nl: "handmatig" }
 field_force_name: { en: "Force", nl: "Forceren" }
 field_force_description:
-  en: Pulse even when the previous pulse was less than 30 s ago.
-  nl: Ook een puls geven als de vorige minder dan 30 s geleden was.
+  en: Pulse even when the previous pulse was less than the travel time ago.
+  nl: Ook een puls geven als de vorige minder dan de looptijd geleden was.
 log_unreachable: { en: "no pulse: gate control unreachable ({reason})", nl: "geen puls: poortbediening onbereikbaar ({reason})" }
 title_not_operated: { en: "Gate not operated", nl: "Poort niet bediend" }
 message_unreachable: { en: "The gate control is unreachable.", nl: "De poortbediening is onbereikbaar." }
@@ -262,11 +346,17 @@ reason_manual_open: { en: "manual open", nl: "handmatig openen" }
 close_manual_alias: { en: "Close gate", nl: "Poort sluiten" }
 close_manual_description_sensor:
   en: >-
-    Closes the gate with a pulse, only when binary_sensor.gate_open reports open. When it reports closed or is
-    unreachable, no pulse: a pulse on a closed gate opens it.
+    Closes the gate until it reports closed, only when binary_sensor.gate_open reports open (closed or unreachable:
+    no pulse, a pulse on a closed gate opens it). While the gate moves (binary_sensor.gate_moving) no pulse: it waits
+    for closed. Standing still: a pulse, then up to travel time + 10 s for closed. Still open: the gate stood
+    halfway and reversed, so one more pulse. At most max_pulses (default 2). With notify a notification
+    'Gate is closed' or 'not closed yet' to whoever started it, with a photo when there is a garage camera.
   nl: >-
-    Sluit de poort met een puls, enkel als binary_sensor.gate_open 'open' meldt. Meldt hij 'dicht' of is hij
-    onbereikbaar, dan geen puls: een puls op een dichte poort opent ze.
+    Sluit de poort tot ze dicht meldt, enkel als binary_sensor.gate_open 'open' meldt (dicht of onbereikbaar: geen
+    puls, een puls op een dichte poort opent ze). Zolang de poort beweegt (binary_sensor.gate_moving) geen puls:
+    wachten op dicht. Staat ze stil: een puls, dan tot looptijd + 10 s wachten op dicht. Nog open: de poort stond
+    halverwege en keerde om, dus nog één puls. Max. max_pulses (standaard 2). Met notify een melding 'Poort is
+    dicht' of 'nog niet dicht' aan wie het startte, met een foto als er een garagecamera is.
 close_manual_description_no_sensor:
   en: >-
     Gives a pulse. Without a gate sensor Home Assistant does not know whether the gate is open: only press when you
@@ -279,6 +369,78 @@ log_close_no_pulse:
   en: "no pulse on close: gate reports {state} ({reason})"
   nl: "geen puls bij sluiten: poort meldt {state} ({reason})"
 reason_close: { en: "close", nl: "sluiten" }
+reason_close_pulse_of: { en: "pulse {n} of {max}", nl: "puls {n} van {max}" }
+field_max_pulses_name: { en: "Maximum pulses", nl: "Maximaal aantal pulsen" }
+field_max_pulses_description:
+  en: How many pulses at most when the gate does not close (it may have stood halfway and reversed).
+  nl: Hoeveel pulsen maximaal als de poort niet dichtgaat (ze kan halverwege gestaan hebben en omgekeerd zijn).
+field_notify_name: { en: "Notify", nl: "Melden" }
+field_notify_description:
+  en: Afterwards a notification 'closed' or 'not closed yet' to whoever started it. Off when the caller reports itself.
+  nl: Daarna een melding 'dicht' of 'nog niet dicht' aan wie het startte. Uit als de aanroeper zelf meldt.
+moving_why_pulse: { en: "pulse less than the travel time ago", nl: "puls minder dan de looptijd geleden" }
+moving_why_opened: { en: "opening seen less than the travel time ago", nl: "opening gezien minder dan de looptijd geleden" }
+moving_why_cover: { en: "the cover reports opening or closing", nl: "de cover meldt openen of sluiten" }
+log_close_waiting_moving:
+  en: "no pulse: the gate is moving ({why}), waiting for closed ({reason})"
+  nl: "geen puls: de poort beweegt ({why}), wachten op dicht ({reason})"
+log_close_retry:
+  en: "not closed {seconds} s after pulse {n}: the gate stood halfway and reversed, one more pulse ({reason})"
+  nl: "niet dicht {seconds} s na puls {n}: de poort stond halverwege en keerde om, nog één puls ({reason})"
+log_close_closed: { en: "gate reports closed ({reason})", nl: "poort meldt dicht ({reason})" }
+log_close_gave_up:
+  en: "still not closed after at most {pulses} pulses: stopped trying ({reason})"
+  nl: "nog altijd niet dicht na max. {pulses} pulsen: gestopt met proberen ({reason})"
+
+# --- script gate_snapshot (only with entities.garage_camera); {camera} is filled in at fill time ---
+snapshot_alias: { en: "Gate photo (internal)", nl: "Poort foto (intern)" }
+snapshot_description:
+  en: >-
+    Photo of this moment from {camera} to /media/gate/<kind>-<minute>.jpg (at most 60 files per kind). Answers
+    with image (for a notification) and media (for an AI service). A file, so the notification shows that moment.
+  nl: >-
+    Foto van dit moment van {camera} naar /media/gate/<soort>-<minuut>.jpg (max. 60 bestanden per soort). Antwoordt
+    met image (voor een melding) en media (voor een AI-dienst). Een bestand, zodat de melding dat moment toont.
+field_kind_name: { en: "Kind", nl: "Soort" }
+field_kind_description: { en: "Part of the file name, e.g. closed.", nl: "Deel van de bestandsnaam, bv. closed." }
+
+# --- script gate_photo_check (garage camera and an AI service) ---
+photo_check_alias: { en: "Gate photo check (internal)", nl: "Poort fotocheck (intern)" }
+photo_check_description:
+  en: >-
+    Two photos of {camera}, 2 s apart, judged by an AI service (ai_task): is the gate closing, opening, open, half
+    open, closed, or unsure? Used by closing after leaving before it pulses. Without an AI service it answers none.
+  nl: >-
+    Twee foto's van {camera}, 2 s na elkaar, beoordeeld door een AI-dienst (ai_task): sluit de poort, opent ze,
+    staat ze open, half open, dicht, of onzeker? Gebruikt door sluiten na vertrek vóór het een puls geeft. Zonder
+    AI-dienst antwoordt het none.
+field_skip_name: { en: "Skip", nl: "Overslaan" }
+field_skip_description: { en: "No photos, answer skipped.", nl: "Geen foto's, antwoord skipped." }
+photo_check_dark: { en: "garage too dark", nl: "garage te donker" }
+photo_check_no_ai: { en: "no AI service", nl: "geen AI-dienst" }
+photo_check_no_photo: { en: "no photo from the camera", nl: "geen foto van de camera" }
+photo_check_no_answer: { en: "no answer from the AI service", nl: "geen antwoord van de AI-dienst" }
+photo_check_task_name: { en: "Gate closing?", nl: "Poort aan het sluiten?" }
+photo_check_instructions:
+  en: >-
+    You get two photos from a camera in a garage, taken 2 seconds apart: first the first photo, then the second.
+    Look only at the gate or garage door. Compare its position in both photos. closing = it moves towards closed
+    between the first and the second photo. opening = it moves towards open. open = fully open and in the same
+    place in both photos. half_open = partly open and in the same place in both photos. closed = fully closed.
+    unsure = too dark, the gate is not visible, or you cannot tell. When in doubt: unsure.
+  nl: >-
+    Je krijgt twee foto's van een camera in een garage, 2 seconden na elkaar genomen: eerst de eerste foto, dan de
+    tweede. Kijk enkel naar de poort of garagepoort. Vergelijk haar stand op beide foto's. closing = ze beweegt
+    richting dicht tussen de eerste en de tweede foto. opening = ze beweegt richting open. open = volledig open en
+    op beide foto's op dezelfde plaats. half_open = gedeeltelijk open en op beide foto's op dezelfde plaats.
+    closed = volledig dicht. unsure = te donker, de poort is niet zichtbaar, of je kan het niet zeggen. Bij twijfel:
+    unsure.
+photo_check_state_question:
+  en: "What the gate does: closing, opening, open, half_open, closed or unsure."
+  nl: "Wat de poort doet: closing, opening, open, half_open, closed of unsure."
+photo_check_description_question:
+  en: "One short sentence: what you see of the gate on both photos."
+  nl: "Eén korte zin: wat je van de poort ziet op beide foto's."
 
 # --- script tesla_unlock_charge_cable ---
 unlock_alias: { en: "Unlock Tesla charge cable", nl: "Laadkabel Tesla ontgrendelen" }

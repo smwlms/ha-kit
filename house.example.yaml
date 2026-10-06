@@ -226,12 +226,13 @@ entities:
   # Empty = no second photo for Gemini and no automation "package left".
   doorbell_package_camera: camera.front_door_package
   doorbell_package: event.front_door_package
-  # --- parcel-service and tesla-driveway-lock ---
+  # --- gate, parcel-service and tesla-driveway-lock ---
   # (optional; required with tesla_driveway_lock.garage_photo) camera that sees the parking spots in the garage.
-  # Empty = no live garage view and no proof photo (parcel-service), no garage photo (tesla-driveway-lock).
+  # Empty = no live garage view and no proof photo (parcel-service), no garage photo (tesla-driveway-lock), no photo
+  # in the gate notifications and no photo check before closing after leaving (gate).
   garage_camera: camera.garage
-  # (optional, tesla-driveway-lock) binary_sensor that is on when the garage is dark: then no photo (the GPS
-  # decides). Empty = always a photo; Gemini answers "unsure" on a black image.
+  # (optional, tesla-driveway-lock, gate) binary_sensor that is on when the garage is dark: then no photo (the GPS
+  # decides; the gate does not pulse after leaving and notifies). Empty = always a photo; Gemini answers "unsure" on a black image.
   garage_dark: binary_sensor.garage_dark
   # --- shading ---
   # (required for shading on sun and heat, and for climate) weather entity with an hourly forecast
@@ -467,6 +468,11 @@ notifications:
   # (stroomprijs, overschot) still work.
   kinds: [power_price, surplus, filter]
   tap_url: /lovelace/energy # (optional) where a tap on the notification goes; empty = the app just opens
+
+# (optional, gate) Closing after leaving first looks at two photos of entities.garage_camera: is the gate already
+# closing (someone's remote)? Only with a gate sensor and a garage camera.
+gate:
+  ai_task: # (optional) ai_task entity or auto; empty = doorbell.ai_task; none = no photo to an AI service (closing then pulses unless the gate is moving)
 
 # (optional, tesla-driveway-lock) Car on the driveway gets locked. The waiting time and the radius of zone.driveway are
 # start values in modules/tesla-driveway-lock/module.yaml (defaults:) and you tune them afterwards in Home Assistant.

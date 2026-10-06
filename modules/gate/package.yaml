@@ -1,5 +1,6 @@
 <% if not entities.gate_relay %><@ fail('house.yaml: entities.gate_relay is empty (required for the module gate)') @><% endif %>
 <% set gate_sensor = entities.get('gate_sensor') %>
+<% from '_gate.jinja' import camera with context %>
 # Gate: helpers (ha-kit module gate, see gate/LOGIC.md "Settings").
 # Uploaded by gate/deploy.py to /config/packages/gate.yaml (module base: packages: !include_dir_named packages/).
 # No `initial` on anything you tune yourself: Home Assistant keeps the last value over a restart. gate/deploy.py
@@ -18,6 +19,11 @@ input_boolean:
   gate_auto_close_enabled:           # automation.gate_close_after_departure (default off)
     name: "<@ t('helper_auto_close_enabled') @>"
     icon: mdi:gate-arrow-left
+<% endif %>
+<% if camera %>
+  gate_closed_notify:                # automation.gate_closed_photo: "Gate is closed" with a photo on every closing (default on)
+    name: "<@ t('helper_closed_notify') @>"
+    icon: mdi:camera-lock
 <% endif %>
 
 input_number:
@@ -40,6 +46,13 @@ input_number:
     max: 500
     step: 25
     unit_of_measurement: m
+  gate_travel_time:                  # how long the gate takes from end to end; the pulse block and gate_moving (default 30)
+    name: "<@ t('helper_travel_time') @>"
+    min: 10
+    max: 120
+    step: 1
+    mode: box
+    unit_of_measurement: s
 <% if gate_sensor %>
   gate_open_alert_minutes:           # automation.gate_open_too_long (default 10)
     name: "<@ t('helper_open_alert_minutes') @>"
@@ -58,7 +71,7 @@ input_number:
 <% endif %>
 
 input_datetime:
-  gate_last_pulse:                   # script.gate_pulse: ignore a new pulse within 30 s of this one
+  gate_last_pulse:                   # script.gate_pulse and automation.gate_relay_seen: no new pulse within gate_travel_time
     name: "<@ t('helper_last_pulse') @>"
     has_date: true
     has_time: true

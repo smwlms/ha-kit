@@ -1,5 +1,5 @@
 (() => {
-  const VERSION = "4";
+  const VERSION = "5";
   // Arrival card (ha-kit module tesla-route): one card per Tesla while it is on the road.
   //   home  = navigating home (binary_sensor.gate_<car>_navigating_home): arrival time, map, gate row with Open button;
   //   trip  = navigating elsewhere: collapsed card "<car> → <destination>", tap to show the map;
@@ -446,10 +446,8 @@ ${trips.length ? `<div class="trips">${trips.map((c) => `<div class="arrive-slot
     _mountArrivals(arriving) {
       this._arr = this._arr || {};
       for (const c of arriving) {
-        if (this._arr[c.p] && this._arr[c.p].mode !== c.mode) {
-          this._arr[c.p].map?.remove();
-          delete this._arr[c.p];
-        }
+        if (this._arr[c.p] && this._arr[c.p].mode !== c.mode)
+          this._dropArrival(c.p);
         const st = this._arr[c.p] || (this._arr[c.p] = this._newArrival(c));
         st.c = c;
         const slot = this._wrapEl.querySelector(
@@ -460,9 +458,16 @@ ${trips.length ? `<div class="trips">${trips.map((c) => `<div class="arrive-slot
       }
       for (const p of Object.keys(this._arr)) {
         if (arriving.some((c) => c.p === p)) continue;
-        this._arr[p].map?.remove();
-        delete this._arr[p];
+        this._dropArrival(p);
       }
+    }
+    // A removed Leaflet map must never be touched again: a pending zoom animation or invalidateSize on it reads
+    // the deleted map pane and throws "_leaflet_pos". st.map = null makes every later update skip the map.
+    _dropArrival(p) {
+      const st = this._arr[p];
+      st.map?.remove();
+      st.map = null;
+      delete this._arr[p];
     }
     _newArrival(c) {
       const home = c.mode === "home";
@@ -714,7 +719,9 @@ ${home && this._gate ? `<div class="gate"><span class="gic">${I.gate()}</span><s
       }
       if (dest) st.home.setOpacity(1);
       else st.home.setOpacity(0);
-      // Fit only while the map is visible (a collapsed trip card has a map of size 0).
+      // Fit only while the map is visible (a collapsed trip card has a map of size 0). No zoom animation: the map
+      // is removed when the car arrives or changes mode, and Leaflet's zoom-end timer (250 ms) then crashes on the
+      // removed map pane ("_leaflet_pos").
       if (
         !st.fitted &&
         here &&
@@ -730,6 +737,7 @@ ${home && this._gate ? `<div class="gate"><span class="gic">${I.gate()}</span><s
         st.map.fitBounds(st.L.latLngBounds(pts), {
           padding: [24, 24],
           maxZoom: 15,
+          animate: false,
         });
         st.fitted = true;
       }
@@ -975,7 +983,9 @@ ${home && this._gate ? `<div class="gate"><span class="gic">${I.gate()}</span><s
             ?.setAttribute("aria-expanded", String(open));
           st.fitted = false;
           if (open) this._ensureMap(st.c, st);
-          requestAnimationFrame(() => this._updateArrival(st.c, st));
+          requestAnimationFrame(
+            () => this._arr?.[p] === st && this._updateArrival(st.c, st),
+          );
         }
         return;
       }

@@ -17,6 +17,7 @@ How every decision is made is in [LOGIC.md](LOGIC.md). The test plan is there to
 | **Companion app** on every phone, location **Always** + **Precise location** | notifications with buttons, zone trigger, who is in the car                 | See "Setting up the phone"                                                                   |
 | Gate control as a `switch`, `button` or `cover` in HA                       | `entities.gate_relay`                                                       | See "Gate hardware"                                                                          |
 | End-position contact or gate sensor (**optional**)                          | `entities.gate_sensor`: open too long, close after leaving, no double pulse | Without a sensor: no "open too long" and no "close after leaving"                            |
+| Garage camera + AI integration (**optional**)                               | `entities.garage_camera`: photos in the notifications; with an `ai_task` entity (e.g. Google Generative AI) the photo check before closing after leaving | The photos of the gate then go to that AI service (Google Gemini); `gate.ai_task: none` keeps them home |
 | Python 3.11 + [uv](https://docs.astral.sh/uv/)                              | `fill.py`, `deploy.py`                                                      |                                                                                              |
 
 Module **tesla-route** is not needed: the gate logic reads the Teslemetry entities itself. With tesla-route the arrival card gets a gate row.
@@ -64,6 +65,9 @@ Car position, navigation and charging state come from Teslemetry (cloud); the ch
 | `entities.gate_relay`                                  | `switch`, `button` or `cover`                                                                             |
 | `entities.gate_sensor` (optional)                      | `binary_sensor` (on = open) or the `cover` itself. Empty = no end-position sensor                         |
 | `entities.gate_sensor_inverted`                        | `true` when your sensor is **on** while the gate is **closed** (end-position relay "closed")              |
+| `entities.garage_camera` (optional)                    | camera that sees the gate: "Gate is closed" with a photo on every closing (`input_boolean.gate_closed_notify`), photos in "not closed" and "open too long", and the photo check before closing after leaving |
+| `entities.garage_dark` (optional)                      | `binary_sensor`, on when the garage is too dark for the photo check (then: no pulse, a notification)      |
+| `gate.ai_task` (optional)                              | AI service for the photo check: empty = `doorbell.ai_task`, empty there too = the first `ai_task` entity; `none` = no photo leaves the house (closing after leaving then pulses unless the gate is moving) |
 | `teslemetry.*`                                         | pattern of the Teslemetry entities per role, see "Entity names"                                           |
 
 The number of cars and people is free. Everything that exists per car or per person is repeated when filling in.
@@ -78,7 +82,7 @@ Everything that operates the gate goes through `script.gate_pulse`. Which action
 | `button.…`   | `button.press`                                                  | For a gate module that only offers a button                                                                     |
 | `cover.…`    | `cover.open_cover` when it is closed, otherwise `cover.close_cover` | Use the same cover as `gate_sensor`: then `binary_sensor.gate_open` = not `closed`                          |
 
-In all three cases the script ignores a second pulse within 30 s (two pulses shortly after each other make the gate stop or reverse), unless called with `force: true`.
+In all three cases the script ignores a second pulse within `input_number.gate_travel_time` (two pulses shortly after each other make the gate stop or reverse), unless called with `force: true`. With a `switch` (and a `button` pressed in the HA interface) `automation.gate_relay_seen` also counts a click that bypasses the script, e.g. from the relay's own app or Google Home. **Measure the travel time** of your gate (pulse to end position) and set the helper to it.
 
 **End-position sensor.** Best is a wired signal from the gate controller itself, e.g. a potential-free relay "end position closed" to the input of a Shelly 1 (input set to _detached_, otherwise every signal gives a pulse). Such a relay is **on while the gate is closed**: then set `gate_sensor_inverted: true`. A battery sensor on wifi can go blind and then keeps showing "closed" while the gate is open (see LOGIC.md, edge cases).
 
@@ -133,14 +137,14 @@ When one car differs (in the source one car had `binary_sensor.garage_<prefix>_t
 
 | Kind        | Entity                                                                                                                                                                                                                                                                                                                      |
 | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Helpers     | `input_boolean.gate_auto_open_enabled`, `gate_auto_open_dry_run`, `gate_auto_close_enabled`¹; `input_number.gate_away_minutes`, `gate_far_distance`, `gate_nav_home_tolerance`, `gate_open_alert_minutes`¹, `gate_close_distance`¹; `input_datetime.gate_last_pulse`, `gate_last_auto_open`; `counter.tesla_commands_today` |
+| Helpers     | `input_boolean.gate_auto_open_enabled`, `gate_auto_open_dry_run`, `gate_auto_close_enabled`¹, `gate_closed_notify`²; `input_number.gate_away_minutes`, `gate_far_distance`, `gate_nav_home_tolerance`, `gate_travel_time`, `gate_open_alert_minutes`¹, `gate_close_distance`¹; `input_datetime.gate_last_pulse`, `gate_last_auto_open`; `counter.tesla_commands_today` |
 | Zone        | `zone.gate_approach` (UI zone, by `--setup`)                                                                                                                                                                                                                                                                                |
-| Sensors     | per car `sensor.gate_<car>_far_since`, `binary_sensor.gate_<car>_away_long_enough`, `binary_sensor.gate_<car>_navigating_home`, `sensor.gate_update_interval_<car>`; per phone `sensor.gate_update_interval_phone_<key>`; `binary_sensor.gate_auto_open_ready`; `binary_sensor.gate_open`¹                                  |
-| Automations | `gate_auto_open`, `gate_notification_action`, `gate_open_too_long`¹, `gate_close_after_departure`¹, `phone_location_permission_watch`, `tesla_commands_counter_reset`                                                                                                                                                       |
-| Scripts     | `gate_pulse` (internal), `gate_open_manual`, `gate_close_manual`, `tesla_unlock_charge_cable`, `leaving`, `leaving_<car>` per car                                                                                                                                                                                           |
+| Sensors     | per car `sensor.gate_<car>_far_since`, `binary_sensor.gate_<car>_away_long_enough`, `binary_sensor.gate_<car>_navigating_home`, `sensor.gate_update_interval_<car>`; per phone `sensor.gate_update_interval_phone_<key>`; `binary_sensor.gate_auto_open_ready`; `binary_sensor.gate_open`¹, `binary_sensor.gate_moving`¹, `sensor.gate_moving_until`¹      |
+| Automations | `gate_auto_open`, `gate_notification_action`, `gate_open_too_long`¹, `gate_close_after_departure`¹, `gate_closed_photo`², `gate_relay_seen` (`switch` or `button` relay), `phone_location_permission_watch`, `tesla_commands_counter_reset`                                                                                                     |
+| Scripts     | `gate_pulse` (internal), `gate_snapshot`² and `gate_photo_check`³ (internal), `gate_open_manual`, `gate_close_manual`, `tesla_unlock_charge_cable`, `leaving`, `leaving_<car>` per car                                                                                                                                       |
 | Macros      | `custom_templates/gate.jinja`: `cars()`, `people()`, `conditions(p)`, `all_conditions()`, `riders(p)`, `recipients(user_id)`                                                                                                                                                                                                |
 
-¹ only with `entities.gate_sensor`.
+¹ only with `entities.gate_sensor`. ² with a gate sensor and `entities.garage_camera`. ³ the same plus an AI service (`gate.ai_task` not `none`). Photos go to `/media/gate/` (at most 60 per kind).
 
 Names, notifications and logbook lines are in `house.language` (texts in `strings.yaml`); the entity ids are the same in every language.
 

@@ -243,19 +243,19 @@ parcel_garage:
             reason: <@ t('reason_parcel_close') | tojson @>
             force: true
       else:
+        # Blocking: gate_close_manual closes until it is closed (module gate) and only returns then; this script
+        # sends its own notification (notify: false). So wait on the state, not on a change that may be over.
         - action: script.gate_close_manual
           continue_on_error: true
           data:
             reason: <@ t('reason_parcel') | tojson @>
-    - wait_for_trigger:
-        - trigger: state
-          entity_id: binary_sensor.gate_open
-          to: "off"
+            notify: false
+    - wait_template: "{{ is_state('binary_sensor.gate_open', 'off') }}"
       timeout: "00:01:00"
       continue_on_timeout: true
     - if:
         - condition: template
-          value_template: "{{ wait.trigger is not none }}"
+          value_template: "{{ wait.completed }}"
       then:
         - action: logbook.log
           data:

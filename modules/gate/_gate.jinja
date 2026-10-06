@@ -1,0 +1,15 @@
+<# Shared preamble of the module gate, derived from house.yaml (never copied to the build itself). Use:
+   <% from '_gate.jinja' import camera, dark, ai_value, ai_check with context %>
+   camera    entities.garage_camera, only with a gate sensor (photos of the gate when it closes or does not)
+   dark      entities.garage_dark (optional): on = too dark for a photo check
+   ai_value  YAML value of the ai_task entity that judges the departure photos: gate.ai_task, else doorbell.ai_task,
+             else the first ai_task entity (auto); "" = none, no photo leaves the house
+   ai_check  camera and an AI service: closing after leaving first looks at two photos #>
+<% set gate_sensor = entities.get('gate_sensor') %>
+<% set camera = entities.get('garage_camera') if gate_sensor else none %>
+<% set dark = entities.get('garage_dark') if camera else none %>
+<% from '_ai_task.jinja' import ai_entity %>
+<% set gate_cfg = gate if gate is defined and gate else {} %>
+<% set db = doorbell if doorbell is defined and doorbell else {} %>
+<% set ai_value = ai_entity(gate_cfg.get('ai_task') or db.get('ai_task')) if camera else '""' %>
+<% set ai_check = true if (camera and ai_value != '""') else false %>

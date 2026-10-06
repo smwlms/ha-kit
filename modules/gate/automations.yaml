@@ -1,5 +1,7 @@
 <% set relay = entities.gate_relay %>
+<% set relay_domain = relay.split('.')[0] %>
 <% set gate_sensor = entities.get('gate_sensor') %>
+<% from '_gate.jinja' import camera, dark, ai_value, ai_check with context %>
 <% set phones = people | selectattr('phone', 'defined') | selectattr('phone') | list %>
 # Gate: automations (ha-kit module gate, see gate/LOGIC.md).
 # Written by gate/deploy.py through the config API (same as the automation editor).
@@ -67,6 +69,7 @@
           ask_title: "<@ t('title_ask_open') @>"
           ask_destination: "<@ t('message_ask_destination') @>"
           ask_no_navigation: "<@ t('message_ask_no_navigation') @>"
+          ask_short_trip: "<@ t('message_ask_short_trip') @>"
         cooldown_min: 5
         car_list: "{% from 'gate.jinja' import cars %}{{ cars() | from_json }}"
         targets: "{% from 'gate.jinja' import recipients %}{{ recipients() | from_json }}"
@@ -98,13 +101,22 @@
             {% set ns.c = c %}
           {% endfor %}
           {{ ns.c }}
+        # A car in the zone that navigates home (C) but was not away long enough (no A): a short trip. Asks too.
+        nav_car: >
+          {% set ns = namespace(c='') %}
+          {% for c in in_zone if ns.c == '' and is_state('binary_sensor.gate_' ~ c ~ '_navigating_home', 'on') %}
+            {% set ns.c = c %}
+          {% endfor %}
+          {{ ns.c }}
+        # The car the question is about: away long enough without navigating home first, else the short trip.
+        ask_car: "{{ away_car or nav_car }}"
         # Who is in it: phones moving with the car, else the usual driver (gate.jinja, riders).
         riders_text: >
           {% from 'gate.jinja' import riders %}
-          {% set c = ready_car or away_car %}
+          {% set c = ready_car or ask_car %}
           {{ (riders(c) | from_json | join(' ' ~ txt.joiner ~ ' ')) if c else '' }}
-        # The car the messages are about: ready, else away long enough, else the first in the zone.
-        msg_car: "{{ ready_car or away_car or (in_zone | first | default('')) }}"
+        # The car the messages are about: ready, else the one asked about, else the first in the zone.
+        msg_car: "{{ ready_car or ask_car or (in_zone | first | default('')) }}"
         car_name: "{{ car_list | selectattr('p', 'eq', msg_car) | map(attribute='name') | first | default('') }}"
         car_called: "{{ car_list | selectattr('p', 'eq', msg_car) | map(attribute='called') | first | default(car_name) }}"
         car_Called: "{{ car_list | selectattr('p', 'eq', msg_car) | map(attribute='Called') | first | default(car_name) }}"
@@ -124,8 +136,9 @@
              >= cooldown_min * 60 }}
         test: "{{ is_state('input_boolean.gate_auto_open_dry_run', 'on') }}"
         opens: "{{ c_ok and gate_ok and cooldown_ok }}"
-        # Ask instead of opening: a car that was away long enough approaches without navigating home.
-        asks: "{{ not opens and cooldown_ok and gate_ok and not c_ok and away_car != '' }}"
+        # Ask instead of opening: a car that was away long enough approaches without navigating home (A without C),
+        # or a car navigates home after a short trip (C without A).
+        asks: "{{ not opens and cooldown_ok and gate_ok and ask_car != '' }}"
         details: >
           {% from 'gate.jinja' import riders %}
           {% set ns = namespace(t=[]) %}
@@ -208,7 +221,8 @@
                 notification:
                   title: "{{ txt.ask_title }}"
                   message: >-
-                    {{ ((txt.ask_destination | replace('{dest}', destination)) if destination else txt.ask_no_navigation)
+                    {{ (txt.ask_short_trip if ask_car != away_car
+                        else (txt.ask_destination | replace('{dest}', destination)) if destination else txt.ask_no_navigation)
                        | replace('{the_car}', car_called) | replace('{The_car}', car_Called)
                        | replace('{car}', car_name) }}{{ (' (' ~ riders_text ~ ')') if riders_text else '' }}
                   data:
@@ -257,7 +271,8 @@
           closed: "<@ t('gate_closed') @>"
           not_closed_yet: "<@ t('gate_not_closed_yet') @>"
           closed_at: "<@ t('message_closed_at') @>"
-          not_closed_after_minute: "<@ t('message_not_closed_after_minute') @>"
+          not_closed: "<@ t('message_not_closed_after_tries') @>"
+          close_gate: "<@ t('button_close_gate') @>"
           pulse_given: "<@ t('message_pulse_given_no_sensor') @>"
         # Which phone pressed: iOS sends sourceDeviceID/sourceDeviceName; matched on the person's key, name or phone
         # (device_tracker object id). Unknown: everyone with a phone.
@@ -295,28 +310,49 @@
                             tag: gate-status
                             group: gate
                 - stop: Gate already closed
+            # Blocking: "close until it is closed" (waits for a moving gate, at most 2 pulses). A second press while
+            # it runs returns at once (mode single), so wait until the script is done before reading the state.
             - action: script.gate_close_manual
+              continue_on_error: true
               data:
                 reason: "<@ t('reason_close_notification') @>"
-            - wait_for_trigger:
-                - trigger: state
-                  entity_id: binary_sensor.gate_open
-                  to: "off"
-              timeout: "00:01:00"
+                notify: false
+            - wait_template: "{{ is_state('script.gate_close_manual', 'off') }}"
+              timeout:
+                seconds: "{{ 4 * (states('input_number.gate_travel_time') | float(30) + 10) }}"
               continue_on_timeout: true
+            - variables:
+                closed: "{{ is_state('binary_sensor.gate_open', 'off') }}"
+<% if camera %>
+            - alias: Closed and automation.gate_closed_photo notifies everyone with a photo - no second message
+              condition: template
+              value_template: "{{ not closed or is_state('input_boolean.gate_closed_notify', 'off') }}"
+            - action: script.gate_snapshot
+              continue_on_error: true
+              response_variable: photo
+              data:
+                kind: "{{ 'closed' if closed else 'not-closed' }}"
+<% endif %>
+            - variables:
+                note_data: >-
+                  {% set d = {'tag': 'gate-closed', 'group': 'gate',
+                              'actions': [] if closed else [{'action': 'GATE_CLOSE', 'title': txt.close_gate}]} %}
+<% if camera %>
+                  {{ dict(d, image=photo.image) if photo is defined and photo.image is defined else d }}
+<% else %>
+                  {{ d }}
+<% endif %>
             - repeat:
                 for_each: "{{ targets }}"
                 sequence:
                   - action: "{{ repeat.item }}"
                     continue_on_error: true
                     data:
-                      title: "{{ txt.closed if wait.trigger else txt.not_closed_yet }}"
+                      title: "{{ txt.closed if closed else txt.not_closed_yet }}"
                       message: >-
-                        {{ txt.closed_at | replace('{time}', now().strftime('%H:%M')) if wait.trigger
-                           else txt.not_closed_after_minute }}
-                      data:
-                        tag: gate-status
-                        group: gate
+                        {{ txt.closed_at | replace('{time}', now().strftime('%H:%M')) if closed
+                           else txt.not_closed | replace('{pulses}', '2') }}
+                      data: "{{ note_data }}"
 <% else %>
             - action: script.gate_close_manual
               data:
@@ -389,6 +425,13 @@
       default:
         - repeat:
             sequence:
+<% if camera %>
+              - action: script.gate_snapshot
+                continue_on_error: true
+                response_variable: photo
+                data:
+                  kind: open-too-long
+<% endif %>
               - variables:
                   minutes: >
                     {{ ((now() - states.binary_sensor.gate_open.last_changed).total_seconds() / 60) | round(0) | int }}
@@ -410,7 +453,14 @@
                       data:
                         title: "{{ notification.title }}"
                         message: "{{ notification.message }}"
+<% if camera %>
+                        # With the photo of this moment (script.gate_snapshot), when the camera gave one.
+                        data: >-
+                          {{ dict(notification.data, image=photo.image) if photo is defined and photo.image is defined
+                             else notification.data }}
+<% else %>
                         data: "{{ notification.data }}"
+<% endif %>
               - wait_for_trigger:
                   - trigger: state
                     entity_id: binary_sensor.gate_open
@@ -422,6 +472,63 @@
               - condition: template
                 value_template: "{{ not is_state('binary_sensor.gate_open', 'on') or repeat.index >= 6 }}"
 
+<% if camera %>
+# --- 3b. Gate closed: notification with a photo of that moment ----------------------------------------------------
+# On EVERY closing, whatever closed it (a button or card in HA, closing after leaving, the remote, Google Home, the
+# wall button). The one place that says "Gate is closed": the HA flows send no closed message of their own while
+# input_boolean.gate_closed_notify is on. Fixed tag gate-closed: it replaces the previous closed message and a
+# "not closed yet" of a HA flow (same tag).
+- id: gate_closed_photo
+  alias: "<@ t('closed_photo_alias') @>"
+  description: >-
+    <@ t('closed_photo_description', camera=camera) @>
+<% if 'parcel-service' in modules %>
+    <@ t('closed_photo_description_parcel') @>
+<% endif %>
+  mode: single
+  max_exceeded: silent
+  triggers:
+    - trigger: state
+      entity_id: binary_sensor.gate_open
+      from: "on"
+      to: "off"
+  conditions:
+    - condition: state
+      entity_id: input_boolean.gate_closed_notify
+      state: "on"
+<% if 'parcel-service' in modules %>
+    - alias: "Parcel service: its own proof photo goes to whoever subscribed, no second message"
+      condition: state
+      entity_id: script.parcel_garage
+      state: "off"
+<% endif %>
+  actions:
+    - action: script.gate_snapshot
+      continue_on_error: true
+      response_variable: photo
+      data:
+        kind: closed
+    - variables:
+        txt:
+          title: "<@ t('gate_closed') @>"
+          message: "<@ t('message_closed_at') @>"
+          open_gate: "<@ t('button_open_gate') @>"
+        targets: "{% from 'gate.jinja' import recipients %}{{ recipients() | from_json }}"
+        note_data: >-
+          {% set d = {'tag': 'gate-closed', 'group': 'gate',
+                      'actions': [{'action': 'GATE_OPEN', 'title': txt.open_gate}]} %}
+          {{ dict(d, image=photo.image) if photo is defined and photo.image is defined else d }}
+    - repeat:
+        for_each: "{{ targets }}"
+        sequence:
+          - action: "{{ repeat.item }}"
+            continue_on_error: true
+            data:
+              title: "{{ txt.title }}"
+              message: "{{ txt.message | replace('{time}', now().strftime('%H:%M')) }}"
+              data: "{{ note_data }}"
+
+<% endif %>
 # --- 4. Close the gate behind a departing car -------------------------------------------------------------------
 - id: gate_close_after_departure
   alias: "<@ t('close_after_departure_alias') @>"
@@ -456,7 +563,32 @@
           not_closed_yet: "<@ t('gate_not_closed_yet') @>"
           left_test: "<@ t('message_left_test') @>"
           left_closed: "<@ t('message_left_closed') @>"
+          left_closed_itself: "<@ t('message_left_closed_itself') @>"
           left_not_closed: "<@ t('message_left_not_closed') @>"
+          # No pulse given, per verdict; {why} = what the AI saw.
+          left_no_pulse:
+            moving: "<@ t('message_left_moving_not_closed') @>"
+            closing: "<@ t('message_left_moving_not_closed') @>"
+            opening: "<@ t('message_left_opening') @>"
+            closed: "<@ t('message_left_photo_closed') @>"
+            unsure: "<@ t('message_left_unsure') @>"
+          decision: "<@ t('log_departure_decision') @>"
+          moving_why:
+            pulse: "<@ t('moving_why_pulse') @>"
+            opened: "<@ t('moving_why_opened') @>"
+            cover: "<@ t('moving_why_cover') @>"
+          action_pulse: "<@ t('log_action_close') @>"
+          action_test: "<@ t('log_action_test') @>"
+          action_none: "<@ t('log_action_none') @>"
+          verdict:
+            moving: "<@ t('verdict_moving') @>"
+            closing: "<@ t('verdict_closing') @>"
+            opening: "<@ t('verdict_opening') @>"
+            open: "<@ t('verdict_open') @>"
+            half_open: "<@ t('verdict_half_open') @>"
+            closed: "<@ t('verdict_closed') @>"
+            unsure: "<@ t('verdict_unsure') @>"
+            none: "<@ t('verdict_none') @>"
           open_gate: "<@ t('button_open_gate') @>"
           close_gate: "<@ t('button_close_gate') @>"
         car_list: "{% from 'gate.jinja' import cars %}{{ cars() | from_json }}"
@@ -484,30 +616,103 @@
     - condition: state
       entity_id: binary_sensor.gate_open
       state: "on"
-    - if:
-        - condition: template
-          value_template: "{{ test }}"
-      then:
-        - action: logbook.log
-          data:
-            name: "{{ txt.logbook }}"
-            entity_id: input_boolean.gate_auto_close_enabled
-            message: >-
-              {{ txt.would_close_log | replace('{the_car}', car_called) | replace('{car}', car_name)
-                 | replace('{m}', distance_m | int | string) }}
-      else:
-        - action: script.gate_close_manual
-          data:
-            reason: "{{ txt.reason | replace('{car}', car_name) }}"
-    # At the top level (not inside the else branch) so `wait` is visible below. Test mode: gate stays open, 1 s.
-    - wait_for_trigger:
-        - trigger: state
-          entity_id: binary_sensor.gate_open
-          to: "off"
-      timeout: "{{ 1 if test else 60 }}"
-      continue_on_timeout: true
+    # What does the gate do right now? The remote of whoever drives off, Google Home or the relay's app may have
+    # started it already, and a pulse on a moving gate stops or reverses it.
+    #   moving  = binary_sensor.gate_moving (a pulse or an opening less than the travel time ago): no pulse
+<% if ai_check %>
+    #   else two photos <@ camera @>, judged by script.gate_photo_check (AI): closing = no pulse; open / half_open =
+    #   close (gate_close_manual); opening, closed (while the sensor says open), unsure = no pulse, notification
+    #   with photo; none = no AI service at this moment: close as without a camera
+<% else %>
+    #   else close (gate_close_manual: close until it is closed)<@ '' if camera else '; no garage camera, so no photo check' @>
+<% endif %>
     - variables:
-        closed: "{{ not test and wait.trigger is not none }}"
+        travel: "{{ states('input_number.gate_travel_time') | float(30) }}"
+        moving: "{{ is_state('binary_sensor.gate_moving', 'on') }}"
+        moving_reason: >-
+          {{ txt.moving_why.get(state_attr('binary_sensor.gate_moving', 'reason') | string,
+                                state_attr('binary_sensor.gate_moving', 'reason') | string) }}
+<% if ai_check %>
+    # At the top level (not inside an if) so `check` is visible below; skip: the gate is moving, no photos needed.
+    - action: script.gate_photo_check
+      continue_on_error: true
+      response_variable: check
+      data:
+        skip: "{{ moving }}"
+<% endif %>
+    - variables:
+        verdict: >-
+<% if ai_check %>
+          {{ 'moving' if moving else (check.state if check is defined and check.state is defined else 'unsure') }}
+<% else %>
+          {{ 'moving' if moving else 'none' }}
+<% endif %>
+        check_text: >-
+<% if ai_check %>
+          {{ check.description | default('') if check is defined else '' }}
+<% else %>
+          {{ '' }}
+<% endif %>
+        # Pulse (through gate_close_manual) only when the gate stands still: open, half open, or no photo check.
+        pulse: "{{ verdict in ['open', 'half_open', 'none'] }}"
+    - action: logbook.log
+      data:
+        name: "{{ txt.logbook }}"
+        entity_id: input_boolean.gate_auto_close_enabled
+        message: >-
+          {{ txt.decision | replace('{the_car}', car_called) | replace('{car}', car_name)
+             | replace('{verdict}', txt.verdict.get(verdict, verdict)) | replace('{why}', moving_reason if moving else check_text)
+             | replace('{action}', (txt.action_test if test else txt.action_pulse) if pulse else txt.action_none) }}
+    - choose:
+        - alias: Test mode and it would pulse
+          conditions:
+            - condition: template
+              value_template: "{{ test and pulse }}"
+          sequence:
+            - action: logbook.log
+              data:
+                name: "{{ txt.logbook }}"
+                entity_id: input_boolean.gate_auto_close_enabled
+                message: >-
+                  {{ txt.would_close_log | replace('{the_car}', car_called) | replace('{car}', car_name)
+                     | replace('{m}', distance_m | int | string) }}
+        - alias: Close until it is closed (blocking; then the state is read below)
+          conditions:
+            - condition: template
+              value_template: "{{ pulse }}"
+          sequence:
+            - action: script.gate_close_manual
+              continue_on_error: true
+              data:
+                reason: "{{ txt.reason | replace('{car}', car_name) }}"
+                notify: false
+            - wait_template: "{{ is_state('script.gate_close_manual', 'off') }}"
+              timeout:
+                seconds: "{{ 4 * (travel + 10) }}"
+              continue_on_timeout: true
+        - alias: Moving or closing by itself - no pulse, wait for the end position closed
+          conditions:
+            - condition: template
+              value_template: "{{ verdict in ['moving', 'closing'] }}"
+          sequence:
+            - wait_template: "{{ not is_state('binary_sensor.gate_open', 'on') }}"
+              timeout:
+                seconds: "{{ travel + 10 }}"
+              continue_on_timeout: true
+    - variables:
+        closed: "{{ is_state('binary_sensor.gate_open', 'off') }}"
+        would_close: "{{ test and pulse }}"
+<% if camera %>
+    - alias: Closed and automation.gate_closed_photo notifies everyone with a photo - no second message
+      condition: template
+      value_template: "{{ would_close or not closed or is_state('input_boolean.gate_closed_notify', 'off') }}"
+    # Photo of this moment, before waiting for the phones: proof that it closed, or what it looks like now.
+    - action: script.gate_snapshot
+      continue_on_error: true
+      response_variable: photo
+      data:
+        kind: "{{ 'closed' if closed else 'not-closed' }}"
+<% endif %>
     - alias: Phones report leaving with some delay, wait at most 3 min
       wait_template: >
         {% set ns = namespace(n=0) %}
@@ -532,6 +737,23 @@
           {% endfor %}
           {% set usual = people_list | selectattr('key', 'eq', usual_driver) | selectattr('notify') | map(attribute='notify') | list %}
           {{ ns.l or usual or (people_list | selectattr('notify') | map(attribute='notify') | list) }}
+        message: >-
+          {%- if would_close %}{% set m = txt.left_test %}
+          {%- elif closed %}{% set m = txt.left_closed if pulse else txt.left_closed_itself %}
+          {%- elif verdict in ['open', 'half_open', 'none'] %}{% set m = txt.left_not_closed %}
+          {%- else %}{% set m = txt.left_no_pulse.get(verdict, txt.left_no_pulse.unsure) %}
+          {%- endif %}
+          {{- m | replace('{the_car}', car_called) | replace('{car}', car_name) | replace('{why}', check_text) }}
+        note_data: >-
+          {% set d = {'tag': 'gate-closed', 'group': 'gate',
+                      'actions': [] if would_close
+                                 else ([{'action': 'GATE_OPEN', 'title': txt.open_gate}] if closed
+                                       else [{'action': 'GATE_CLOSE', 'title': txt.close_gate}])} %}
+<% if camera %>
+          {{ dict(d, image=photo.image) if photo is defined and photo.image is defined else d }}
+<% else %>
+          {{ d }}
+<% endif %>
     - repeat:
         for_each: "{{ targets }}"
         sequence:
@@ -539,16 +761,9 @@
             continue_on_error: true
             data:
               title: >-
-                {{ ('🧪 ' ~ txt.would_close) if test else (txt.closed if closed else txt.not_closed_yet) }}
-              message: >-
-                {{ (txt.left_test if test else (txt.left_closed if closed else txt.left_not_closed))
-                   | replace('{the_car}', car_called) | replace('{car}', car_name) }}
-              data:
-                tag: gate-departure
-                group: gate
-                actions: >-
-                  {{ [] if test else ([{'action': 'GATE_OPEN', 'title': txt.open_gate}] if closed
-                     else [{'action': 'GATE_CLOSE', 'title': txt.close_gate}]) }}
+                {{ ('🧪 ' ~ txt.would_close) if would_close else (txt.closed if closed else txt.not_closed_yet) }}
+              message: "{{ message }}"
+              data: "{{ note_data }}"
 <% endif %>
 <% if phones %>
 
@@ -606,6 +821,78 @@
               data:
                 tag: location-{{ owner.key | default('phone') }}
                 group: gate
+<% endif %>
+<% if relay_domain in ['switch', 'button'] %>
+
+# --- 5b. Every relay click counts as a pulse ---------------------------------------------------------------------
+# A click that does not come from script.gate_pulse (the HA UI, the relay's own app, Google Home, a cloud service)
+# moves the gate just as well. This sets input_datetime.gate_last_pulse for it, so the pulse block and
+# binary_sensor.gate_moving see it too, and writes it in the logbook.
+<% if relay_domain == 'button' %>
+# Button: only a press through Home Assistant changes its state; a press in the device's own app stays invisible.
+<% endif %>
+# A cover is not handled here: it reports opening/closing itself, whoever started it (binary_sensor.gate_moving).
+- id: gate_relay_seen
+  alias: "<@ t('relay_seen_alias') @>"
+  description: >-
+    <@ t('relay_seen_description', relay=relay) @>
+  mode: single
+  max_exceeded: silent
+  triggers:
+<% if relay_domain == 'switch' %>
+    - trigger: state
+      entity_id: <@ relay @>
+      from: "off"
+      to: "on"
+<% else %>
+    - trigger: state
+      entity_id: <@ relay @>
+      not_from: unavailable
+      not_to:
+        - unavailable
+        - unknown
+<% endif %>
+<% if relay_domain == 'button' %>
+  conditions:
+    - alias: A real press now (not a restored state after a restart)
+      condition: template
+      value_template: >-
+        {{ trigger.from_state is not none and
+           (as_timestamp(now()) - as_timestamp(trigger.to_state.state, 0)) | abs < 10 }}
+<% endif %>
+  actions:
+    - variables:
+        txt:
+          logbook: "<@ t('logbook_gate') @>"
+          outside: "<@ t('log_pulse_outside') @>"
+          by_user: "<@ t('source_ha_user') @>"
+          by_automation: "<@ t('source_automation') @>"
+          by_device: "<@ t('source_outside') @>"
+        clicked: "{{ as_timestamp(trigger.to_state.last_changed) }}"
+        user: >-
+          {{ states.person | selectattr('attributes.user_id', 'eq', trigger.to_state.context.user_id)
+             | map(attribute='name') | first | default('') if trigger.to_state.context.user_id else '' }}
+    # script.gate_pulse sets gate_last_pulse right after its own click: give it a moment.
+    - delay:
+        seconds: 2
+    - alias: Not from script.gate_pulse (its last pulse is more than 3 s older than this click)
+      condition: template
+      value_template: >-
+        {{ (state_attr('input_datetime.gate_last_pulse', 'timestamp') | float(0)) < clicked - 3 }}
+    - action: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.gate_last_pulse
+      data:
+        timestamp: "{{ clicked }}"
+    - action: logbook.log
+      data:
+        name: "{{ txt.logbook }}"
+        entity_id: <@ relay @>
+        message: >-
+          {% set c = trigger.to_state.context %}
+          {{ txt.outside | replace('{source}',
+               (txt.by_user | replace('{name}', user or '?')) if c.user_id
+               else txt.by_automation if c.parent_id else txt.by_device) }}
 <% endif %>
 
 # --- 6. Reset the Tesla command counter at midnight -------------------------------------------------------------

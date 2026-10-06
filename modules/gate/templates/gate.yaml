@@ -1,4 +1,5 @@
 <% set gate_sensor = entities.get('gate_sensor') %>
+<% set relay = entities.gate_relay %>
 # Gate: template sensors (ha-kit module gate, see gate/LOGIC.md).
 # Filled in from house.yaml by tools/fill.py; uploaded by gate/deploy.py to /config/templates/gate.yaml.
 # Conditions for the automatic opening, evaluated in one place so the automation, the dashboard and
@@ -160,4 +161,93 @@
 <% else %>
       state: "{{ is_state('<@ gate_sensor @>', 'on') }}"
 <% endif %>
+
+# --- Gate moving ----------------------------------------------------------------------------------------------
+# binary_sensor.gate_moving: on while the gate is probably moving, i.e. less than input_number.gate_travel_time after
+#   - the last pulse (input_datetime.gate_last_pulse: script.gate_pulse, and automation.gate_relay_seen for a pulse
+#     from the HA UI, the relay's own app, Google Home, ...), or
+#   - binary_sensor.gate_open going from off to on (opening started, also with the remote),
+# and until the gate reports closed again after that start<@ ', or while the cover reports opening/closing' if relay.startswith('cover.') else '' @>.
+# Home Assistant cannot see the gate move: this is the travel time after the last thing it saw.
+# Two steps, so it turns off on the second without polling: sensor.gate_moving_until holds the end time (only
+# changes on an event) and the binary sensor has a time trigger on exactly that time.
+- trigger:
+    - trigger: state
+      entity_id: input_datetime.gate_last_pulse
+      id: pulse
+    - trigger: state
+      entity_id: binary_sensor.gate_open
+      id: gate
+    - trigger: state
+      entity_id: input_number.gate_travel_time
+      id: travel
+    - trigger: homeassistant
+      event: start
+    - trigger: event
+      event_type: event_template_reloaded
+  action:
+    - variables:
+        travel: "{{ states('input_number.gate_travel_time') | float(30) }}"
+        pulse: "{{ state_attr('input_datetime.gate_last_pulse', 'timestamp') | float(0) }}"
+        # Opening start: captured when gate_open goes from off to on (not from unavailable: a relay that comes back).
+        opened: >-
+          {%- if trigger.id | default('') == 'gate' and trigger.from_state is not none and trigger.to_state is not none
+                 and trigger.from_state.state == 'off' and trigger.to_state.state == 'on' -%}
+            {{ as_timestamp(trigger.to_state.last_changed) }}
+          {%- else -%}
+            {{ state_attr('sensor.gate_moving_until', 'opened_at') | float(0) }}
+          {%- endif -%}
+        start: "{{ [pulse, opened] | max }}"
+        # Closed after the start: the movement is over.
+        closed_at: >-
+          {{ as_timestamp(states.binary_sensor.gate_open.last_changed)
+             if is_state('binary_sensor.gate_open', 'off') and states.binary_sensor.gate_open is not none else 0 }}
+        ended: "{{ start > 0 and closed_at >= start }}"
+        until_ts: "{{ ([start + travel, closed_at] | min) if ended else (start + travel) }}"
+  sensor:
+    - name: "<@ t('sensor_gate_moving_until') @>"
+      unique_id: gate_moving_until
+      default_entity_id: sensor.gate_moving_until
+      device_class: timestamp
+      icon: mdi:timer-sand
+      state: "{{ (until_ts | float) | timestamp_local if start > 0 else none }}"
+      attributes:
+        opened_at: "{{ opened }}"
+        reason: "{{ 'closed' if ended else ('pulse' if pulse >= opened else 'opened') if start > 0 else 'none' }}"
+
+- trigger:
+    - trigger: state
+      entity_id: sensor.gate_moving_until
+    - trigger: time
+      at: sensor.gate_moving_until
+<% if relay.startswith('cover.') %>
+    - trigger: state
+      entity_id: <@ relay @>
+<% endif %>
+    - trigger: homeassistant
+      event: start
+    - trigger: event
+      event_type: event_template_reloaded
+  binary_sensor:
+    - name: "<@ t('sensor_gate_moving') @>"
+      unique_id: gate_moving
+      default_entity_id: binary_sensor.gate_moving
+      device_class: moving
+      icon: mdi:gate-arrow-right
+      state: >-
+        {% set u = states('sensor.gate_moving_until') | as_datetime(none) %}
+        {{ (u is not none and now() < u)<% if relay.startswith('cover.') %> or is_state('<@ relay @>', ['opening', 'closing'])<% endif %> }}
+      attributes:
+        # pulse = a pulse less than the travel time ago; opened = gate_open went from closed to open; none = not moving
+<% if relay.startswith('cover.') %>
+        # cover = the cover reports opening/closing
+<% endif %>
+        reason: >-
+          {%- set u = states('sensor.gate_moving_until') | as_datetime(none) -%}
+          {%- if u is not none and now() < u -%}{{ state_attr('sensor.gate_moving_until', 'reason') }}
+<% if relay.startswith('cover.') %>
+          {%- elif is_state('<@ relay @>', ['opening', 'closing']) -%}cover
+<% endif %>
+          {%- else -%}none{%- endif -%}
+        until: "{{ states('sensor.gate_moving_until') }}"
 <% endif %>

@@ -181,7 +181,7 @@ tesla_driveway_lock_car:
             name: "{{ txt.logbook }}"
             entity_id: "{{ c.lock }}"
             message: >-
-              {% if place == 'unsure' %}
+              {% if when == 'close' and place == 'unsure' %}
                 {{ txt.close_unsure | replace('{car}', c.name) | replace('{minutes}', minutes | string)
                    | replace('{camera}', camera_sentence) }}
               {% else %}
@@ -328,7 +328,7 @@ tesla_garage_photo:
           data:
             name: "{{ txt.logbook }}"
             entity_id: <@ camera @>
-            message: "{{ txt.dark | replace('{car}', names[car]) | replace('{why}', txt.why[reason]) }}"
+            message: "{{ txt.dark | replace('{car}', names[car]) | replace('{why}', (txt.why[reason][:1] | upper) ~ txt.why[reason][1:]) }}"
         - stop: Garage dark
 <% endif %>
     - action: camera.snapshot
@@ -432,7 +432,7 @@ tesla_garage_photo:
               {% if garage.data.drive is defined %}
                 {% set ns.l = ns.l + [txt.drive ~ ' ' ~ txt.drive_verdict.get(garage.data.drive, garage.data.drive)] %}
               {% endif %}
-              {{ txt.result | replace('{car}', names[car]) | replace('{why}', txt.why[reason])
+              {{ txt.result | replace('{car}', names[car]) | replace('{why}', (txt.why[reason][:1] | upper) ~ txt.why[reason][1:])
                  | replace('{result}', ns.l | join(', '))
                  | replace('{description}', garage.data.description | default('')) | replace('{file}', '/media/' ~ file) }}
       else:
@@ -441,6 +441,6 @@ tesla_garage_photo:
             name: "{{ txt.logbook }}"
             entity_id: <@ camera @>
             message: >-
-              {{ txt.no_answer | replace('{car}', names[car]) | replace('{why}', txt.why[reason])
+              {{ txt.no_answer | replace('{car}', names[car]) | replace('{why}', (txt.why[reason][:1] | upper) ~ txt.why[reason][1:])
                  | replace('{file}', '/media/' ~ file) }}
 <% endif %>

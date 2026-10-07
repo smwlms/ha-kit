@@ -1,7 +1,7 @@
 <% set relay = entities.gate_relay %>
 <% set relay_domain = relay.split('.')[0] %>
 <% set gate_sensor = entities.get('gate_sensor') %>
-<% from '_gate.jinja' import camera, dark, ai_value, ai_check with context %>
+<% from '_gate.jinja' import camera, check_camera, dark, ai_value, ai_check with context %>
 <% if relay_domain not in ['switch', 'button', 'cover'] %><@ fail('entities.gate_relay must be a switch, button or cover (now: ' ~ relay ~ ')') @><% endif %>
 # Gate + Tesla quick actions: scripts (ha-kit module gate, see gate/LOGIC.md).
 # Written by gate/deploy.py through the config API (same as the script editor).
@@ -205,6 +205,7 @@ gate_open_manual:
 # --- Internal: photo of this moment (garage camera) -------------------------------------------------------------
 # A file, not /api/camera_proxy: the notification must show the gate at the moment it closed (or did not), not when
 # the phone happens to load the image. 60 files per kind at most (the minute is in the name), so /media stays small.
+# Field camera: another channel of the same camera (gate.check_camera, smaller and faster); default the garage camera.
 gate_snapshot:
   alias: "<@ t('snapshot_alias') @>"
   icon: mdi:camera
@@ -219,17 +220,24 @@ gate_snapshot:
       example: closed
       selector:
         text: {}
+    camera:
+      name: "<@ t('field_camera_name') @>"
+      description: "<@ t('field_camera_description', camera=camera) @>"
+      example: <@ check_camera @>
+      selector:
+        entity:
+          domain: camera
   sequence:
     - variables:
+        cam: "{{ camera | default('', true) or '<@ camera @>' }}"
         file: "gate/{{ kind | default('photo') | slugify }}-{{ now().strftime('%M') }}.jpg"
         result:
           file: "{{ file }}"
           image: "/media/local/{{ file }}"
           media: "media-source://media_source/local/{{ file }}"
     - if:
-        - condition: state
-          entity_id: <@ camera @>
-          state: unavailable
+        - condition: template
+          value_template: "{{ states(cam) in ['unavailable', 'unknown'] }}"
       then:
         - variables:
             result: {}
@@ -238,7 +246,7 @@ gate_snapshot:
     - action: camera.snapshot
       continue_on_error: true
       target:
-        entity_id: <@ camera @>
+        entity_id: "{{ cam }}"
       data:
         filename: "/media/{{ file }}"
     - stop: Photo taken
@@ -253,7 +261,7 @@ gate_photo_check:
   alias: "<@ t('photo_check_alias') @>"
   icon: mdi:image-search
   description: >-
-    <@ t('photo_check_description', camera=camera) @>
+    <@ t('photo_check_description', camera=check_camera) @>
   mode: parallel
   max: 2
   fields:
@@ -276,7 +284,8 @@ gate_photo_check:
           response_variable: result
     - variables:
         ai: <@ ai_value @>
-        gap_s: 2
+        gap_s: 1
+        cam: <@ check_camera @>
         states_ok: [closing, opening, open, half_open, closed, unsure]
         no_answer: "<@ t('photo_check_no_answer') @>"
 <% if dark %>
@@ -307,6 +316,7 @@ gate_photo_check:
       response_variable: first
       data:
         kind: check-1
+        camera: "{{ cam }}"
     - delay:
         seconds: "{{ gap_s }}"
     - action: script.gate_snapshot
@@ -314,6 +324,7 @@ gate_photo_check:
       response_variable: second
       data:
         kind: check-2
+        camera: "{{ cam }}"
     - if:
         - condition: template
           value_template: "{{ first is not defined or first.media is not defined or second is not defined or second.media is not defined }}"
@@ -533,7 +544,7 @@ gate_close_manual:
         - variables:
             targets: "{% from 'gate.jinja' import recipients %}{{ recipients(context.user_id) | from_json }}"
             note_data: >-
-              {% set d = {'tag': 'gate-closed', 'group': 'gate',
+              {% set d = {'tag': 'gate-closed', 'group': 'gate', 'push': {'sound': 'default'},
                           'actions': [] if closed else [{'action': 'GATE_CLOSE', 'title': txt.close_gate}]} %}
 <% if camera %>
               {{ dict(d, image=photo.image) if photo is defined and photo.image is defined else d }}

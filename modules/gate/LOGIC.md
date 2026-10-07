@@ -18,6 +18,8 @@
 <% set sensornote = '' if withsensor else ' (not applicable: no gate sensor filled in)' %>
 <% set travel = module.defaults['input_number.gate_travel_time'] %>
 <% set cam = entities.get('garage_camera') if withsensor else none %>
+<% set gatecfg = gate if gate is defined and gate else {} %>
+<% set checkcam = (gatecfg.get('check_camera') or cam) if cam else none %>
 -->
 
 ## In one sentence
@@ -69,7 +71,7 @@ flowchart TD
   MV -- yes --> WC["no pulse: wait max travel time + 10 s for closed"]
   MV -- no --> CAM{"Garage camera and AI service?"}
   CAM -- no --> CL
-  CAM -- yes --> PH["2 photos, 2 s apart: script.gate_photo_check"]
+  CAM -- yes --> PH["2 photos, 1 s apart (gate.check_camera): script.gate_photo_check"]
   PH -- closing --> WC
   PH -- "open / half_open / no AI right now" --> CL{"Test mode on?"}
   PH -- "opening / closed / unsure" --> NP["no pulse"]
@@ -86,6 +88,8 @@ flowchart TD
 With a camera and `input_boolean.gate_closed_notify` on, the "closed" message comes from `automation.gate_closed_photo` (to everyone, at the moment of closing); this automation then only sends "not closed yet" and "🧪 would close".
 
 The AI service is `gate.ai_task` in `house.yaml`, else `doorbell.ai_task`, else the first `ai_task` entity (auto). `none` = no photo leaves the house: then the gate closes as without a camera (pulse unless it is moving). When the AI call fails or the camera gives no photo, the verdict is `unsure`: no pulse, a notification with the button **Close gate**. With `entities.garage_dark` on: `unsure` without asking the AI.
+
+Timing of the photo check (everything between "the car is far enough" and the pulse): in the source (07-10) it took 15 s with the 1920×1080 channel: photo 1 3.6 s, pause 2 s, photo 2 2.0 s, Gemini 7.5 s (two big images). Now the pause is 1 s, and with `gate.check_camera` (a smaller channel, e.g. the low-resolution channel of UniFi Protect) the photos and the AI call are smaller and faster.
 
 ### Close until it is closed (`script.gate_close_manual`, with a gate sensor)
 
@@ -130,7 +134,13 @@ Without a gate sensor "Close gate" always pulses and the answer is "Pulse given"
 flowchart LR
   T["binary_sensor.gate_open: on to off (whatever closed it)"] --> S{"gate_closed_notify on?<@ ' parcel script not running?' if 'parcel-service' in modules else '' @>"}
   S -- no --> X["nothing (the HA flows send their own closed message)"]
-  S -- yes --> P["photo of this moment: script.gate_snapshot"] --> N["Gate is closed, closed at HH:MM, button Open gate, tag gate-closed: to everyone with notify"]
+  S -- yes --> D{"garage_dark on? (only with entities.garage_dark)"}
+  D -- no --> P["photo of this moment: script.gate_snapshot (gate.check_camera)"]
+  D -- yes --> W["wait max 5 s for light (garage_dark off)"]
+  W -- light --> P
+  W -- "still dark" --> NP["no photo"]
+  P --> N["Gate is closed, closed at HH:MM, button Open gate, tag gate-closed, sound: to everyone with notify"]
+  NP --> N2["same, without photo, text: no photo (garage dark)"]
 ```
 
 Every closing, also with the remote, Google Home or the wall button. The tag `gate-closed` is shared with the "not closed yet" messages of the HA flows (button, card, closing after leaving): the newest replaces the older one, so one message stays.
@@ -199,7 +209,8 @@ Attributes of A: `away_minutes`, `needed_minutes`, `gate_distance_m`, `position_
 | Same in test mode¹, where it would close                                       | no pulse; notification "🧪 Gate would close". Waiting for a moving gate and the photo check run as live | `WOULD CLOSE (test mode)`         | `gate_auto_open_dry_run`                                            |
 | Close gate (button, card) while the gate moves¹                               | no pulse; waits until it is closed or stands still, then a pulse when still open            | `no pulse: the gate is moving (…)`         | `gate_travel_time`                                                  |
 | Close gate, not closed after a pulse¹                                         | the gate stood halfway and reversed: one more pulse (at most `max_pulses`, default 2)       | `not closed … after pulse 1 …`             | field `max_pulses`                                                  |
-| Gate closes (any way), camera, `gate_closed_notify` on²                      | photo of that moment, "Gate is closed" to everyone with button **Open gate**; replaces the previous message (tag `gate-closed`) | | `input_boolean.gate_closed_notify` |
+| Gate closes (any way), camera, `gate_closed_notify` on²                      | photo of that moment, "Gate is closed" to everyone with button **Open gate** and a sound; replaces the previous message (tag `gate-closed`) | | `input_boolean.gate_closed_notify` |
+| Same, `garage_dark` on at the closing²                                       | waits max 5 s for light, then the photo; still dark: no photo, text "no photo (garage dark)" | | `entities.garage_dark` |
 | A relay click outside `script.gate_pulse` (HA UI, relay app, Google Home)     | counts as the last pulse: no second pulse within the travel time, `gate_moving` on¹         | `pulse outside Home Assistant's gate scripts (…)` | `switch` relay                                               |
 | Gate open for `gate_open_alert_minutes`¹                                      | notification "Gate has been open for N min" with **Close gate** and a photo², repeats up to 6 times |                                    | `gate_open_alert_minutes`                                           |
 | Phone loses location access "Always"                                          | notification to the owner and the admin(s); on recovery to the admin(s)                     |                                            | `people[].admin`                                                    |
@@ -220,6 +231,12 @@ Attributes of A: `away_minutes`, `needed_minutes`, `gate_distance_m`, `position_
 ### Photos (with `entities.garage_camera`)
 
 "Gate is closed" (`gate_closed_photo`, every closing), "not closed yet" of a closing through Home Assistant (button, card, closing after leaving) and "open too long" carry a photo **of that moment**: `script.gate_snapshot` writes it to `/media/gate/<kind>-<minute>.jpg` and the notification shows `/media/local/…`. Not `/api/camera_proxy`: the phone may load that only when you open the notification, so it would not show the moment of closing. At most 60 files per kind (the minute is in the name; the same minute an hour later overwrites it).
+
+Which camera: `script.gate_snapshot` has a field `camera` (default `entities.garage_camera`<@ ', here ' ~ cam if cam else '' @>). The two photos of the photo check and the proof photo of "Gate is closed" use `gate.check_camera`<@ ' (here ' ~ checkcam ~ ')' if checkcam else '' @>: a smaller channel is faster (less to fetch, less for the AI service) and enough to see the gate. Empty = the garage camera. "Not closed yet" and "open too long" keep the garage camera: they are not in a hurry.
+
+**The garage camera needs light.** A closed garage without light is black, also by day. Give the garage light that switches on with motion (the moving gate, people, a car) and stays on for a few minutes. Without light the photo check answers `unsure` (no pulse after leaving, a notification instead) and "Gate is closed" comes without a photo ("no photo (garage dark)", with `entities.garage_dark`) or with a black one (without it).
+
+Sound: "Gate is closed", "not closed yet" (button, card, closing after leaving) and "open too long" carry `push: {sound: default}`: iOS plays the default sound (Android ignores it). Not critical and not time-sensitive, so a Focus mode can still silence them.
 
 ### Who is in it (`riders(p)` in `gate.jinja`)
 
@@ -256,7 +273,8 @@ Fixed values in the code (deliberately no helper):
 | block of `gate_travel_time`, except with `force: true` | `gate_pulse`                 | two pulses shortly after each other make the gate stop or reverse                                     |
 | 2 s wait, 3 s margin                          | `gate_relay_seen`                     | `gate_pulse` sets `gate_last_pulse` right after its own click; a click 3 s or more after it is another |
 | travel time + 5 s / + 10 s, at most 2 pulses  | `gate_close_manual`                   | wait for a moving gate / for closed after a pulse; a second pulse only after a reversal                |
-| 2 photos 2 s apart                            | `gate_photo_check`                    | at ±23 s end to end the gate moves ±9 % in 2 s: visible, and the car is not far yet                   |
+| 2 photos 1 s apart                            | `gate_photo_check`                    | at ±23 s end to end the gate moves ±4 % in 1 s: still visible, and the check is 1 s faster (2 s in the source: the whole check took 15 s) |
+| wait max 5 s for light at the closing         | `gate_closed_photo` (with `garage_dark`) | light on motion: the closing gate switches it on; the camera reports it with some delay. Longer delays "Gate is closed" |
 | wait up to 45 s for an offline relay          | `gate_pulse` (switch)                 | in the source a wifi relay dropped out several times an hour for ±33 s                                |
 | wait 3 min for the other car and for phones   | `gate_close_after_departure`          | phones report leaving only 100 to 300 m beyond the zone boundary                                      |
 | 300 m, 5 min, 20 min                          | `riders()`                            | measured: phone and car were 2 to 71 m apart at the same moment; a phone reports every 1 to 5 min     |
@@ -284,6 +302,8 @@ What went wrong in the source and how it was solved.
 16. **A pulse outside Home Assistant.** In the source (06-10) Google Home clicked the relay (no HA context) and the gate began to close. `gate_last_pulse` did not know it, so 12 s later closing after leaving pulsed too: the gate stopped halfway. Now `gate_relay_seen` registers every click, so the pulse block and `gate_moving` see it.
 17. **A pulse on a moving gate stops or reverses it.** The controller goes open, stop, close, stop, open, … on every pulse. The same evening a press on "Close gate" sent the halfway gate open instead of closed. So `gate_close_manual` never pulses while `gate_moving` is on, and gives one more pulse when the gate does not close (it reversed). Closing after leaving looks at two photos first, because the remote of whoever drives off is invisible.
 18. **The photo check can be wrong.** A dark garage, a car in front of the gate or a doubtful answer gives `unsure`: no pulse, and the notification with the photo and **Close gate** lets a person decide. A photo that says opening or closing never gets a pulse.
+19. **Garage light broken: a black proof photo.** In the source (07-10) the garage light was broken. With the gate closed the camera was completely black, also by day, so the photo in "Gate is closed" showed nothing (with the gate open daylight came in and the photo check at leaving worked). The light was repaired (on with motion, 3 min). Now, with `garage_dark` on at the closing, `gate_closed_photo` waits max 5 s for light and otherwise sends no photo with "no photo (garage dark)". A camera that reports dark late (in the source ±10 s after a change of light) can still give a black photo: the camera needs light.
+20. **No sound.** Until 07-10 "Gate is closed" came without a sound and nobody noticed it. Now it and the "not closed yet" and "open too long" messages ask for the default sound (iOS).
 
 ## What it does not do
 

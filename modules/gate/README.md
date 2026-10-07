@@ -66,8 +66,9 @@ Car position, navigation and charging state come from Teslemetry (cloud); the ch
 | `entities.gate_sensor` (optional)                      | `binary_sensor` (on = open) or the `cover` itself. Empty = no end-position sensor                         |
 | `entities.gate_sensor_inverted`                        | `true` when your sensor is **on** while the gate is **closed** (end-position relay "closed")              |
 | `entities.garage_camera` (optional)                    | camera that sees the gate: "Gate is closed" with a photo on every closing (`input_boolean.gate_closed_notify`), photos in "not closed" and "open too long", and the photo check before closing after leaving |
-| `entities.garage_dark` (optional)                      | `binary_sensor`, on when the garage is too dark for the photo check (then: no pulse, a notification)      |
+| `entities.garage_dark` (optional)                      | `binary_sensor`, on when the garage is too dark for a photo: the photo check answers `unsure` (no pulse, a notification); "Gate is closed" waits max 5 s for light, else comes without a photo |
 | `gate.ai_task` (optional)                              | AI service for the photo check: empty = `doorbell.ai_task`, empty there too = the first `ai_task` entity; `none` = no photo leaves the house (closing after leaving then pulses unless the gate is moving) |
+| `gate.check_camera` (optional)                         | a smaller, faster channel of the garage camera (e.g. UniFi Protect's low-resolution channel) for the two photos of the photo check and the proof photo of "Gate is closed". Empty = `entities.garage_camera` |
 | `teslemetry.*`                                         | pattern of the Teslemetry entities per role, see "Entity names"                                           |
 
 The number of cars and people is free. Everything that exists per car or per person is repeated when filling in.
@@ -144,7 +145,7 @@ When one car differs (in the source one car had `binary_sensor.garage_<prefix>_t
 | Scripts     | `gate_pulse` (internal), `gate_snapshot`² and `gate_photo_check`³ (internal), `gate_open_manual`, `gate_close_manual`, `tesla_unlock_charge_cable`, `leaving`, `leaving_<car>` per car                                                                                                                                       |
 | Macros      | `custom_templates/gate.jinja`: `cars()`, `people()`, `conditions(p)`, `all_conditions()`, `riders(p)`, `recipients(user_id)`                                                                                                                                                                                                |
 
-¹ only with `entities.gate_sensor`. ² with a gate sensor and `entities.garage_camera`. ³ the same plus an AI service (`gate.ai_task` not `none`). Photos go to `/media/gate/` (at most 60 per kind).
+¹ only with `entities.gate_sensor`. ² with a gate sensor and `entities.garage_camera`. ³ the same plus an AI service (`gate.ai_task` not `none`). Photos go to `/media/gate/` (at most 60 per kind). The garage camera needs light (e.g. light on motion): in a dark garage the photo check gives `unsure` and the proof photo is missing or black. "Gate is closed", "not closed yet" and "open too long" play the default sound on iOS.
 
 Names, notifications and logbook lines are in `house.language` (texts in `strings.yaml`); the entity ids are the same in every language.
 

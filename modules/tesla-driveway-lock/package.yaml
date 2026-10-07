@@ -1,8 +1,10 @@
 <% from '_tesla_driveway_lock.jinja' import tdl, photo, ent, car_list, spots with context %>
 <% if not car_list %><@ fail('house.yaml has no cars (the module tesla-driveway-lock needs at least one)') @><% endif %>
 <% if photo and not ent.get('garage_camera') %><@ fail('house.yaml: tesla_driveway_lock.garage_photo is true but entities.garage_camera is empty') @><% endif %>
-<% if photo and not spots %><@ fail('house.yaml: tesla_driveway_lock.garage_photo is true but no car has a garage_spot (e.g. left, right)') @><% endif %>
-<% for sp in spots if not (sp is string and sp == sp | lower and sp.replace('_', '').isalnum() and sp not in ['t', 'car', 'description']) %><@ fail('house.yaml: cars[].garage_spot ' ~ sp ~ ' must be one word in lower case (e.g. left, right, middle; not t, car or description)') @><% endfor %>
+<% if photo and not spots %><@ fail('house.yaml: tesla_driveway_lock.garage_photo is true but there are no garage spots: set tesla_driveway_lock.garage_spots (e.g. [left, right]) or cars[].garage_spot') @><% endif %>
+<% for a in car_list if a.prefix in ['car', 'empty', 'unsure', 'none'] %><@ fail('house.yaml: cars[].prefix ' ~ a.prefix ~ ' is a reserved verdict of the garage photo (car, empty, unsure, none)') @><% endfor %>
+<% set reserved = ['t', 'car', 'why', 'drive', 'tried', 'description'] + (car_list | map(attribute='prefix') | list) %>
+<% for sp in spots if not (sp is string and sp == sp | lower and sp.replace('_', '').isalnum() and sp not in reserved) %><@ fail('house.yaml: garage spot ' ~ sp ~ ' must be one word in lower case (e.g. left, right, middle; not t, car, why, drive, tried, description or a car prefix)') @><% endfor %>
 # Tesla on the driveway gets locked: helpers (ha-kit module tesla-driveway-lock, see tesla-driveway-lock/LOGIC.md
 # "Settings"). Uploaded by tesla-driveway-lock/deploy.py to /config/packages/tesla_driveway_lock.yaml (module base:
 # packages/). No `initial`: deploy.py sets the defaults from module.yaml (defaults:) once, when a helper is new; the
@@ -26,8 +28,9 @@ input_number:
 <% if photo %>
 
 input_text:
-  # Last arrival photo verdict, JSON {"t": time, "car": prefix, "<spot>": "occupied|empty|unsure", ...}.
-  # Written by automation.tesla_garage_arrival_photo, read by automation.tesla_driveway_lock.
+  # Last garage photo verdict, JSON {"t": time, "car": prefix, "why": "park|close", "<spot>": "<car prefix>|car|empty|unsure",
+  # "drive": "car|none|unsure", "tried": [prefix, ...]}. Written by script.tesla_garage_photo (on parking and when the
+  # gate closes) and by script.tesla_driveway_lock_car ("tried"), read by script.tesla_driveway_lock_car.
   tesla_garage_photo:
     name: "<@ t('helper_photo') @>"
     icon: mdi:garage-variant

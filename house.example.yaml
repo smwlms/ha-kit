@@ -110,8 +110,11 @@ cars:
   # color       (optional, tesla-route) colour on the cards (hex); default a colour from the palette
   # badge       (optional, tesla-route) values: lightning | plaid | an own "<svg ...>" (48x48); default a circle with
   #             the first letter
-  # garage_spot (optional, tesla-driveway-lock with garage photo) fixed spot of the car in the garage, seen from the
-  #             garage camera: one lower-case word (e.g. left, right, middle). Without: the GPS decides
+  # garage_spot (optional, tesla-driveway-lock with garage photo) usual spot of the car in the garage, seen from the
+  #             garage camera: one lower-case word (e.g. left, right, middle). Only lists the spots Gemini reports on
+  #             (when tesla_driveway_lock.garage_spots is empty); the decision does not depend on it
+  # look        (optional, tesla-driveway-lock with garage photo) how Gemini recognises the car in the garage: model,
+  #             shape, colour (e.g. "Tesla Model Y, white, a taller crossover"). Default "a Tesla"
   # entities    (optional) entity ids that do not follow the pattern of 'teslemetry' below (one key per role)
   # battery_kwh (optional, ev-charging) usable battery in kWh; needed for the charge plan and the energy a car still
   #             needs. Empty = no charge plan for this car, and 75 kWh in the energy plan
@@ -234,6 +237,9 @@ entities:
   # (optional, tesla-driveway-lock, gate) binary_sensor that is on when the garage is dark: then no photo (the GPS
   # decides; the gate does not pulse after leaving and notifies). Empty = always a photo; Gemini answers "unsure" on a black image.
   garage_dark: binary_sensor.garage_dark
+  # (optional, tesla-driveway-lock with garage photo) camera that sees the driveway: second image for Gemini, does a
+  # car stand on the driveway? Empty = only the garage photo.
+  driveway_camera: camera.driveway
   # --- shading ---
   # (required for shading on sun and heat, and for climate) weather entity with an hourly forecast
   # (weather.get_forecasts, type hourly) and preferably cloud coverage (cloud_coverage), e.g. Met.no; climate also
@@ -477,9 +483,12 @@ gate:
 # (optional, tesla-driveway-lock) Car on the driveway gets locked. The waiting time and the radius of zone.driveway are
 # start values in modules/tesla-driveway-lock/module.yaml (defaults:) and you tune them afterwards in Home Assistant.
 tesla_driveway_lock:
-  # (optional) true = garage photo on arrival: Gemini says whether the fixed spot of the car is empty or taken, and
-  # that decides first. Needs entities.garage_camera and cars[].garage_spot. Default false: GPS only (zone.driveway).
+  # (optional) true = garage photo when a car parks and when the gate closes: Gemini says which car stands on each
+  # spot (cars[].look), and that decides first, whatever the spot. With the gate sensor (entities.gate_sensor) a car
+  # that stands unlocked outside when the gate closes is locked right away. Needs entities.garage_camera and the
+  # spots (garage_spots or cars[].garage_spot). Default false: GPS only (zone.driveway).
   garage_photo: false
+  garage_spots: # (optional) the parking spots in the garage as the camera sees them, e.g. [left, right]; empty = every cars[].garage_spot
   ai_task: # (optional) ai_task entity or auto; empty = doorbell.ai_task; none = no garage photo to an AI service
   garage_hint: # (optional) one extra sentence for Gemini about the garage, e.g. "Bikes are parked on the left too."
 

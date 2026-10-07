@@ -5,8 +5,9 @@
 # - {car}, {minutes}, {reason}, ... without a value at fill time stay in the text and are filled in by Home Assistant
 #   at run time (replace('{car}', ...)); keep them when you translate;
 # - no emoji: the templates add them;
-# - the verdicts of the garage photo are fixed English values (occupied, empty, unsure): Gemini answers with them and
-#   they are stored in input_text.tesla_garage_photo. The verdict_* texts are only how they are shown.
+# - the verdicts of the garage photo are fixed values (a car prefix, car, empty, unsure; for the driveway car, none,
+#   unsure): Gemini answers with them and they are stored in input_text.tesla_garage_photo. The verdict_* texts are
+#   only how they are shown (a car prefix is shown as the car's name).
 
 # --- helper names (package.yaml), zone and sensor names; {car} is filled in at fill time ---
 helper_enabled: { en: "Tesla on driveway: lock automatically", nl: "Tesla op oprit automatisch op slot" }
@@ -16,103 +17,183 @@ zone_name: { en: "Driveway", nl: "Oprit" }
 sensor_home_unlocked: { en: "Tesla driveway {car} home unlocked", nl: "Tesla oprit {car} thuis open" }
 
 # --- verdicts of the garage photo (display only) ---
-verdict_occupied: { en: "occupied", nl: "bezet" }
+verdict_car: { en: "a car (not recognised)", nl: "een auto (niet herkend)" }
 verdict_empty: { en: "empty", nl: "leeg" }
 verdict_unsure: { en: "unsure", nl: "onzeker" }
+verdict_none: { en: "no car", nl: "geen auto" }
+verdict_drive_car: { en: "a car", nl: "een auto" }
+why_park: { en: "parked", nl: "geparkeerd" }
+why_close: { en: "gate closed", nl: "poort dicht" }
+photo_drive: { en: "driveway", nl: "oprit" }
 
 # --- automation tesla_driveway_lock ---
 lock_alias: { en: "Tesla on the driveway: lock automatically", nl: "Tesla op de oprit automatisch op slot" }
 lock_description:
   en: >-
     A Tesla that has been in P at home and unlocked for input_number.tesla_driveway_lock_minutes
-    (binary_sensor.tesla_driveway_<car>_home_unlocked). When it is outside, one lock command (wakes the car),
-    counted in counter.tesla_commands_today. Outside =
+    (binary_sensor.tesla_driveway_<car>_home_unlocked). Calls script.tesla_driveway_lock_car: when it is outside, one
+    lock command (wakes the car), counted in counter.tesla_commands_today. Outside =
   nl: >-
     Een Tesla die thuis input_number.tesla_driveway_lock_minutes in P staat en niet op slot is
-    (binary_sensor.tesla_driveway_<auto>_home_unlocked). Staat hij buiten, dan één slotcommando (wekt de auto),
-    geteld in counter.tesla_commands_today. Buiten =
+    (binary_sensor.tesla_driveway_<auto>_home_unlocked). Roept script.tesla_driveway_lock_car: staat hij buiten, dan
+    één slotcommando (wekt de auto), geteld in counter.tesla_commands_today. Buiten =
 lock_description_photo:
   en: >-
-    its own spot is empty on the garage photo on arrival (input_text.tesla_garage_photo, taken after this car went
-    into P); no usable photo: GPS within the radius of zone.driveway.
+    the last garage photo (input_text.tesla_garage_photo, taken after this car went into P) does not show this car
+    in the garage, whatever the spot; no usable photo: GPS within the radius of zone.driveway.
   nl: >-
-    de eigen plaats is leeg op de garagefoto bij aankomst (input_text.tesla_garage_photo, genomen nadat deze auto in
-    P ging); geen bruikbare foto: GPS binnen de straal van zone.driveway.
+    de laatste garagefoto (input_text.tesla_garage_photo, genomen nadat deze auto in P ging) toont deze auto niet in
+    de garage, op welke plaats ook; geen bruikbare foto: GPS binnen de straal van zone.driveway.
 lock_description_gps:
   en: GPS within the radius of zone.driveway.
   nl: GPS binnen de straal van zone.driveway.
 lock_description_tail:
   en: One attempt per parking. Master switch input_boolean.tesla_driveway_lock_enabled.
   nl: Eén poging per parkeerbeurt. Hoofdschakelaar input_boolean.tesla_driveway_lock_enabled.
+
+# --- automations tesla_garage_arrival_photo and tesla_driveway_gate_closed ---
+arrival_alias: { en: "Tesla garage photo on arrival", nl: "Tesla garagefoto bij aankomst" }
+arrival_description:
+  en: >-
+    A Tesla shifts into P at home: after 5 s script.tesla_garage_photo (which car stands where in the garage).
+  nl: >-
+    Een Tesla schakelt thuis naar P: na 5 s script.tesla_garage_photo (welke auto staat waar in de garage).
+closed_alias: { en: "Tesla driveway lock: gate closed", nl: "Tesla oprit-slot: poort dicht" }
+closed_description:
+  en: >-
+    The gate closed (binary_sensor.gate_open from on to off, also with the remote or the wall button) while a Tesla
+    stands unlocked in P at home: a garage photo right away (script.tesla_garage_photo), then per car
+    script.tesla_driveway_lock_car: not in the garage = locked now. An unsure photo changes nothing: the lock after
+    input_number.tesla_driveway_lock_minutes decides as usual. Master switch input_boolean.tesla_driveway_lock_enabled.
+  nl: >-
+    De poort ging dicht (binary_sensor.gate_open van aan naar uit, ook met de afstandsbediening of de wandknop)
+    terwijl een Tesla thuis open in P staat: meteen een garagefoto (script.tesla_garage_photo), dan per auto
+    script.tesla_driveway_lock_car: niet in de garage = nu op slot. Een onzekere foto verandert niets: het slot na
+    input_number.tesla_driveway_lock_minutes beslist zoals gewoonlijk. Hoofdschakelaar
+    input_boolean.tesla_driveway_lock_enabled.
+
+# --- script tesla_driveway_lock_car ---
+script_lock_alias: { en: "Tesla driveway lock: decide and lock", nl: "Tesla oprit-slot: beslissen en vergrendelen" }
+script_lock_description:
+  en: >-
+    Decides for one car whether it stands outside and locks it then (one command, wakes a sleeping car). The last
+    garage photo after parking decides by which car stands in the garage, not by the spot; no usable photo: after N
+    min the GPS (zone.driveway), right after the gate closed nothing. Called by the automations of this module.
+  nl: >-
+    Beslist voor één auto of hij buiten staat en doet hem dan op slot (één commando, wekt een slapende auto). De
+    laatste garagefoto na het parkeren beslist op basis van welke auto in de garage staat, niet van de plaats; geen
+    bruikbare foto: na N min de GPS (zone.driveway), vlak na het sluiten van de poort niets. Aangeroepen door de
+    automations van deze module.
+field_car_name: { en: "Car", nl: "Auto" }
+field_car_description: { en: "Prefix of the car (cars[].prefix)", nl: "Prefix van de auto (cars[].prefix)" }
+field_source_name: { en: "When", nl: "Wanneer" }
+field_source_description:
+  en: "minutes = after N min unlocked at home (GPS as a fallback); close = right after the gate closed (photo only)"
+  nl: "minutes = na N min open thuis (GPS als terugval); close = vlak na het sluiten van de poort (enkel de foto)"
 logbook_lock: { en: "Tesla driveway lock", nl: "Tesla oprit-slot" }
-camera_sentence: { en: "garage photo {time}: {spots}", nl: "garagefoto {time}: {spots}" }
-camera_no_spot: { en: "no fixed spot in the garage", nl: "geen vaste plaats in de garage" }
+camera_sentence: { en: "garage photo {time} ({why}): {spots}", nl: "garagefoto {time} ({why}): {spots}" }
 camera_no_photo: { en: "no garage photo after parking", nl: "geen garagefoto na het parkeren" }
-reason_photo_empty: { en: "garage photo: spot {spot} empty", nl: "garagefoto: plaats {spot} leeg" }
-reason_photo_occupied: { en: "garage photo: spot {spot} occupied", nl: "garagefoto: plaats {spot} bezet" }
+reason_seen: { en: "garage photo: {car} in the garage", nl: "garagefoto: {car} in de garage" }
+reason_only_car:
+  en: "garage photo: a car in the garage that can only be {car}"
+  nl: "garagefoto: een auto in de garage die enkel {car} kan zijn"
+reason_not_seen: { en: "garage photo: {car} not in the garage", nl: "garagefoto: {car} niet in de garage" }
 reason_gps:
   en: "GPS {m} m from the middle of zone.driveway (radius {radius} m)"
   nl: "GPS {m} m van het midden van zone.driveway (straal {radius} m)"
 log_stays_unlocked:
   en: "{car} stays unlocked: it is in the garage ({reason}). {camera}"
   nl: "{car} blijft open: staat in de garage ({reason}). {camera}"
+log_close_unsure:
+  en: "{car}: gate closed, but the garage photo is not clear. The lock decides after {minutes} min. {camera}"
+  nl: "{car}: poort dicht, maar de garagefoto is niet duidelijk. Het slot beslist na {minutes} min. {camera}"
+log_tried:
+  en: "{car} stays as it is: the lock was already tried when the gate closed. No new attempt."
+  nl: "{car} blijft zoals hij is: het slot werd al geprobeerd toen de poort dichtging. Geen nieuwe poging."
 title_locked: { en: "{car} locked", nl: "{car} op slot" }
 title_not_locked: { en: "{car} not locked", nl: "{car} niet op slot" }
 message_locked:
   en: "Was unlocked on the driveway for {minutes} min. Locked automatically."
   nl: "Stond {minutes} min open op de oprit. Automatisch vergrendeld."
+message_locked_close:
+  en: "Stood unlocked on the driveway when the gate closed. Locked automatically."
+  nl: "Stond open op de oprit toen de poort dichtging. Automatisch vergrendeld."
 message_not_locked:
   en: >-
-    Was unlocked on the driveway for {minutes} min, but the lock command failed (lock: {state}).
+    Stood unlocked on the driveway, but the lock command failed (lock: {state}).
     There will be no new attempt; lock it in the Tesla app.
   nl: >-
-    Stond {minutes} min open op de oprit, maar het slotcommando lukte niet (slot: {state}).
+    Stond open op de oprit, maar het slotcommando lukte niet (slot: {state}).
     Er komt geen nieuwe poging; vergrendel hem in de Tesla-app.
 log_locked:
   en: "{car} locked: was unlocked outside for {minutes} min ({reason}){woken}."
   nl: "{car} op slot gedaan: stond {minutes} min open buiten ({reason}){woken}."
+log_locked_close:
+  en: "{car} locked: stood unlocked outside when the gate closed ({reason}){woken}."
+  nl: "{car} op slot gedaan: stond open buiten toen de poort dichtging ({reason}){woken}."
 log_woken: { en: ", woken", nl: ", gewekt" }
 log_not_locked:
   en: "{car} NOT locked: no confirmation within 90 s (lock {state}, asleep {asleep}, {reason}). No new attempt."
   nl: "{car} NIET op slot: geen bevestiging binnen 90 s (slot {state}, sliep {asleep}, {reason}). Geen nieuwe poging."
 
-# --- automation tesla_garage_arrival_photo; {camera}, {spots}, {dark} are filled in at fill time ---
-photo_alias: { en: "Tesla garage photo on arrival", nl: "Tesla garagefoto bij aankomst" }
+# --- script tesla_garage_photo; {camera}, {spots}, {dark} are filled in at fill time ---
+photo_alias: { en: "Tesla garage photo", nl: "Tesla garagefoto" }
 photo_description:
   en: >-
-    A Tesla with a fixed spot in the garage (cars[].garage_spot) shifts into P at home. After 5 s a snapshot of
-    {camera}; Gemini says per spot occupied, empty or unsure ({spots}). The result with its time goes into
-    input_text.tesla_garage_photo and is used by automation.tesla_driveway_lock.
+    Snapshot of {camera} (and of entities.driveway_camera when set); Gemini names per spot ({spots}) the car it
+    recognises, car, empty or unsure, and whether a car stands on the driveway. The verdict with its time goes into
+    input_text.tesla_garage_photo and is used by script.tesla_driveway_lock_car.
   nl: >-
-    Een Tesla met een vaste plaats in de garage (cars[].garage_spot) schakelt thuis naar P. Na 5 s een snapshot van
-    {camera}; Gemini zegt per plaats bezet, leeg of onzeker ({spots}). Het resultaat met tijdstip komt in
-    input_text.tesla_garage_photo en wordt gebruikt door automation.tesla_driveway_lock.
+    Snapshot van {camera} (en van entities.driveway_camera als die er is); Gemini noemt per plaats ({spots}) de auto
+    die hij herkent, car, empty of unsure, en of er een auto op de oprit staat. Het oordeel met tijdstip komt in
+    input_text.tesla_garage_photo en wordt gebruikt door script.tesla_driveway_lock_car.
 photo_description_dark:
-  en: No photo while it is dark in the garage ({dark} on).
-  nl: Geen foto als het donker is in de garage ({dark} aan).
+  en: In the dark ({dark} on) it waits up to 5 s for the light, else no photo.
+  nl: In het donker ({dark} aan) wacht het tot 5 s op het licht, anders geen foto.
+field_photo_car_description:
+  en: "Prefix of the car that caused the photo (only for the logbook and the file name)"
+  nl: "Prefix van de auto die de foto veroorzaakte (enkel voor het logboek en de bestandsnaam)"
+field_why_name: { en: "Why", nl: "Waarom" }
+field_why_description: { en: "park = a car went into P; close = the gate closed", nl: "park = een auto ging in P; close = de poort ging dicht" }
 logbook_photo: { en: "Tesla garage photo", nl: "Tesla garagefoto" }
 log_dark:
-  en: "{car} in P, but the garage is dark: no photo (the lock decides later with the GPS)"
-  nl: "{car} in P, maar de garage is donker: geen foto (het slot beslist later met de GPS)"
-log_photo: { en: "{car} in P: {result}. {description} ({file})", nl: "{car} in P: {result}. {description} ({file})" }
+  en: "{why} ({car}), but the garage is dark: no photo"
+  nl: "{why} ({car}), maar de garage is donker: geen foto"
+log_photo: { en: "{why} ({car}): {result}. {description} ({file})", nl: "{why} ({car}): {result}. {description} ({file})" }
 log_no_answer:
-  en: "{car} in P: no answer from Gemini, photo not judged ({file})"
-  nl: "{car} in P: geen antwoord van Gemini, foto niet beoordeeld ({file})"
-ai_task_name: { en: "Garage photo on arrival", nl: "Garagefoto bij aankomst" }
+  en: "{why} ({car}): no answer from Gemini, photo not judged ({file})"
+  nl: "{why} ({car}): geen antwoord van Gemini, foto niet beoordeeld ({file})"
+ai_task_name: { en: "Garage photo", nl: "Garagefoto" }
 ai_intro_one:
-  en: "This is a photo of the security camera in a garage. There is one parking spot: {spots}, seen from the camera."
-  nl: "Dit is een foto van de bewakingscamera in een garage. Er is één parkeerplaats: {spots}, gezien vanuit de camera."
+  en: "Image 1 is from the security camera inside a garage. There is one parking spot: {spots}, seen from the camera."
+  nl: "Beeld 1 komt van de bewakingscamera binnen in een garage. Er is één parkeerplaats: {spots}, gezien vanuit de camera."
 ai_intro_many:
-  en: "This is a photo of the security camera in a garage. There are {count} parking spots: {spots}, seen from the camera."
-  nl: "Dit is een foto van de bewakingscamera in een garage. Er zijn {count} parkeerplaatsen: {spots}, gezien vanuit de camera."
+  en: "Image 1 is from the security camera inside a garage. There are {count} parking spots: {spots}, seen from the camera."
+  nl: "Beeld 1 komt van de bewakingscamera binnen in een garage. Er zijn {count} parkeerplaatsen: {spots}, gezien vanuit de camera."
+ai_cars: { en: "The cars of this house, with the code to answer:", nl: "De auto's van dit huis, met de code om te antwoorden:" }
+ai_look_default: { en: "a Tesla", nl: "een Tesla" }
 ai_rules:
   en: >-
-    Say per spot whether a car is parked there: occupied, empty or unsure. When the image is (almost) black or
-    unclear, answer 'unsure'. Only say 'empty' when you clearly see the empty spot.
+    Say per spot what is parked there INSIDE the garage: the code of the car when you recognise it; 'car' for a car
+    you cannot tell apart; 'empty' when no car stands there (bikes, a cargo bike, boxes or a person are not cars);
+    'unsure' when the image is (almost) black or unclear. Any car can stand on any spot: do not assume a fixed spot. A
+    car you see outside through an open gate is NOT in the garage.
   nl: >-
-    Zeg per plaats of er een auto staat: occupied (bezet), empty (leeg) of unsure (onzeker). Is het beeld (bijna)
-    zwart of onduidelijk, antwoord dan 'unsure'. Zeg enkel 'empty' als je de lege plaats duidelijk ziet.
+    Zeg per plaats wat er BINNEN in de garage staat: de code van de auto als je hem herkent; 'car' voor een auto die
+    je niet kunt onderscheiden; 'empty' als er geen auto staat (fietsen, een bakfiets, dozen of een persoon zijn geen
+    auto's); 'unsure' als het beeld (bijna) zwart of onduidelijk is. Elke auto kan op elke plaats staan: ga niet uit
+    van een vaste plaats. Een auto die je buiten door een open poort ziet, staat NIET in de garage.
+ai_drive:
+  en: >-
+    Image 2 is from the camera on the driveway; part of it may be hidden (plants, a fence). Say at 'drive' whether a
+    car stands on the driveway: car, none or unsure.
+  nl: >-
+    Beeld 2 komt van de camera op de oprit; een deel kan verborgen zijn (planten, een haag). Zeg bij 'drive' of er
+    een auto op de oprit staat: car (ja), none (nee) of unsure (onzeker).
 ai_spot_question:
-  en: "Is a car parked on spot {spot}? occupied, empty or unsure"
-  nl: "Staat er een auto op de plaats {spot}? occupied (bezet), empty (leeg) of unsure (onzeker)"
+  en: "Which car stands inside the garage on spot {spot}? the car's code, car, empty or unsure"
+  nl: "Welke auto staat binnen in de garage op de plaats {spot}? de code van de auto, car, empty of unsure"
+ai_drive_question:
+  en: "Does a car stand on the driveway (image 2)? car, none or unsure"
+  nl: "Staat er een auto op de oprit (beeld 2)? car, none of unsure"
 ai_description: { en: "One short English sentence about what you see", nl: "Eén korte Nederlandse zin over wat je ziet" }

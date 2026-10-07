@@ -1,5 +1,5 @@
-<% from '_tesla_driveway_lock.jinja' import tdl, photo, ent, car_list with context %>
-"""Deploy module 'tesla-driveway-lock': helpers, per-car sensors, zone.driveway and the lock automation
+<% from '_tesla_driveway_lock.jinja' import tdl, photo, ent, car_list, drive_cam, on_close with context %>
+"""Deploy module 'tesla-driveway-lock': helpers, per-car sensors, zone.driveway, the automations and scripts
 (see tesla-driveway-lock/README.md).
 
 Run from the filled-in folder (output of tools/fill.py), with HA_URL and HA_TOKEN set (see ha_api.py):
@@ -11,7 +11,7 @@ Steps:
   3. checks the configuration, reloads the helpers and the template sensors
   4. gives every helper that did not exist before its default from module.yaml (defaults:), once;
      the master switch (input_boolean.tesla_driveway_lock_enabled) starts OFF
-  5. writes automations.yaml through the config API (same as the automation editor)
+  5. writes scripts.yaml and automations.yaml through the config API (same as the script and automation editors)
   --setup    one-off: creates zone.driveway (passive, radius from module.yaml, named in house.language) around
              house.lat/lon when it does not exist yet. Move it onto the driveway afterwards (Settings > Areas & zones >
              Zones), see README.
@@ -49,6 +49,10 @@ PACKAGE = HERE / "package.yaml"
 HELPERS = ("input_boolean", "input_number") + (("input_text",) if WITH_PHOTO else ())
 NEEDS = {"counter.tesla_commands_today": "module gate (gate/deploy.py; a new counter appears after one restart of "
                                          "Home Assistant)"}
+<% if on_close %>
+# The photo when the gate closes listens to the gate sensor of module gate.
+NEEDS["binary_sensor.gate_open"] = "module gate with entities.gate_sensor (gate/deploy.py)"
+<% endif %>
 # Entities from integrations (only reported when missing).
 EXPECTED = [
 <% for a in car_list %>
@@ -59,6 +63,9 @@ EXPECTED = [
     <@ ent.get('garage_camera') | tojson @>,
 <% if ent.get('garage_dark') %>
     <@ ent.garage_dark | tojson @>,
+<% endif %>
+<% if drive_cam %>
+    <@ drive_cam | tojson @>,
 <% endif %>
 <% endif %>
 ]
@@ -97,6 +104,7 @@ def setup(current: set[str]) -> None:
 
 def main() -> None:
     automations = HERE / "automations.yaml"
+    scripts = HERE / "scripts.yaml"
     if "--dry-run" in sys.argv:
         print("dry run: nothing sent")
         print("  check:", ", ".join(NEEDS), "| only reported when missing:", ", ".join(EXPECTED))
@@ -107,7 +115,8 @@ def main() -> None:
             print("  upload", src.relative_to(HERE.parent), "->", dst)
         print("  check_config, reload:", ha_api.describe_helper_reload(PACKAGE, HELPERS) + ", template")
         print("  defaults for new helpers:", ", ".join(f"{k}={v}" for k, v in DEFAULTS.items()))
-        print("  config API: automations", ", ".join(a["id"] for a in yaml.safe_load(automations.read_text())))
+        print("  config API: scripts", ", ".join(yaml.safe_load(scripts.read_text()) or {}),
+              "| automations", ", ".join(a["id"] for a in yaml.safe_load(automations.read_text())))
         return
 
     current = ha_api.entity_ids()
@@ -136,6 +145,8 @@ def main() -> None:
     ha_api.rest("/api/services/template/reload", {})
     print("template sensors reloaded")
     ha_api.set_defaults(DEFAULTS, current)
+    # Scripts first: the automations call them.
+    ha_api.push_automations_and_scripts(None, scripts)
     ha_api.push_automations_and_scripts(automations, None)
     print("done. The master switch is off after a first install: follow the test plan in LOGIC.md first.")
 

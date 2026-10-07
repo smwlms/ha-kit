@@ -1,7 +1,7 @@
 <% set relay = entities.gate_relay %>
 <% set relay_domain = relay.split('.')[0] %>
 <% set gate_sensor = entities.get('gate_sensor') %>
-<% from '_gate.jinja' import camera, dark, ai_value, ai_check with context %>
+<% from '_gate.jinja' import camera, check_camera, dark, ai_value, ai_check with context %>
 <% set phones = people | selectattr('phone', 'defined') | selectattr('phone') | list %>
 # Gate: automations (ha-kit module gate, see gate/LOGIC.md).
 # Written by gate/deploy.py through the config API (same as the automation editor).
@@ -335,7 +335,7 @@
 <% endif %>
             - variables:
                 note_data: >-
-                  {% set d = {'tag': 'gate-closed', 'group': 'gate',
+                  {% set d = {'tag': 'gate-closed', 'group': 'gate', 'push': {'sound': 'default'},
                               'actions': [] if closed else [{'action': 'GATE_CLOSE', 'title': txt.close_gate}]} %}
 <% if camera %>
                   {{ dict(d, image=photo.image) if photo is defined and photo.image is defined else d }}
@@ -442,6 +442,9 @@
                     data:
                       tag: gate-open-too-long
                       group: gate
+                      # iOS: play the sound (Android ignores it). Not critical, not time-sensitive.
+                      push:
+                        sound: default
                       actions:
                         - action: GATE_CLOSE
                           title: "<@ t('button_close_gate') @>"
@@ -477,11 +480,17 @@
 # On EVERY closing, whatever closed it (a button or card in HA, closing after leaving, the remote, Google Home, the
 # wall button). The one place that says "Gate is closed": the HA flows send no closed message of their own while
 # input_boolean.gate_closed_notify is on. Fixed tag gate-closed: it replaces the previous closed message and a
-# "not closed yet" of a HA flow (same tag).
+# "not closed yet" of a HA flow (same tag). Camera: <@ check_camera @> (gate.check_camera, else the garage camera).
+<% if dark %>
+# Garage dark at the closing (<@ dark @> on): wait max 5 s for light, else no photo (a black photo proves nothing).
+<% endif %>
 - id: gate_closed_photo
   alias: "<@ t('closed_photo_alias') @>"
   description: >-
-    <@ t('closed_photo_description', camera=camera) @>
+    <@ t('closed_photo_description', camera=check_camera) @>
+<% if dark %>
+    <@ t('closed_photo_description_dark', dark=dark) @>
+<% endif %>
 <% if 'parcel-service' in modules %>
     <@ t('closed_photo_description_parcel') @>
 <% endif %>
@@ -503,19 +512,50 @@
       state: "off"
 <% endif %>
   actions:
-    - action: script.gate_snapshot
-      continue_on_error: true
-      response_variable: photo
-      data:
-        kind: closed
     - variables:
         txt:
           title: "<@ t('gate_closed') @>"
           message: "<@ t('message_closed_at') @>"
           open_gate: "<@ t('button_open_gate') @>"
+<% if dark %>
+          no_photo_dark: "<@ t('message_no_photo_dark') @>"
+<% endif %>
         targets: "{% from 'gate.jinja' import recipients %}{{ recipients() | from_json }}"
+        closed_at: "{{ now().strftime('%H:%M') }}"
+<% if dark %>
+        # Set inside the if below (a variables step updates the outer variable, HA 2025.4 and newer).
+        photo: {}
+    - alias: Garage dark - wait max 5 s for light (light on motion)
+      wait_template: "{{ not is_state('<@ dark @>', 'on') }}"
+      timeout:
+        seconds: 5
+      continue_on_timeout: true
+    - variables:
+        dark_now: "{{ is_state('<@ dark @>', 'on') }}"
+    # Still dark: no photo (a black photo proves nothing).
+    - if:
+        - condition: template
+          value_template: "{{ not dark_now }}"
+      then:
+        - action: script.gate_snapshot
+          continue_on_error: true
+          response_variable: shot
+          data:
+            kind: closed
+            camera: <@ check_camera @>
+        - variables:
+            photo: "{{ shot if shot is defined and shot.image is defined else {} }}"
+<% else %>
+    - action: script.gate_snapshot
+      continue_on_error: true
+      response_variable: photo
+      data:
+        kind: closed
+        camera: <@ check_camera @>
+<% endif %>
+    - variables:
         note_data: >-
-          {% set d = {'tag': 'gate-closed', 'group': 'gate',
+          {% set d = {'tag': 'gate-closed', 'group': 'gate', 'push': {'sound': 'default'},
                       'actions': [{'action': 'GATE_OPEN', 'title': txt.open_gate}]} %}
           {{ dict(d, image=photo.image) if photo is defined and photo.image is defined else d }}
     - repeat:
@@ -525,7 +565,12 @@
             continue_on_error: true
             data:
               title: "{{ txt.title }}"
-              message: "{{ txt.message | replace('{time}', now().strftime('%H:%M')) }}"
+<% if dark %>
+              message: >-
+                {{ txt.message | replace('{time}', closed_at) }}{{ (' ' ~ txt.no_photo_dark) if dark_now else '' }}
+<% else %>
+              message: "{{ txt.message | replace('{time}', closed_at) }}"
+<% endif %>
               data: "{{ note_data }}"
 
 <% endif %>
@@ -745,7 +790,7 @@
           {%- endif %}
           {{- m | replace('{the_car}', car_called) | replace('{car}', car_name) | replace('{why}', check_text) }}
         note_data: >-
-          {% set d = {'tag': 'gate-closed', 'group': 'gate',
+          {% set d = {'tag': 'gate-closed', 'group': 'gate', 'push': {'sound': 'default'},
                       'actions': [] if would_close
                                  else ([{'action': 'GATE_OPEN', 'title': txt.open_gate}] if closed
                                        else [{'action': 'GATE_CLOSE', 'title': txt.close_gate}])} %}

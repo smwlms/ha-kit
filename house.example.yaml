@@ -479,6 +479,10 @@ notifications:
 # closing (someone's remote)? Only with a gate sensor and a garage camera.
 gate:
   ai_task: # (optional) ai_task entity or auto; empty = doorbell.ai_task; none = no photo to an AI service (closing then pulses unless the gate is moving)
+  # (optional) a smaller, faster channel of the garage camera, e.g. the low-resolution channel of UniFi Protect
+  # (camera.garage_low_resolution_channel). Used for the two photos of the photo check and the proof photo of
+  # "Gate is closed". Empty = entities.garage_camera.
+  check_camera:
 
 # (optional, tesla-driveway-lock) Car on the driveway gets locked. The waiting time and the radius of zone.driveway are
 # start values in modules/tesla-driveway-lock/module.yaml (defaults:) and you tune them afterwards in Home Assistant.

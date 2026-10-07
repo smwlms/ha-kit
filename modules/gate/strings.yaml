@@ -168,6 +168,14 @@ closed_photo_description:
     de knop 'Open poort'. Vaste tag gate-closed, zodat de nieuwste de vorige vervangt. Schakelaar:
     input_boolean.gate_closed_notify. Zolang die aan staat, sturen de sluitflows van Home Assistant zelf geen
     dicht-melding.
+closed_photo_description_dark:
+  en: >-
+    When {dark} reports dark at the closing: wait at most 5 s for light (e.g. light on motion), then the photo; still
+    dark = the notification without a photo, with 'no photo (garage dark)'.
+  nl: >-
+    Meldt {dark} donker bij het dichtgaan: max. 5 s wachten op licht (bv. licht op beweging), dan de foto; nog altijd
+    donker = de melding zonder foto, met 'geen foto (garage donker)'.
+message_no_photo_dark: { en: "No photo (garage dark).", nl: "Geen foto (garage donker)." }
 closed_photo_description_parcel:
   en: Silent while script.parcel_garage (module parcel-service) runs; that script sends its own proof photo.
   nl: Zwijgt zolang script.parcel_garage (module parcel-service) loopt; dat script stuurt zelf een bewijsfoto.
@@ -396,22 +404,28 @@ log_close_gave_up:
 snapshot_alias: { en: "Gate photo (internal)", nl: "Poort foto (intern)" }
 snapshot_description:
   en: >-
-    Photo of this moment from {camera} to /media/gate/<kind>-<minute>.jpg (at most 60 files per kind). Answers
-    with image (for a notification) and media (for an AI service). A file, so the notification shows that moment.
+    Photo of this moment from {camera} (or the camera in the field camera) to /media/gate/<kind>-<minute>.jpg (at
+    most 60 files per kind). Answers with image (for a notification) and media (for an AI service). A file, so the
+    notification shows that moment.
   nl: >-
-    Foto van dit moment van {camera} naar /media/gate/<soort>-<minuut>.jpg (max. 60 bestanden per soort). Antwoordt
-    met image (voor een melding) en media (voor een AI-dienst). Een bestand, zodat de melding dat moment toont.
+    Foto van dit moment van {camera} (of de camera in het veld camera) naar /media/gate/<soort>-<minuut>.jpg (max.
+    60 bestanden per soort). Antwoordt met image (voor een melding) en media (voor een AI-dienst). Een bestand,
+    zodat de melding dat moment toont.
 field_kind_name: { en: "Kind", nl: "Soort" }
 field_kind_description: { en: "Part of the file name, e.g. closed.", nl: "Deel van de bestandsnaam, bv. closed." }
+field_camera_name: { en: "Camera", nl: "Camera" }
+field_camera_description:
+  en: "Camera to take the photo with, e.g. a smaller channel (gate.check_camera). Empty = {camera}."
+  nl: "Camera die de foto neemt, bv. een kleiner kanaal (gate.check_camera). Leeg = {camera}."
 
 # --- script gate_photo_check (garage camera and an AI service) ---
 photo_check_alias: { en: "Gate photo check (internal)", nl: "Poort fotocheck (intern)" }
 photo_check_description:
   en: >-
-    Two photos of {camera}, 2 s apart, judged by an AI service (ai_task): is the gate closing, opening, open, half
+    Two photos of {camera}, 1 s apart, judged by an AI service (ai_task): is the gate closing, opening, open, half
     open, closed, or unsure? Used by closing after leaving before it pulses. Without an AI service it answers none.
   nl: >-
-    Twee foto's van {camera}, 2 s na elkaar, beoordeeld door een AI-dienst (ai_task): sluit de poort, opent ze,
+    Twee foto's van {camera}, 1 s na elkaar, beoordeeld door een AI-dienst (ai_task): sluit de poort, opent ze,
     staat ze open, half open, dicht, of onzeker? Gebruikt door sluiten na vertrek vóór het een puls geeft. Zonder
     AI-dienst antwoordt het none.
 field_skip_name: { en: "Skip", nl: "Overslaan" }
@@ -423,13 +437,13 @@ photo_check_no_answer: { en: "no answer from the AI service", nl: "geen antwoord
 photo_check_task_name: { en: "Gate closing?", nl: "Poort aan het sluiten?" }
 photo_check_instructions:
   en: >-
-    You get two photos from a camera in a garage, taken 2 seconds apart: first the first photo, then the second.
+    You get two photos from a camera in a garage, taken 1 second apart: first the first photo, then the second.
     Look only at the gate or garage door. Compare its position in both photos. closing = it moves towards closed
     between the first and the second photo. opening = it moves towards open. open = fully open and in the same
     place in both photos. half_open = partly open and in the same place in both photos. closed = fully closed.
     unsure = too dark, the gate is not visible, or you cannot tell. When in doubt: unsure.
   nl: >-
-    Je krijgt twee foto's van een camera in een garage, 2 seconden na elkaar genomen: eerst de eerste foto, dan de
+    Je krijgt twee foto's van een camera in een garage, 1 seconde na elkaar genomen: eerst de eerste foto, dan de
     tweede. Kijk enkel naar de poort of garagepoort. Vergelijk haar stand op beide foto's. closing = ze beweegt
     richting dicht tussen de eerste en de tweede foto. opening = ze beweegt richting open. open = volledig open en
     op beide foto's op dezelfde plaats. half_open = gedeeltelijk open en op beide foto's op dezelfde plaats.

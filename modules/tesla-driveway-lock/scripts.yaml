@@ -1,0 +1,446 @@
+<% from '_tesla_driveway_lock.jinja' import tdl, photo, ent, car_list, spots, drive_cam, ai_value with context %>
+<% set persons = people if people is defined and people else [] %>
+<% set admins = persons | selectattr('admin', 'defined') | selectattr('admin') | map(attribute='key') | list %>
+<% set admins = admins or (persons[:1] | map(attribute='key') | list) %>
+<% set camera = ent.get('garage_camera') %>
+<% set dark = ent.get('garage_dark') %>
+<% set prefixes = car_list | map(attribute='prefix') | list %>
+# Tesla on the driveway gets locked: scripts (ha-kit module tesla-driveway-lock, see tesla-driveway-lock/LOGIC.md).
+# Written by tesla-driveway-lock/deploy.py through the config API (same as the script editor). Called by the
+# automations of automations.yaml; not meant to be run by hand, except to test (LOGIC.md, test plan).
+
+# --- 1. Decide for one car whether it stands outside, and lock it when it does -----------------------------------
+# Outside or garage: the last garage photo (taken after this car went into P) decides first, by WHICH car stands in
+# the garage, not by the spot. No usable photo: after N min the GPS decides; right after the gate closed nothing.
+tesla_driveway_lock_car:
+  alias: "<@ t('script_lock_alias') @>"
+  icon: mdi:car-key
+  description: >-
+    <@ t('script_lock_description') @>
+  mode: parallel
+  max: 4
+  fields:
+    car:
+      name: "<@ t('field_car_name') @>"
+      description: "<@ t('field_car_description') @>"
+      required: true
+      example: <@ car_list[0].prefix @>
+      selector:
+        select:
+          options: <@ prefixes | tojson @>
+    source:
+      name: "<@ t('field_source_name') @>"
+      description: "<@ t('field_source_description') @>"
+      example: minutes
+      selector:
+        select:
+          options: [minutes, close]
+  sequence:
+    - variables:
+        # Per car (prefix): name, entities and who gets the message. Filled in from house.yaml.
+        car_list:
+<% for a in car_list %>
+<% set keys = ([a.get('driver')] if a.get('driver') else []) + admins %>
+<% set ns = namespace(n=[]) %>
+<% for x in persons if x.key in keys and x.get('notify') and ('notify.' ~ x.notify) not in ns.n %>
+<% set ns.n = ns.n + ['notify.' ~ x.notify] %>
+<% endfor %>
+          "<@ a.prefix @>":
+            name: <@ a.name | tojson @>
+            lock: <@ car_entity(a, 'lock') @>
+            location: <@ car_entity(a, 'location') @>
+            at_home: <@ car_entity(a, 'located_at_home') @>
+            shift: <@ car_entity(a, 'shift_state') @>
+            status: <@ car_entity(a, 'status') @>
+            notify: <@ ns.n | tojson @>
+<% endfor %>
+        spots: <@ spots | tojson @>
+        txt:
+          logbook: "<@ t('logbook_lock') @>"
+          camera_sentence: "<@ t('camera_sentence') @>"
+          camera_no_photo: "<@ t('camera_no_photo') @>"
+          why:
+            park: "<@ t('why_park') @>"
+            close: "<@ t('why_close') @>"
+          drive: "<@ t('photo_drive') @>"
+          reason_seen: "<@ t('reason_seen') @>"
+          reason_only_car: "<@ t('reason_only_car') @>"
+          reason_not_seen: "<@ t('reason_not_seen') @>"
+          reason_gps: "<@ t('reason_gps') @>"
+          stays_unlocked: "<@ t('log_stays_unlocked') @>"
+          close_unsure: "<@ t('log_close_unsure') @>"
+          tried: "<@ t('log_tried') @>"
+          title_locked: "<@ t('title_locked') @>"
+          title_not_locked: "<@ t('title_not_locked') @>"
+          message_locked: "<@ t('message_locked') @>"
+          message_locked_close: "<@ t('message_locked_close') @>"
+          message_not_locked: "<@ t('message_not_locked') @>"
+          log_locked: "<@ t('log_locked') @>"
+          log_locked_close: "<@ t('log_locked_close') @>"
+          log_woken: "<@ t('log_woken') @>"
+          log_not_locked: "<@ t('log_not_locked') @>"
+          verdict:
+            car: "<@ t('verdict_car') @>"
+            empty: "<@ t('verdict_empty') @>"
+            unsure: "<@ t('verdict_unsure') @>"
+            none: "<@ t('verdict_none') @>"
+          drive_verdict:
+            car: "<@ t('verdict_drive_car') @>"
+            none: "<@ t('verdict_none') @>"
+            unsure: "<@ t('verdict_unsure') @>"
+    - variables:
+        c: "{{ car_list[car] }}"
+        when: "{{ 'close' if source | default('minutes') == 'close' else 'minutes' }}"
+        minutes: "{{ states('input_number.tesla_driveway_lock_minutes') | int(15) }}"
+        gps_m: >-
+          {% set d = distance(c.location, 'zone.driveway') %}
+          {{ (d * 1000) | round(1) if d is number else none }}
+        gps_driveway: "{{ gps_m is number and gps_m <= state_attr('zone.driveway', 'radius') | float(0) }}"
+<% if photo %>
+    - alias: The garage photo only counts when it was taken after this car went into P
+      variables:
+        photo: "{{ states('input_text.tesla_garage_photo') | from_json(default={}) }}"
+        parked: >-
+          {% set s = states[c.shift] %}
+          {{ as_timestamp(s.last_changed, 0) if s is not none else 0 }}
+        photo_valid: "{{ photo is mapping and photo.t is defined and as_timestamp(photo.t, 0) > parked }}"
+        home_now: >-
+          {% set ns = namespace(l=[]) %}
+          {% for k, v in car_list.items() if is_state(v.location, 'home') or is_state(v.at_home, 'on') %}
+            {% set ns.l = ns.l + [k] %}
+          {% endfor %}
+          {{ ns.l + ([car] if car not in ns.l else []) }}
+        # What stands on each spot. A car Gemini named but that is not at home is some other car ("car"); "occupied"
+        # is the verdict of earlier kit versions (a car, not recognised).
+        seen: >-
+          {% set ns = namespace(l=[]) %}
+          {% for s in spots %}
+            {% set v = photo.get(s, 'unsure') if photo_valid else 'unsure' %}
+            {% set v = 'car' if v == 'occupied' or (v in car_list and v not in home_now) else v %}
+            {% set ns.l = ns.l + [v] %}
+          {% endfor %}
+          {{ ns.l }}
+        # garage  = this car is recognised in the garage, or a car stands there that can only be this one (every
+        #           other Tesla at home is recognised elsewhere in the garage, and no car stands on the driveway);
+        # outside = the garage holds no car that could be this one (empty, or only other Teslas that are at home);
+        # unsure  = no valid photo, a spot unclear, or an unrecognised car while another Tesla is unaccounted for.
+        place: >-
+          {%- set others_unseen = home_now | reject('eq', car) | reject('in', seen) | list | count -%}
+          {%- if not photo_valid -%}unsure
+          {%- elif car in seen -%}garage
+          {%- elif seen | reject('in', ['empty', 'car'] + (car_list.keys() | list)) | list | count > 0 -%}unsure
+          {%- elif 'car' not in seen -%}outside
+          {%- elif others_unseen == 0 and photo.get('drive', 'none') != 'car' -%}garage
+          {%- else -%}unsure{%- endif -%}
+        tried_before: "{{ photo_valid and car in photo.get('tried', []) }}"
+        camera_sentence: >-
+          {%- if photo_valid -%}
+            {%- set ns = namespace(l=[]) -%}
+            {%- for s in spots -%}
+              {%- set v = photo.get(s, 'unsure') -%}
+              {%- set ns.l = ns.l + [s ~ ' ' ~ (car_list[v].name if v in car_list else txt.verdict.get(v, v))] -%}
+            {%- endfor -%}
+            {%- if photo.drive is defined -%}
+              {%- set ns.l = ns.l + [txt.drive ~ ' ' ~ txt.drive_verdict.get(photo.drive, photo.drive)] -%}
+            {%- endif -%}
+            {{ txt.camera_sentence | replace('{time}', as_timestamp(photo.t) | timestamp_custom('%H:%M'))
+               | replace('{why}', txt.why.get(photo.why | default('park'), ''))
+               | replace('{spots}', ns.l | join(', ')) }}
+          {%- else -%}{{ txt.camera_no_photo }}{%- endif -%}
+<% else %>
+    - variables:
+        place: unsure
+        tried_before: false
+        camera_sentence: ""
+<% endif %>
+    - variables:
+        outside: "{{ place == 'outside' or (when == 'minutes' and place == 'unsure' and gps_driveway) }}"
+        reason: >-
+          {%- if place == 'garage' and car in seen | default([]) -%}{{ txt.reason_seen }}
+          {%- elif place == 'garage' -%}{{ txt.reason_only_car }}
+          {%- elif place == 'outside' -%}{{ txt.reason_not_seen }}
+          {%- else -%}{{ txt.reason_gps | replace('{m}', gps_m | string)
+                          | replace('{radius}', state_attr('zone.driveway', 'radius') | string) }}{%- endif -%}
+    - alias: "One attempt per parking: the lock was already tried when the gate closed"
+      if:
+        - condition: template
+          value_template: "{{ when == 'minutes' and tried_before }}"
+      then:
+        - action: logbook.log
+          data:
+            name: "{{ txt.logbook }}"
+            entity_id: "{{ c.lock }}"
+            message: "{{ txt.tried | replace('{car}', c.name) }}"
+        - stop: Already tried when the gate closed
+    - if:
+        - condition: template
+          value_template: "{{ not outside }}"
+      then:
+        - action: logbook.log
+          data:
+            name: "{{ txt.logbook }}"
+            entity_id: "{{ c.lock }}"
+            message: >-
+              {% if when == 'close' and place == 'unsure' %}
+                {{ txt.close_unsure | replace('{car}', c.name) | replace('{minutes}', minutes | string)
+                   | replace('{camera}', camera_sentence) }}
+              {% else %}
+                {{ txt.stays_unlocked | replace('{car}', c.name)
+                   | replace('{reason}', reason | replace('{car}', c.name)) | replace('{camera}', camera_sentence) }}
+              {% endif %}
+        - stop: Not outside (or not sure right after the gate closed)
+<% if photo %>
+    - alias: Remember the attempt in the photo verdict, so the lock after N min does not try again
+      if:
+        - condition: template
+          value_template: "{{ when == 'close' }}"
+      then:
+        - action: input_text.set_value
+          target:
+            entity_id: input_text.tesla_garage_photo
+          data:
+            value: >-
+              {% set p = states('input_text.tesla_garage_photo') | from_json(default={}) %}
+              {{ dict(p, tried=(p.get('tried', []) + [car]) | unique | list) | to_json }}
+<% endif %>
+    - variables:
+        asleep: "{{ is_state(c.status, 'off') }}"
+    - alias: Count the Tesla command (shared counter, module gate)
+      action: counter.increment
+      target:
+        entity_id: counter.tesla_commands_today
+    - alias: One lock command (wakes the car when it sleeps)
+      action: lock.lock
+      target:
+        entity_id: "{{ c.lock }}"
+      continue_on_error: true
+    - alias: Wait for confirmation (waking a car takes up to ±1 min)
+      wait_template: "{{ is_state(c.lock, 'locked') }}"
+      timeout: "00:01:30"
+      continue_on_timeout: true
+    - variables:
+        locked: "{{ is_state(c.lock, 'locked') }}"
+        notification:
+          title: >-
+            {{ (('🔒 ' ~ txt.title_locked) if locked else ('⚠️ ' ~ txt.title_not_locked)) | replace('{car}', c.name) }}
+          message: >-
+            {{ (txt.message_not_locked if not locked else (txt.message_locked_close if when == 'close' else txt.message_locked))
+               | replace('{minutes}', minutes | string) | replace('{state}', states(c.lock)) }}
+    - action: logbook.log
+      data:
+        name: "{{ txt.logbook }}"
+        entity_id: "{{ c.lock }}"
+        message: >-
+          {{ (txt.log_not_locked if not locked else (txt.log_locked_close if when == 'close' else txt.log_locked))
+             | replace('{car}', c.name) | replace('{minutes}', minutes | string)
+             | replace('{reason}', reason | replace('{car}', c.name))
+             | replace('{woken}', txt.log_woken if asleep else '') | replace('{state}', states(c.lock))
+             | replace('{asleep}', asleep | string) }}
+          {{ camera_sentence }}
+    # One notify action per phone; continue_on_error so one offline phone does not block the others.
+    - repeat:
+        for_each: "{{ c.notify }}"
+        sequence:
+          - action: "{{ repeat.item }}"
+            continue_on_error: true
+            data:
+              title: "{{ notification.title }}"
+              message: "{{ notification.message }}"
+              data:
+                tag: "tesla-driveway-{{ car }}"
+<% if photo %>
+
+# --- 2. Garage photo: which car stands where (optional, tesla_driveway_lock.garage_photo) -------------------------
+# Taken when a car shifts into P at home (why: park) and when the gate closes with a car unlocked at home (why: close).
+# Gemini names per spot the car it recognises (cars[].look), "car", "empty" or "unsure"; with entities.driveway_camera
+# also whether a car stands on the driveway. The verdict with its time goes into input_text.tesla_garage_photo.
+tesla_garage_photo:
+  alias: "<@ t('photo_alias') @>"
+  icon: mdi:garage-variant
+  description: >-
+    <@ t('photo_description', camera=camera, spots=spots | join(', ')) @>
+<% if dark %>
+    <@ t('photo_description_dark', dark=dark) @>
+<% endif %>
+  mode: queued
+  max: 4
+  fields:
+    car:
+      name: "<@ t('field_car_name') @>"
+      description: "<@ t('field_photo_car_description') @>"
+      required: true
+      example: <@ car_list[0].prefix @>
+      selector:
+        select:
+          options: <@ prefixes | tojson @>
+    why:
+      name: "<@ t('field_why_name') @>"
+      description: "<@ t('field_why_description') @>"
+      example: park
+      selector:
+        select:
+          options: [park, close]
+  sequence:
+    - variables:
+        names:
+<% for a in car_list %>
+          "<@ a.prefix @>": <@ a.name | tojson @>
+<% endfor %>
+        reason: "{{ 'close' if why | default('park') == 'close' else 'park' }}"
+        file: "garage/{{ reason }}-{{ car }}.jpg"
+<% if drive_cam %>
+        drive_file: "garage/driveway-{{ reason }}.jpg"
+<% endif %>
+        txt:
+          logbook: "<@ t('logbook_photo') @>"
+          dark: "<@ t('log_dark') @>"
+          result: "<@ t('log_photo') @>"
+          no_answer: "<@ t('log_no_answer') @>"
+          why:
+            park: "<@ t('why_park') @>"
+            close: "<@ t('why_close') @>"
+          drive: "<@ t('photo_drive') @>"
+          verdict:
+            car: "<@ t('verdict_car') @>"
+            empty: "<@ t('verdict_empty') @>"
+            unsure: "<@ t('verdict_unsure') @>"
+            none: "<@ t('verdict_none') @>"
+          drive_verdict:
+            car: "<@ t('verdict_drive_car') @>"
+            none: "<@ t('verdict_none') @>"
+            unsure: "<@ t('verdict_unsure') @>"
+<% if dark %>
+    - alias: In the dark, wait up to 5 s for the light (it goes on with movement or when the gate opens)
+      if:
+        - condition: state
+          entity_id: <@ dark @>
+          state: "on"
+      then:
+        - wait_template: "{{ is_state('<@ dark @>', 'off') }}"
+          timeout: "00:00:05"
+          continue_on_timeout: true
+    - if:
+        - condition: state
+          entity_id: <@ dark @>
+          state: "on"
+      then:
+        - action: logbook.log
+          data:
+            name: "{{ txt.logbook }}"
+            entity_id: <@ camera @>
+            message: "{{ txt.dark | replace('{car}', names[car]) | replace('{why}', (txt.why[reason][:1] | upper) ~ txt.why[reason][1:]) }}"
+        - stop: Garage dark
+<% endif %>
+    - action: camera.snapshot
+      continue_on_error: true
+      target:
+        entity_id: <@ camera @>
+      data:
+        filename: "/media/{{ file }}"
+<% if drive_cam %>
+    - action: camera.snapshot
+      continue_on_error: true
+      target:
+        entity_id: <@ drive_cam @>
+      data:
+        filename: "/media/{{ drive_file }}"
+<% endif %>
+    - action: ai_task.generate_data
+      continue_on_error: true
+      response_variable: garage
+      data:
+        entity_id: <@ ai_value @>
+        task_name: "<@ t('ai_task_name') @>"
+        instructions: >-
+<% if spots | count == 1 %>
+          <@ t('ai_intro_one', spots=spots | join(', ')) @>
+<% else %>
+          <@ t('ai_intro_many', count=spots | count, spots=spots | join(', ')) @>
+<% endif %>
+          <@ t('ai_cars') @>
+<% for a in car_list %>
+          - <@ a.prefix @> = <@ a.name @> (<@ a.get('look') or t('ai_look_default') @>)
+<% endfor %>
+<% if tdl.get('garage_hint') %>
+          <@ tdl.garage_hint @>
+<% endif %>
+          <@ t('ai_rules') @>
+<% if drive_cam %>
+          <@ t('ai_drive') @>
+<% endif %>
+        structure:
+<% for sp in spots %>
+          "<@ sp @>":
+            description: "<@ t('ai_spot_question', spot=sp) @>"
+            required: true
+            selector:
+              select:
+                options: <@ (prefixes + ['car', 'empty', 'unsure']) | tojson @>
+<% endfor %>
+<% if drive_cam %>
+          drive:
+            description: "<@ t('ai_drive_question') @>"
+            required: true
+            selector:
+              select:
+                options: [car, none, unsure]
+<% endif %>
+          description:
+            description: "<@ t('ai_description') @>"
+            required: true
+            selector:
+              text:
+        attachments:
+          - media_content_id: "media-source://media_source/local/{{ file }}"
+            media_content_type: image/jpeg
+<% if drive_cam %>
+          - media_content_id: "media-source://media_source/local/{{ drive_file }}"
+            media_content_type: image/jpeg
+<% endif %>
+    - if:
+        - condition: template
+          value_template: >-
+            {{ garage is defined and garage.data is mapping
+<% for sp in spots %>
+               and garage.data['<@ sp @>'] is defined
+<% endfor %>
+            }}
+      then:
+        - action: input_text.set_value
+          target:
+            entity_id: input_text.tesla_garage_photo
+          data:
+            value: >-
+              {{ {'t': now().isoformat(timespec='seconds'), 'car': car, 'why': reason,
+<% for sp in spots %>
+                  '<@ sp @>': garage.data['<@ sp @>'],
+<% endfor %>
+<% if drive_cam %>
+                  'drive': garage.data.drive | default('unsure'),
+<% endif %>
+                 } | to_json }}
+        - action: logbook.log
+          data:
+            name: "{{ txt.logbook }}"
+            entity_id: <@ camera @>
+            message: >-
+              {% set ns = namespace(l=[]) %}
+              {% for s in <@ spots | tojson @> %}
+                {% set v = garage.data[s] %}
+                {% set ns.l = ns.l + [s ~ ' ' ~ (names[v] if v in names else txt.verdict.get(v, v))] %}
+              {% endfor %}
+              {% if garage.data.drive is defined %}
+                {% set ns.l = ns.l + [txt.drive ~ ' ' ~ txt.drive_verdict.get(garage.data.drive, garage.data.drive)] %}
+              {% endif %}
+              {{ txt.result | replace('{car}', names[car]) | replace('{why}', (txt.why[reason][:1] | upper) ~ txt.why[reason][1:])
+                 | replace('{result}', ns.l | join(', '))
+                 | replace('{description}', garage.data.description | default('')) | replace('{file}', '/media/' ~ file) }}
+      else:
+        - action: logbook.log
+          data:
+            name: "{{ txt.logbook }}"
+            entity_id: <@ camera @>
+            message: >-
+              {{ txt.no_answer | replace('{car}', names[car]) | replace('{why}', (txt.why[reason][:1] | upper) ~ txt.why[reason][1:])
+                 | replace('{file}', '/media/' ~ file) }}
+<% endif %>

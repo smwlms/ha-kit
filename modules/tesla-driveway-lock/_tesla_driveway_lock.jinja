@@ -1,5 +1,10 @@
 <# Shared preamble of the module tesla-driveway-lock, derived from house.yaml. Every templated file imports the names
-   it needs:  <% from '_tesla_driveway_lock.jinja' import photo, car_list with context %> #>
+   it needs:  <% from '_tesla_driveway_lock.jinja' import photo, car_list with context %>
+   photo        garage photo on (tesla_driveway_lock.garage_photo: true)
+   spots        the places in the garage Gemini reports on: tesla_driveway_lock.garage_spots, else every
+                cars[].garage_spot (one word each, e.g. left, right)
+   drive_cam    entities.driveway_camera (optional): second image for Gemini, is a car standing on the driveway?
+   on_close     a photo when the gate closes (needs the gate sensor of module gate: binary_sensor.gate_open) #>
 <% set tdl = tesla_driveway_lock if tesla_driveway_lock is defined and tesla_driveway_lock else {} %>
 <% from '_ai_task.jinja' import ai_entity %>
 <% set db = doorbell if doorbell is defined and doorbell else {} %>
@@ -13,6 +18,8 @@
 <% endif %>
 <% set ent = entities if entities is defined and entities else {} %>
 <% set car_list = cars if cars is defined and cars else [] %>
-<% set spots = car_list | selectattr('garage_spot', 'defined') | selectattr('garage_spot') | map(attribute='garage_spot') | unique | list %>
+<% set spots = tdl.get('garage_spots') or (car_list | selectattr('garage_spot', 'defined') | selectattr('garage_spot') | map(attribute='garage_spot') | unique | list) %>
+<% set drive_cam = ent.get('driveway_camera') if photo else none %>
+<% set on_close = photo and ent.get('gate_sensor') %>
 <% set minutes = module.defaults['input_number.tesla_driveway_lock_minutes'] %>
 <% set radius = module.defaults['zone.driveway'] %>

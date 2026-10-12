@@ -2,6 +2,8 @@
 
 <@ module.description @>.
 
+**Needs:** the `doorbell` and `gate` modules, an electric garage door with an end-position contact, UniFi Protect and Google Generative AI.
+
 You choose a day on which you expect a parcel. When someone rings that day and Gemini sees a parcel in their hand or a courier, the garage door opens (or opens ajar) by itself and closes again after the set time. You follow it live and get a photo afterwards. Besides that: a button "Parcel in the garage" in every doorbell notification and, off by default, a notification when Protect sees a parcel left behind. How and why: `LOGIC.md`.
 
 All texts people see or hear follow `house.language` (`strings.yaml`, `en` and `nl`).

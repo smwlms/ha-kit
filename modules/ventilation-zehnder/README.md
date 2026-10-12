@@ -9,6 +9,8 @@
 
 <@ module.description @>.
 
+**Needs:** a Zehnder ComfoAir Q (Q350/Q450/Q600) with an M5Stack AtomS3 Lite and Mini CAN Unit on the ComfoNet bus, and ESPHome. Brand adapter for this unit only.
+
 A small ESP32 (M5Stack AtomS3 Lite) with a CAN module hangs on the ComfoNet bus of the ComfoAir Q and gives Home Assistant everything the ComfoConnect LAN C gives (airflow, temperatures, humidity, bypass, filter, fan speed, boost, away), locally and without a cloud. The base is [yoziru/esphome-zehnder-comfoair](https://github.com/yoziru/esphome-zehnder-comfoair) at a **pinned commit**. When a **ComfoClime** hangs on the same bus, it can optionally come along: read and set over the bus, without its wifi integration.
 
 How it works, what it reads and controls, and the test plan: [LOGIC.md](LOGIC.md).

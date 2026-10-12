@@ -1,7 +1,7 @@
 # Module metadata, read by tools/fill.py (--list shows it as a table), tools/choose.py (ask:).
 name: Doorbell
 description: Photo notification with buttons when someone rings, description by Gemini, announcement on speakers, Nest Hub and TV, visitor list
-status: built
+status: live since 2026-10-05
 # The 'parcel-service' module adds steps to this module's automation doorbell_ring and script doorbell_reply
 # (rendered in when 'parcel-service' is in modules): fill in and deploy doorbell again after adding parcel-service.
 depends_on: []

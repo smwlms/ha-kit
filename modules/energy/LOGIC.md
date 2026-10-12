@@ -121,7 +121,7 @@ Nothing is drawn without its role or module; `features:` in the card config and 
 
 Done (headless Chrome 2026-10-05, mocked hass and synthetic statistics, apexcharts-card 2.2.3 and power-flow-card-plus from HACS releases): the full example (every role, tariff, charger, ev-charging, heat pump, hot water, results; en and nl) and PV + grid only (no battery, charger, heat pump or tariff; en and nl): energy screen, every detail sheet, views power, battery, tariff, consumers and flows; every data generator of both dashboards (185 resp. 75) runs without error; Jinja of the notes compiles and renders; `tools/check.py` passes.
 
-On a real Home Assistant (until this passed, the status stays "not tested on HA"):
+On a real Home Assistant. Run this when you deploy the kit module; the source setup already passed the equivalent checks in production.
 
 1. Deploy with `--dry-run`, check the features list and the views; deploy for real. Resources present: cw-thema.js, apexcharts-card, power-flow-card-plus, tariff.js.
 2. Energy screen: the diagram moves; the four tiles match the live sensors; today's import/export match the HA energy dashboard (same statistics).

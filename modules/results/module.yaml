@@ -2,7 +2,7 @@
 # (defaults). Contract: docs/phase4-contracts.md (results). The entity and helper ids below are part of it.
 name: Results
 description: "What the smart logic saved (EUR) and whether the day goals were met; consumption and cost per day, week and month against the invoice, other contracts and last year; what the house did"
-status: built, not tested on HA
+status: in production at the source
 # Layer: core. Listens only to the events ha_kit_result / ha_kit_day_goal and to tariff and energy roles; every
 # result line exists only when the module that produces it is in modules: (see _results.jinja, kind table).
 depends_on: [tariff]

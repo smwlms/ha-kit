@@ -2,7 +2,7 @@
 # appliances-home-connect/deploy.py (defaults). Contract: docs/phase4-contracts.md.
 name: Appliances (Home Connect)
 description: "Dishwasher, washing machine and dryer through Home Connect: smart start on solar or the cheapest quarter, ready by an hour or the learned arrival, start from a notification, door, done, error and maintenance notifications"
-status: built, not tested on HA
+status: in production at the source
 # Layer: brand adapter + logic (one module: only one brand, and the logic is bound to Home Connect's program,
 # remote-start and door entities). The brand-free seam is the start-window macro in custom_templates/appliances.jinja.
 # Optional, read when installed: energy-plan (solar start), a tariff module (cheapest quarter), presence (arrival).

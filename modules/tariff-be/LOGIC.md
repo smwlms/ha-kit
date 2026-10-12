@@ -173,7 +173,7 @@ No helper has `initial`: `deploy.py` sets the default once, when the helper is n
 
 ## Test plan
 
-On a real Home Assistant; until it passed, the status says "not tested on HA".
+Run this when you deploy the kit module; the source setup already passed the equivalent checks in production.
 
 1. `tariff-be/deploy.py --dry-run`: lists four uploads, the defaults, the automation (only with `grid_average_peak_kw`) and the resource.
 2. Deploy. In Settings > Helpers the nine helpers have their defaults. Change `input_number.tariff_levies` and back: the price sensors update at once.

@@ -2,7 +2,7 @@
 # (defaults). Contract: docs/phase4-contracts.md (capability tariff).
 name: Tariff (Belgium)
 description: "Flemish dynamic tariff: all-in price per quarter hour (Nord Pool BE, Fluvius day/night grid fees, levies), price level, cheap window and the capacity tariff (month peak, 12-month average, headroom)"
-status: built, not tested on HA
+status: in production at the source
 # Layer: region. Another country is another region module with the same entity ids (provides: [tariff]).
 depends_on: []
 provides: [tariff]

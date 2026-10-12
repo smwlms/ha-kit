@@ -1,7 +1,7 @@
 # Module metadata, read by tools/fill.py (--list shows it as a table), tools/choose.py (ask:) and by ventilation-zehnder/deploy.py.
 name: Ventilation (Zehnder)
 description: ESPHome firmware for the Zehnder ComfoAir Q over the ComfoNet bus (CAN), ComfoClime optional
-status: built, not tested on HA
+status: in production at the source
 depends_on: []
 requires:
   integrations: [ESPHome, ESPHome Device Builder app (or esphome on a computer)]

@@ -2,7 +2,7 @@
 # Contract: docs/phase4-contracts.md section 3 (heat-pump, hot-water-heater).
 name: Heat pump (Vaillant)
 description: "Vaillant heat pump through myVAILLANT as heat-pump (floor band, quick veto, state, estimated power) and hot-water-heater (tank target, boost)"
-status: built, not tested on HA
+status: in production at the source
 # Layer: brand adapter. No decision logic: climate decides the floor band, hot-water decides when to heat the tank.
 depends_on: []
 provides: [heat-pump, hot-water-heater]

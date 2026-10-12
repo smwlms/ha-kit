@@ -2,6 +2,8 @@
 
 <@ module.description @>.
 
+**Needs:** the `gate` module and a Tesla through Teslemetry; a garage camera with Google Generative AI is optional.
+
 <!-- Filled in by tools/fill.py (kept in a comment so a markdown formatter leaves it alone).
 <% from '_tesla_driveway_lock.jinja' import tdl, photo, radius, minutes with context %>
 <% set photonote = 'The garage photo is on in this house.' if photo else 'The garage photo is off in this house (tesla_driveway_lock.garage_photo): only the GPS decides.' %>

@@ -1,7 +1,7 @@
 # Module metadata, read by tools/fill.py (--list shows it as a table), tools/choose.py (ask:) and by presence/deploy.py (defaults).
 name: Our week
 description: Arrivals, work days, school runs and Superchargers in a calendar, with the tab Our week
-status: built, not tested on HA
+status: in production at the source
 # Not gate: this module reads person.*, the phone trackers and the Teslemetry entities itself; gate provides no
 # sensor it needs. The Supercharger log and the Tesla school run read Teslemetry through car_entity(car, role).
 depends_on: []

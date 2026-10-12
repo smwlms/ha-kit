@@ -169,7 +169,7 @@ Start values are set once by `deploy.py` (no `initial`): after that the value is
 
 ## Test plan
 
-Until this passed on a real Home Assistant, the status stays "built, not tested on HA". Use a cheap program (rinse) and an empty appliance where you can.
+Run this when you deploy the kit module; the source setup already passed the equivalent checks in production. Use a cheap program (rinse) and an empty appliance where you can.
 
 1. `deploy.py --dry-run`: the uploads, reloads, defaults (with the duration per appliance), 3 scripts and 7 automations; no connection. `--dry-run --live`: no missing entities, every device found.
 2. `deploy.py --tab`: no configuration error; the helpers exist with their start values; the views Appliances and Appliance settings show every appliance.

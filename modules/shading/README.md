@@ -2,6 +2,8 @@
 
 <@ module.description @>.
 
+**Needs:** blinds and/or curtains as `cover.*` entities (any brand, e.g. Overkiz/Somfy or Shelly); a weather integration with an hourly forecast for the sun and heat rules.
+
 <!-- Filled in by tools/fill.py (kept in a comment so a markdown formatter leaves it alone).
 <% from '_shading.jinja' import all_rooms, blinds, curtains, sun_on, sun with context %>
 <% set nb = blinds | map(attribute='name') | join(', ') or 'none' %>

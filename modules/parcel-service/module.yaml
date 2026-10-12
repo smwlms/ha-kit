@@ -1,7 +1,7 @@
 # Module metadata, read by tools/fill.py (--list shows it as a table), tools/choose.py (ask:).
 name: Parcel service
 description: On an expected parcel day the garage door opens (or opens ajar) by itself when Gemini sees a parcel or courier
-status: built
+status: live since 2026-10-05
 # Adds steps to the doorbell automation doorbell_ring and script doorbell_reply (rendered there); uses
 # script.gate_pulse, script.gate_close_manual and binary_sensor.gate_open from the module gate. The module gate reads
 # script.parcel_garage (automation gate_open_too_long stays silent while it runs).

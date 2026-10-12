@@ -3,6 +3,8 @@
 
 <@ module.description @>.
 
+**Needs:** an `ev-charger` adapter module (today `charger-zappi`) and `energy-plan`; `tariff-be`, Teslemetry, Waze Travel Time and a calendar are optional.
+
 This is a **core** module: it works with any charger adapter that provides the capability `ev-charger` (today `charger-zappi`) and needs `energy-plan` for the surplus signals. The tariff module (`tariff-be`) is optional: it adds cheap power, prices for the charge plan and the month-peak guard. Teslemetry is optional per car: with it the kit sets the car's charge current and charge limit.
 
 One rule holds everything together: **one writer per actuator**. Only `automation.ev_charging_apply` calls `script.ev_charger_set_mode`; `input_select.ev_charging_owner` says who owns the charger now (`none`, `surplus`, `cheap`, `plan`, `manual`). Only `automation.ev_charging_car_amps` writes the car current, only `automation.ev_plan_<car>_limit` the car's charge limit. The decision itself is one template sensor, `sensor.ev_charging_wanted`.

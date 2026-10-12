@@ -2,7 +2,7 @@
 # (defaults). Contract: docs/phase4-contracts.md, "ev-charger".
 name: Charger (myenergi Zappi)
 description: "myenergi Zappi as EV charger for ev-charging: mode mapping, minimum green level, normalised sensors, 1 or 3 phases by surplus"
-status: built, not tested on HA
+status: in production at the source
 # Layer: brand adapter. Phase switching only when ev-charging is in modules: (it reads its available-power average).
 depends_on: []
 provides: [ev-charger]

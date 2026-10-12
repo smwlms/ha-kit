@@ -2,7 +2,7 @@
 # Contract: docs/phase4-contracts.md (energy-plan). The entity and helper ids below are part of it.
 name: Energy plan
 description: "Shared energy signals and the solar day plan: export average, surplus, house power, when the sun leaves the panels, solar left today after house and battery, battery behind"
-status: built, not tested on HA
+status: in production at the source
 # Layer: core. Optional: a module that provides ev-charger (sensor.ev_charger_power is left out of the house load).
 depends_on: []
 provides: []

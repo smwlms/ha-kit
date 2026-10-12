@@ -1,0 +1,96 @@
+<% from '_tesla_car_card.jinja' import car_list, opt, garage_photo, spots, reminder, reminder_minutes, reminder_time, below_limit, tap_url with context %>
+<# Plug-in reminder (optional, tesla_car_card.plug_in_reminder: true). The per-car entity ids and texts are written
+   out at fill time in the variable `cars`; {level} and {limit} in the message are filled in by the automation.
+   See tesla-car-card/LOGIC.md. Without the reminder this file is an empty list and deploy.py writes nothing. #>
+<% if not reminder %>
+[]
+<% else %>
+<% if 'notifications' not in modules %><@ fail('house.yaml: tesla_car_card.plug_in_reminder is true but the module notifications is not in modules: (the reminder is sent with script.send_notification)') @><% endif %>
+<% set car_map = {} %>
+<% for a in car_list %>
+<% set _ = car_map.update({a.prefix: {
+  'location': car_entity(a, 'location'),
+  'cable': car_entity(a, 'charge_cable'),
+  'battery': car_entity(a, 'battery'),
+  'limit': opt(a, 'charge_limit') | trim,
+  'title': t('reminder_title', called=a.called),
+  'message': t('reminder_message' if garage_photo else 'reminder_message_home', Called=a.Called),
+}}) %>
+<% endfor %>
+<% set extra = {'tag': 'tesla_plug_in_{{ repeat.item }}', 'group': 'tesla_plug_in', 'push': {'interruption-level': 'active'}} %>
+<% if tap_url %><% set _ = extra.update({'url': tap_url}) %><% endif %>
+- id: tesla_car_plug_in_reminder
+  alias: <@ t('reminder_alias') | tojson @>
+  description: >-
+    <@ t('reminder_description') @>
+  mode: parallel
+  max: 10
+  triggers:
+<% for a in car_list %>
+    - trigger: state
+      entity_id: <@ car_entity(a, 'location') @>
+      to: home
+      for: { minutes: <@ reminder_minutes @> }
+      id: <@ ('arrived_' ~ a.prefix) | tojson @>
+    - trigger: state
+      entity_id: <@ car_entity(a, 'charge_cable') @>
+      to: "on"
+      id: <@ ('plugged_' ~ a.prefix) | tojson @>
+<% endfor %>
+    - trigger: time
+      at: "<@ reminder_time @>:00"
+      id: evening
+  variables:
+    # per car: entity ids and the texts in house.language (filled in by tools/fill.py)
+    cars: <@ car_map | tojson @>
+  actions:
+    - choose:
+        - alias: "Cable in: clear the reminder on every phone"
+          conditions:
+            - condition: template
+              value_template: "{{ trigger.id.startswith('plugged_') }}"
+          sequence:
+            - variables:
+                tag: "tesla_plug_in_{{ trigger.id[8:] }}"
+                phones: >-
+                  {%- from 'notifications.jinja' import recipients -%}
+                  {{ recipients() | from_json }}
+            - repeat:
+                for_each: "{{ phones }}"
+                sequence:
+                  - action: "{{ repeat.item }}"
+                    continue_on_error: true
+                    data:
+                      message: clear_notification
+                      data:
+                        tag: "{{ tag }}"
+      default:
+        - alias: "Per car: check, and tell whoever is home"
+          repeat:
+            for_each: "{{ cars.keys() | list if trigger.id == 'evening' else [trigger.id[8:]] }}"
+            sequence:
+              - variables:
+                  c: "{{ cars[repeat.item] }}"
+                  level: "{{ states(c.battery) | float(-1) }}"
+                  limit: "{{ (states(c.limit) | float(80)) if c.limit else 80 }}"
+<% if garage_photo %>
+                  photo: "{{ states('input_text.tesla_garage_photo') | from_json(default={}) }}"
+<% endif %>
+              - alias: "<@ 'Home, in the garage (garage photo)' if garage_photo else 'Home' @>, no cable, battery at least <@ below_limit @> % below the charge limit"
+                condition: template
+                value_template: >-
+                  {{ is_state(c.location, 'home') and is_state(c.cable, 'off')
+                     and 0 <= level <= limit - <@ below_limit @>
+<% if garage_photo %>
+                     and repeat.item in [<% for sp in spots %>photo.get(<@ sp | tojson @>)<% if not loop.last %>, <% endif %><% endfor %>]
+<% endif %>
+                  }}
+              - action: script.send_notification
+                data:
+                  title: "{{ c.title }}"
+                  message: >-
+                    {{ c.message | replace('{level}', level | round(0) | int | string)
+                                 | replace('{limit}', limit | int | string) }}
+                  only_home: true
+                  extra: <@ extra | tojson @>
+<% endif %>

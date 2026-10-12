@@ -51,6 +51,7 @@ modules:
   - shading
   - notifications
   - tesla-driveway-lock # (optional) needs gate
+  - tesla-car-card # (optional) a card per car like the Tesla app; section tesla_car_card:
   - room-sensor
   - ventilation-zehnder
   # - spa-spanet   # (optional) only with a SpaNET SV controller; see section spa: at the bottom
@@ -115,6 +116,9 @@ cars:
   #             (when tesla_driveway_lock.garage_spots is empty); the decision does not depend on it
   # look        (optional, tesla-driveway-lock with garage photo) how Gemini recognises the car in the garage: model,
   #             shape, colour (e.g. "Tesla Model Y, white, a taller crossover"). Default "a Tesla"
+  # model       (required for tesla-car-card, or image) model_s | model_y: the pictures of the car card
+  # image       (optional, tesla-car-card) instead of model: an own picture (/local/... or https://...), shown as it
+  #             is (no tap zones, no charger pictures)
   # entities    (optional) entity ids that do not follow the pattern of 'teslemetry' below (one key per role)
   # battery_kwh (optional, ev-charging) usable battery in kWh; needed for the charge plan and the energy a car still
   #             needs. Empty = no charge plan for this car, and 75 kWh in the energy plan
@@ -125,10 +129,11 @@ cars:
   #             charge plan (Waze Travel Time gives the distance); empty = only a target you set by hand
   # A plugged-in car that is not in this list (a guest car, no Teslemetry) counts as "other" for ev-charging: solar
   # logic only, no plan and no car current.
-  - { prefix: rode_x, name: Rode X, driver: jan, color: "#AEBF92", badge: lightning, garage_spot: left }
+  - { prefix: rode_x, name: Rode X, driver: jan, color: "#AEBF92", badge: lightning, garage_spot: left, model: model_y }
   - prefix: witte_x
     name: Witte X
     driver: lien
+    model: model_s
     garage_spot: right
     battery_kwh: 58
     consumption_kwh_100km: 18
@@ -137,6 +142,7 @@ cars:
   - prefix: zwarte_x
     name: Zwarte X
     driver: jan
+    image: /local/zwarte-x.png
     entities:
       located_at_home: binary_sensor.garage_zwarte_x_thuis_gelegen
 
@@ -170,6 +176,39 @@ teslemetry:
   charge_current: "number.{p}_charge_current"
   charge_limit: "number.{p}_charge_limit" # (optional, ev-charging charge plan) charge limit in %
   charger_power: "sensor.{p}_charger_power" # (optional, ev-charging) power the car takes, in kW
+  # (optional, tesla-car-card) Roles of the car card; a role left out hides its tile, row or seat button. English
+  # names (derived, not seen) in modules/tesla-car-card/README.md, "Roles".
+  charger_voltage: "sensor.{p}_charger_voltage" # below 50 V while charging = a fast charger
+  range: "sensor.{p}_battery_range"
+  odometer: "sensor.{p}_kilometerteller"
+  frunk: "cover.{p}_frunk"
+  trunk: "cover.{p}_kofferbak"
+  charge_port: "cover.{p}_laadpoortdeur"
+  windows: "cover.{p}_ramen"
+  sentry: "switch.{p}_sentry_mode"
+  climate: "climate.{p}_klimaat"
+  inside_temperature: "sensor.{p}_binnentemperatuur"
+  outside_temperature: "sensor.{p}_buitentemperatuur"
+  defrost: "switch.{p}_ontdooien"
+  flash_lights: "button.{p}_flash_lights"
+  honk: "button.{p}_honk_horn"
+  steering_wheel_heater: "select.{p}_stuurwielverwarming"
+  seat_heater_left: "select.{p}_stoelverwarming_voor_links"
+  seat_heater_right: "select.{p}_stoelverwarming_voor_rechts"
+  seat_cooler_left: "select.{p}_seat_cooler_front_left" # only cars with cooled seats; others: leave the entity missing
+  seat_cooler_right: "select.{p}_seat_cooler_front_right"
+  tyre_front_left: "sensor.{p}_bandenspanning_linksvoor"
+  tyre_front_right: "sensor.{p}_bandenspanning_rechtsvoor"
+  tyre_rear_left: "sensor.{p}_bandenspanning_linksachter"
+  tyre_rear_right: "sensor.{p}_bandenspanning_rechtsachter"
+  door_front_left: "binary_sensor.{p}_front_driver_door"
+  door_front_right: "binary_sensor.{p}_voorpassagiersdeur"
+  door_rear_left: "binary_sensor.{p}_rear_driver_door"
+  door_rear_right: "binary_sensor.{p}_achterste_passagiersdeur"
+  window_front_left: "binary_sensor.{p}_front_driver_window"
+  window_front_right: "binary_sensor.{p}_voorpassagiersraam"
+  window_rear_left: "binary_sensor.{p}_achterruit_bestuurderszijde"
+  window_rear_right: "binary_sensor.{p}_achterruit_passagierszijde"
 
 # (required for shading and room-sensor) Rooms. A room may be in the list without every module using it: shading
 # skips a room without blind and curtain, room-sensor a room without sensor: true. climate reads them only through
@@ -495,6 +534,19 @@ tesla_driveway_lock:
   garage_spots: # (optional) the parking spots in the garage as the camera sees them, e.g. [left, right]; empty = every cars[].garage_spot
   ai_task: # (optional) ai_task entity or auto; empty = doorbell.ai_task; none = no garage photo to an AI service
   garage_hint: # (optional) one extra sentence for Gemini about the garage, e.g. "Bikes are parked on the left too."
+
+# (optional, tesla-car-card) The car card (cars[].model or image per car) and the plug-in reminder.
+tesla_car_card:
+  # (optional) true = remind whoever is home to plug in a car at home without a cable whose battery is well below
+  # its charge limit; with the garage photo of tesla-driveway-lock only when it stands in the garage. Needs the
+  # module notifications. Default false.
+  plug_in_reminder: true
+  reminder_after_minutes: 15 # (optional) minutes at home before the reminder; default 15
+  reminder_time: "21:00" # (optional) evening check of every car, "HH:MM" in quotes; default "21:00"
+  reminder_below_limit: 10 # (optional) at least this many % below the charge limit; default 10
+  tap_url: /lovelace/cars # (optional) where a tap on the reminder goes; empty = the app's default
+  # (optional) where the gear on the card goes; empty = /lovelace/smart-charging with ev-charging, else no gear
+  settings_path:
 
 # (required for ventilation-zehnder) ESPHome firmware for a Zehnder ComfoAir Q over the ComfoNet bus.
 ventilation:

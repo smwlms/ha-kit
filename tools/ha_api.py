@@ -163,6 +163,26 @@ class FileEditor:
         msg = json.loads(self._call("/api/save", {"filename": dst, "text": src.read_text()}))["message"]
         print("upload", src.name, "→", dst, ":", msg)
 
+    def upload(self, src: Path, folder: str) -> None:
+        """Upload a binary file (picture) into folder below CONFIG_DIR, under its own name, through the File editor's
+        /api/upload (multipart); save() only handles text."""
+        import mimetypes
+        import uuid
+
+        self.ensure_folder(folder)
+        boundary = uuid.uuid4().hex
+        ctype = mimetypes.guess_type(src.name)[0] or "application/octet-stream"
+        body = (f'--{boundary}\r\nContent-Disposition: form-data; name="path"\r\n\r\n{folder}\r\n'
+                f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="{src.name}"\r\n'
+                f"Content-Type: {ctype}\r\n\r\n").encode() + src.read_bytes() + f"\r\n--{boundary}--\r\n".encode()
+        req = urllib.request.Request(
+            f"{HA_URL}{self.entry}/api/upload", data=body,
+            headers={"Cookie": f"ingress_session={self.session}",
+                     "Content-Type": f"multipart/form-data; boundary={boundary}"},
+        )
+        with urllib.request.urlopen(req, timeout=120) as r:
+            print("upload", src.name, "→", f"{folder}/{src.name}", ":", r.status)
+
 
 def check_config() -> None:
     """Exit when the HA configuration does not validate."""

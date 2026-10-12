@@ -1,0 +1,29 @@
+<# Shared preamble of the module tesla-car-card, derived from house.yaml. Every templated file imports the names it
+   needs:  <% from '_tesla_car_card.jinja' import tcc, car_list, opt, garage_photo, spots with context %>
+   tcc            the section tesla_car_card (optional, {} when left out)
+   car_list       the cars; each needs model (model_s, model_y) or image (own picture)
+   opt(car, role) entity id of an optional role: cars[].entities.<role> or teslemetry.<role>; '' when neither is set
+   garage_photo   the garage photo of module tesla-driveway-lock is there (in modules: and garage_photo: true)
+   spots          the garage spots that photo reports on (tesla_driveway_lock.garage_spots, else cars[].garage_spot)
+   reminder       the plug-in reminder is on (tesla_car_card.plug_in_reminder: true)
+   settings_path  where the gear of the card goes; empty = no gear #>
+<% set tcc = tesla_car_card if tesla_car_card is defined and tesla_car_card else {} %>
+<% set tdl = tesla_driveway_lock if tesla_driveway_lock is defined and tesla_driveway_lock else {} %>
+<% set tm = teslemetry if teslemetry is defined and teslemetry else {} %>
+<% set car_list = cars if cars is defined and cars else [] %>
+<% if not car_list %><@ fail('house.yaml has no cars (the module tesla-car-card needs at least one)') @><% endif %>
+<% for a in car_list %>
+<% if not a.get('model') and not a.get('image') %><@ fail('house.yaml: cars[].model (model_s or model_y) or cars[].image is required for tesla-car-card (car ' ~ a.prefix ~ ')') @><% endif %>
+<% if a.get('model') and a.model not in ['model_s', 'model_y'] %><@ fail('house.yaml: cars[].model of ' ~ a.prefix ~ ' must be model_s or model_y (other models: set cars[].image to an own picture)') @><% endif %>
+<% if a.get('image') and not (a.image is string and (a.image.startswith('/') or a.image.startswith('https://'))) %><@ fail('house.yaml: cars[].image of ' ~ a.prefix ~ ' must be a path (/local/...) or an https:// URL') @><% endif %>
+<% endfor %>
+<% set garage_photo = 'tesla-driveway-lock' in modules and tdl.get('garage_photo') is sameas true %>
+<% set spots = tdl.get('garage_spots') or (car_list | selectattr('garage_spot', 'defined') | selectattr('garage_spot') | map(attribute='garage_spot') | unique | list) %>
+<% set reminder = tcc.get('plug_in_reminder') is sameas true %>
+<% set reminder_minutes = tcc.get('reminder_after_minutes', 15) | int %>
+<% set reminder_time = tcc.get('reminder_time') or '21:00' %>
+<% if reminder and not (reminder_time is string and reminder_time | regex_search('^([01][0-9]|2[0-3]):[0-5][0-9]$')) %><@ fail('house.yaml: tesla_car_card.reminder_time must be "HH:MM" in quotes, e.g. "21:00"') @><% endif %>
+<% set below_limit = tcc.get('reminder_below_limit', 10) | int %>
+<% set settings_path = tcc.get('settings_path') or ('/lovelace/smart-charging' if 'ev-charging' in modules else '') %>
+<% set tap_url = tcc.get('tap_url') or '' %>
+<% macro opt(car, role) %><% if (car.get('entities') or {}).get(role) or tm.get(role) %><@ car_entity(car, role) @><% endif %><% endmacro %>

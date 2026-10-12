@@ -1,0 +1,103 @@
+# User-facing texts of the module tesla-car-card: {key: {en: ..., nl: ...}}. In the module's files: <@ t('key') @>.
+# Placeholders in braces that are not passed to t() ({pct}, {kw}, {v}, {t}, {in}, {out}, {part}, {level}, {limit})
+# stay as they are and are filled in by the card (JavaScript) or the automation (Home Assistant template).
+
+# --- the card (www/tesla-car-card.js) ---
+card_name: { en: Tesla car, nl: Tesla-auto }
+view_title: { en: Cars, nl: Auto's }
+card_description: { en: "Picture with tap zones, battery, charge state and controls, like the Tesla app", nl: "Beeld met tikzones, batterij, laadstatus en bediening, zoals de Tesla-app" }
+config_error: { en: "tesla-car-card: name and model (model_s, model_y) or image are required", nl: "tesla-car-card: name en model (model_s, model_y) of image zijn verplicht" }
+battery_aria: { en: "Battery {pct} percent", nl: "Batterij {pct} procent" }
+unlock: { en: Unlock, nl: Ontgrendel }
+lock: { en: Lock, nl: Vergrendel }
+frunk: { en: Frunk, nl: Frunk }
+frunk_open: { en: Frunk open, nl: Frunk open }
+trunk: { en: Trunk, nl: Kofferbak }
+charge_port: { en: Charge port, nl: Laadpoort }
+climate: { en: Climate, nl: Klimaat }
+start_charging: { en: Start charging, nl: Start laden }
+stop_charging: { en: Stop charging, nl: Stop laden }
+lights: { en: Lights, nl: Lampen }
+horn: { en: Horn, nl: Toeter }
+sentry: { en: Sentry, nl: Sentry }
+windows: { en: Windows, nl: Ramen }
+vent: { en: Vent, nl: Ventileren }
+defrost: { en: Defrost, nl: Ontdooien }
+power_on: { en: "On", nl: Aan }
+power_off: { en: "Off", nl: Uit }
+area_open: { en: "{part} open", nl: "{part} open" }
+area_closed: { en: "{part} closed", nl: "{part} dicht" }
+more: { en: More, nl: Meer }
+close: { en: Close, nl: Sluiten }
+charge_settings: { en: Charge settings, nl: Laadinstellingen }
+# charge state (popup subtitle, badge title)
+fast_charging: { en: Fast charging, nl: Snelladen }
+fast_charging_kw: { en: "Fast charging · {kw} kW", nl: "Snelladen · {kw} kW" }
+fast_charging_station: { en: Fast charging at a fast charger, nl: Snelladen aan een snellader }
+charging: { en: Charging, nl: Laadt }
+charging_volt: { en: "Charging · {v} V", nl: "Laadt traag · {v} V" }
+plugged_in: { en: "Plugged in, not charging", nl: "Ingeplugd, laadt niet" }
+not_plugged_in: { en: Not plugged in, nl: Niet ingeplugd }
+badge_fast: { en: fast, nl: snel }
+badge_charging: { en: charging, nl: laadt }
+from_grid: { en: Power from the grid, nl: Stroom van het net }
+from_sun: { en: Power from the sun, nl: Stroom van de zon }
+# where the car is (title of the icon top right)
+home: { en: Home, nl: Thuis }
+home_garage: { en: "Home, in the garage", nl: "Thuis, in de garage" }
+home_driveway: { en: "Home, on the driveway", nl: "Thuis, op de oprit" }
+away: { en: On the road, nl: Onderweg }
+tyre_low: { en: Low tyre pressure, nl: Lage bandenspanning }
+# detail popup
+range: { en: Range, nl: Bereik }
+odometer: { en: Odometer, nl: Kilometerstand }
+tyres: { en: Tyres, nl: Banden }
+open: { en: Open, nl: Open }
+all_closed: { en: all closed, nl: alles dicht }
+unknown: { en: unknown, nl: onbekend }
+charge_limit: { en: Charge limit, nl: Laadlimiet }
+climate_on: { en: "on · {t} °C", nl: "aan · {t} °C" }
+state_on: { en: "on", nl: aan }
+state_off: { en: "off", nl: uit }
+# climate screen
+inside_outside: { en: "Inside {in} °C · outside {out} °C", nl: "Binnen {in} °C · buiten {out} °C" }
+lower: { en: Lower, nl: Lager }
+higher: { en: Higher, nl: Hoger }
+steering_wheel: { en: Steering wheel, nl: Stuurwiel }
+seat_left: { en: Left seat, nl: Stoel links }
+seat_right: { en: Right seat, nl: Stoel rechts }
+cooling_left: { en: Left seat cooling, nl: Koeling stoel links }
+cooling_right: { en: Right seat cooling, nl: Koeling stoel rechts }
+# weather states of Home Assistant (title of the weather icon)
+weather_clear_night: { en: clear, nl: helder }
+weather_sunny: { en: sunny, nl: zonnig }
+weather_partlycloudy: { en: partly cloudy, nl: half bewolkt }
+weather_cloudy: { en: cloudy, nl: bewolkt }
+weather_fog: { en: fog, nl: mist }
+weather_hail: { en: hail, nl: hagel }
+weather_lightning: { en: thunderstorm, nl: onweer }
+weather_pouring: { en: pouring rain, nl: stortregen }
+weather_rainy: { en: rain, nl: regen }
+weather_snowy: { en: snow, nl: sneeuw }
+weather_snowy_rainy: { en: sleet, nl: natte sneeuw }
+weather_windy: { en: wind, nl: wind }
+weather_exceptional: { en: exceptional, nl: uitzonderlijk }
+
+# --- plug-in reminder (automations.yaml); {called}/{Called} at fill time, {level}/{limit} by the automation ---
+reminder_alias: { en: "Car: plug-in reminder", nl: "Auto: insteken-herinnering" }
+reminder_description:
+  en: >-
+    Reminds whoever is home to plug in a car: some minutes after it came home and in the evening, only when it stands
+    in the garage (last garage photo of tesla-driveway-lock, else: at home), no cable is in and the battery is well
+    below the charge limit. Plugging in clears the notification on every phone. See tesla-car-card/LOGIC.md.
+  nl: >-
+    Herinnert wie thuis is eraan een auto in te steken: enkele minuten na thuiskomst en 's avonds, enkel als hij in de
+    garage staat (laatste garagefoto van tesla-driveway-lock, anders: thuis), er geen kabel in zit en de batterij
+    ruim onder de laadlimiet zit. Insteken haalt de melding van elke telefoon. Zie tesla-car-card/LOGIC.md.
+reminder_title: { en: "Plug in {called}", nl: "Steek {called} in" }
+reminder_message:
+  en: "{Called} is in the garage without a cable · {level} % (charge limit {limit} %)."
+  nl: "{Called} staat in de garage zonder kabel · {level} % (laadlimiet {limit} %)."
+reminder_message_home:
+  en: "{Called} is home without a cable · {level} % (charge limit {limit} %)."
+  nl: "{Called} staat thuis zonder kabel · {level} % (laadlimiet {limit} %)."

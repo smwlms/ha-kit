@@ -9,6 +9,7 @@ presence: yes
 covers: yes
 notifications: yes
 driveway_lock: yes
+car_card: yes
 room_sensor: no
 ventilation: Zehnder ComfoAir Q
 spa: none

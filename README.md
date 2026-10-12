@@ -26,6 +26,7 @@ The kit is only useful if you own (some of) the devices below. A core module wor
 | `shading` | blinds and/or curtains as `cover.*` entities (any brand); a weather integration with an hourly forecast for sun and heat | Overkiz/Somfy and Shelly covers (module examples) | Yes: core, any `cover.*` |
 | `notifications` | the Companion app; per kind a price sensor with `starts`/`prices`, a grid-export sensor, or a ventilation filter sensor | Companion app | Yes: core; kinds you cannot feed stay off |
 | `tesla-driveway-lock` | `gate`; a Tesla (Teslemetry); a garage camera and Google Generative AI (optional) | Teslemetry | No: needs a Tesla |
+| `tesla-car-card` | a Tesla Model S or Model Y with the Teslemetry integration; `tesla-driveway-lock` (garage photo), an EV charger module and `notifications` optional | Teslemetry, Model S and Model Y | No: needs a Tesla; other models need your own pictures |
 | `ventilation-zehnder` | a Zehnder ComfoAir Q (Q350/Q450/Q600), an M5Stack AtomS3 Lite and Mini CAN Unit on the ComfoNet bus, ESPHome | ComfoAir Q450 | No: brand adapter for this unit only |
 | `room-sensor` | ESP32 DevKit, HLK-LD2450 radar, BH1750, GY-SHT31-D, ESPHome | not flashed yet | Yes: any home with those parts |
 | `spa-spanet` | a SpaNET SV3 spa controller with a free EXP1 port, an ESP32, ESPHome | SpaNET SV3 | No: brand adapter for SpaNET SV only |
@@ -50,7 +51,7 @@ You get the most out of it with:
 - a UniFi Protect doorbell (`doorbell`, `parcel-service`);
 - blinds or curtains as `cover.*` entities and phones with the Companion app (`shading`, `presence`, `notifications`).
 
-Without a Tesla, `tesla-route`, `tesla-driveway-lock` and the auto-open of `gate` do nothing; the brand adapters (`charger-zappi`, `heat-pump-vaillant`, `ventilation-zehnder`, `spa-spanet`, `doorbell`) are only worth installing with that exact hardware, and `tariff-be` only with a Flemish dynamic contract. `shading`, `presence`, `notifications`, `energy`, `climate`, `home-screen` and `e-ink-display` follow your roles and work with any brand.
+Without a Tesla, `tesla-route`, `tesla-driveway-lock`, `tesla-car-card` and the auto-open of `gate` do nothing; the brand adapters (`charger-zappi`, `heat-pump-vaillant`, `ventilation-zehnder`, `spa-spanet`, `doorbell`) are only worth installing with that exact hardware, and `tariff-be` only with a Flemish dynamic contract. `shading`, `presence`, `notifications`, `energy`, `climate`, `home-screen` and `e-ink-display` follow your roles and work with any brand.
 
 ## Screenshots
 
@@ -115,6 +116,7 @@ The local checks (fill in, YAML, templates, `deploy.py --dry-run`, `esphome conf
 | `shading`             | blinds and curtains per room on a schedule, curtains follow blinds, closed on sun and heat            | -                                                  | no       | in production at the source |
 | `notifications`       | shared notifications to the Companion app (free/negative power price, solar surplus, ventilation filter) | - (filter sensor automatic with `ventilation-zehnder`) | no | in production at the source |
 | `tesla-driveway-lock` | car locks itself on the driveway, after X min or when the gate closes; garage photo (optional)        | `gate`                                             | yes      | live since 2026-10-07 |
+| `tesla-car-card`      | a card per car like the Tesla app (`custom:tesla-car-card`): picture with tap zones, battery, charge state with energy in the cable, controls, climate screen; plug-in reminder (optional) | - (garage icon with `tesla-driveway-lock`, reminder needs `notifications`) | yes | in production at the source since 2026-10-12 (the card runs daily in the author's house; the kit module itself is not deployed there yet) |
 | `room-sensor`         | ESPHome room sensor (radar, light, temperature, humidity), one firmware file per room                 | -                                                  | no       | built, never flashed |
 | `ventilation-zehnder` | ESPHome firmware for the Zehnder ComfoAir Q over the ComfoNet bus, ComfoClime optional                | -                                                  | no       | in production at the source |
 | `spa-spanet`          | ESP32 on the EXP1 port of a SpaNET SV3 spa                                                            | -                                                  | yes      | in production at the source since 2026-10-11 |

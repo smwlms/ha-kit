@@ -1,0 +1,179 @@
+<!doctype html>
+<!--
+  Local test page for the card of module tesla-car-card, with a stubbed `hass`: nothing talks to Home Assistant or a
+  car. callService only records the call (window.__calls and the log at the bottom).
+  1. Fill in the example house into build/ (in .gitignore):
+       uv run --with-requirements tools/requirements.txt python tools/fill.py house.example.yaml build/
+  2. Open this file in a browser (file:// works), or serve the kit root: python3 -m http.server, then
+       http://localhost:8000/tests/tesla-car-card.html
+  Query: ?theme=dark (default light), ?only=<scene id> (one card), ?width=<px> (card width, default 460).
+  Commands need a real click (event.isTrusted); clicks from Playwright or a person count, el.click() from a script not.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>tesla-car-card test</title>
+    <style>
+      /* theme tokens of module base, theme Organic (modules/base/themes/organic.yaml) */
+      .light {
+        --cw-bg: #f5ead8; --cw-card: #ebddc5; --cw-raised: #f9f3ea; --cw-line: #d8c6a8; --cw-text: #201e1d;
+        --cw-muted: #645c50; --cw-accent: #c67139; --cw-accent-ink: #84502e; --cw-good: #41692f; --cw-warn: #7e5409;
+        --cw-bad: #a63b28;
+      }
+      .dark {
+        --cw-bg: #1d1a17; --cw-card: #2a2622; --cw-raised: #3a3530; --cw-line: #4a433c; --cw-text: #f5ead8;
+        --cw-muted: #bfb3a1; --cw-accent: #d67f48; --cw-accent-ink: #da8c59; --cw-good: #6fbf73; --cw-warn: #e8b04a;
+        --cw-bad: #ee8575;
+      }
+      body { margin: 0; font-family: system-ui, sans-serif; }
+      main { background: var(--cw-bg); color: var(--cw-text); min-height: 100vh; padding: 16px; box-sizing: border-box;
+        display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+      figure { margin: 0; width: var(--w, 460px); max-width: 100%; }
+      figcaption { font-size: 12px; color: var(--cw-muted); margin: 0 0 6px 4px; }
+      #log { width: 100%; font: 12px ui-monospace, monospace; color: var(--cw-muted); white-space: pre-wrap; }
+    </style>
+    <script src="../build/tesla-car-card/www/tesla-car-card.js"></script>
+  </head>
+  <body>
+    <main id="main"></main>
+    <script>
+      const q = new URLSearchParams(location.search);
+      const IMAGES = "../build/tesla-car-card/www/images/";
+      document.getElementById("main").className = q.get("theme") === "dark" ? "dark" : "light";
+      if (q.get("width")) document.documentElement.style.setProperty("--w", `${Number(q.get("width"))}px`);
+
+      // States of one car (Dutch Teslemetry names, as in house.example.yaml); o overrides single values.
+      const car = (p, o = {}) => {
+        const v = {
+          battery: 64, charging: "disconnected", kw: 0, volt: 0, cable: "off", location: "home", lock: "locked",
+          frunk: "closed", trunk: "closed", port: "closed", windows: "closed", charge: "off", limit: 80, range: 312,
+          odo: 48210, sentry: "off", climate: "off", temp: 18.5, target: 20.5, inside: 18.5, outside: 11,
+          defrost: "off", tyres: [2.9, 2.9, 2.9, 2.9], seats: "off", ...o,
+        };
+        const st = (state, attributes = {}) => ({ state: String(state), attributes });
+        const sel = (s) => st(s, { options: ["off", "low", "medium", "high"] });
+        return {
+          [`sensor.${p}_batterijniveau`]: st(v.battery, { unit_of_measurement: "%" }),
+          [`sensor.${p}_opladen`]: st(v.charging),
+          [`sensor.${p}_charger_power`]: st(v.kw, { unit_of_measurement: "kW" }),
+          [`sensor.${p}_charger_voltage`]: st(v.volt, { unit_of_measurement: "V" }),
+          [`binary_sensor.${p}_oplaadkabel`]: st(v.cable),
+          [`device_tracker.${p}_locatie`]: st(v.location),
+          [`lock.${p}_slot`]: st(v.lock),
+          [`cover.${p}_frunk`]: st(v.frunk, { supported_features: 1 }),
+          [`cover.${p}_kofferbak`]: st(v.trunk, { supported_features: 3 }),
+          [`cover.${p}_laadpoortdeur`]: st(v.port, { supported_features: 3 }),
+          [`cover.${p}_ramen`]: st(v.windows, { supported_features: 3 }),
+          [`switch.${p}_opladen`]: st(v.charge),
+          [`number.${p}_charge_limit`]: st(v.limit, { min: 50, max: 100 }),
+          [`sensor.${p}_battery_range`]: st(v.range, { unit_of_measurement: "km" }),
+          [`sensor.${p}_kilometerteller`]: st(v.odo, { unit_of_measurement: "km" }),
+          [`switch.${p}_sentry_mode`]: st(v.sentry),
+          [`climate.${p}_klimaat`]: st(v.climate, { current_temperature: v.temp, temperature: v.target, min_temp: 15, max_temp: 28 }),
+          [`sensor.${p}_binnentemperatuur`]: st(v.inside),
+          [`sensor.${p}_buitentemperatuur`]: st(v.outside),
+          [`switch.${p}_ontdooien`]: st(v.defrost),
+          [`button.${p}_flash_lights`]: st("unknown"),
+          [`button.${p}_honk_horn`]: st("unknown"),
+          [`select.${p}_stuurwielverwarming`]: sel(v.seats),
+          [`select.${p}_stoelverwarming_voor_links`]: sel("high"),
+          [`select.${p}_stoelverwarming_voor_rechts`]: sel(v.seats),
+          ...(p === "witte_x" ? { [`select.${p}_seat_cooler_front_left`]: sel("low"), [`select.${p}_seat_cooler_front_right`]: sel("off") } : {}),
+          [`sensor.${p}_bandenspanning_linksvoor`]: st(v.tyres[0], { unit_of_measurement: "bar" }),
+          [`sensor.${p}_bandenspanning_rechtsvoor`]: st(v.tyres[1], { unit_of_measurement: "bar" }),
+          [`sensor.${p}_bandenspanning_linksachter`]: st(v.tyres[2], { unit_of_measurement: "bar" }),
+          [`sensor.${p}_bandenspanning_rechtsachter`]: st(v.tyres[3], { unit_of_measurement: "bar" }),
+          [`binary_sensor.${p}_front_driver_door`]: st("off", { friendly_name: "Front driver door" }),
+          [`binary_sensor.${p}_voorpassagiersdeur`]: st(v.door || "off", { friendly_name: "Front passenger door" }),
+        };
+      };
+      // Card config like lovelace/tesla-car-view.yaml writes it.
+      const config = (p, name, extra = {}) => ({
+        type: "custom:tesla-car-card", prefix: p, name, images: IMAGES,
+        garage_photo: "input_text.tesla_garage_photo", garage_spots: ["left", "right"],
+        weather: "weather.home", grid_power: "sensor.power_consumed", settings_path: "/lovelace/smart-charging",
+        entities: {
+          battery: `sensor.${p}_batterijniveau`, charging_state: `sensor.${p}_opladen`,
+          charge_cable: `binary_sensor.${p}_oplaadkabel`, location: `device_tracker.${p}_locatie`,
+          lock: `lock.${p}_slot`, charge_switch: `switch.${p}_opladen`, charge_limit: `number.${p}_charge_limit`,
+          charger_power: `sensor.${p}_charger_power`, charger_voltage: `sensor.${p}_charger_voltage`,
+          range: `sensor.${p}_battery_range`, odometer: `sensor.${p}_kilometerteller`, frunk: `cover.${p}_frunk`,
+          trunk: `cover.${p}_kofferbak`, charge_port: `cover.${p}_laadpoortdeur`, windows: `cover.${p}_ramen`,
+          sentry: `switch.${p}_sentry_mode`, climate: `climate.${p}_klimaat`,
+          inside_temperature: `sensor.${p}_binnentemperatuur`, outside_temperature: `sensor.${p}_buitentemperatuur`,
+          defrost: `switch.${p}_ontdooien`, flash_lights: `button.${p}_flash_lights`, honk: `button.${p}_honk_horn`,
+          steering_wheel_heater: `select.${p}_stuurwielverwarming`,
+          seat_heater_left: `select.${p}_stoelverwarming_voor_links`,
+          seat_heater_right: `select.${p}_stoelverwarming_voor_rechts`,
+          seat_cooler_left: `select.${p}_seat_cooler_front_left`, seat_cooler_right: `select.${p}_seat_cooler_front_right`,
+          doors: [`binary_sensor.${p}_front_driver_door`, `binary_sensor.${p}_voorpassagiersdeur`],
+          tyres: ["linksvoor", "rechtsvoor", "linksachter", "rechtsachter"].map((k) => `sensor.${p}_bandenspanning_${k}`),
+        },
+        ...extra,
+      });
+
+      // Scenes: id, caption, card config, states. Every scene gets its own stubbed hass.
+      const SCENES = [
+        ["y-home-sun", "Model Y in the garage, charging at the wall box on solar (7.2 kW)",
+          config("rode_x", "Rode X", { model: "model_y" }),
+          { ...car("rode_x", { charging: "charging", kw: 7.2, volt: 231, cable: "on", charge: "on", battery: 46 }),
+            "sensor.power_consumed": { state: "0", attributes: { unit_of_measurement: "W" } } }],
+        ["s-fast", "Model S at a fast charger, away, rain, unlocked, low tyre",
+          config("witte_x", "Witte X", { model: "model_s" }),
+          { ...car("witte_x", { charging: "charging", kw: 0, volt: 1, cable: "on", charge: "on", location: "not_home",
+            lock: "unlocked", battery: 18, range: 74, tyres: [2.9, 2.5, 2.9, 2.9], climate: "heat_cool" }) }],
+        ["y-trunk-driveway", "Model Y on the driveway, plugged in not charging, trunk open, door open",
+          config("rode_x", "Rode X", { model: "model_y" }),
+          { ...car("rode_x", { cable: "on", trunk: "open", door: "on", battery: 81 }),
+            // the last garage photo did not see this car in the garage: it stands on the driveway
+            "input_text.tesla_garage_photo": { state: JSON.stringify({ left: "empty", right: "empty", drive: "car" }), attributes: {} },
+            "weather.home": { state: "partlycloudy", attributes: { temperature: 14 } } }],
+        ["s-frunk-grid", "Model S at home charging from the grid (11 kW), frunk open",
+          config("witte_x", "Witte X", { model: "model_s" }),
+          { ...car("witte_x", { charging: "charging", kw: 11, volt: 229, cable: "on", charge: "on", frunk: "open", battery: 57 }),
+            "sensor.power_consumed": { state: "3.4", attributes: { unit_of_measurement: "kW" } } }],
+        ["own-image", "Own picture (cars[].image), fewer entities",
+          { type: "custom:tesla-car-card", prefix: "zwarte_x", name: "Zwarte X", image: `${IMAGES}s-base.webp`,
+            entities: { battery: "sensor.zwarte_x_batterijniveau", charging_state: "sensor.zwarte_x_opladen",
+              charge_cable: "binary_sensor.zwarte_x_oplaadkabel", location: "device_tracker.zwarte_x_locatie",
+              lock: "lock.zwarte_x_slot", climate: "climate.zwarte_x_klimaat" } },
+          { ...car("zwarte_x", { battery: 92, location: "not_home" }) }],
+      ];
+      const COMMON = {
+        "input_text.tesla_garage_photo": { state: JSON.stringify({ t: "2026-10-12T18:00:00", left: "rode_x", right: "empty" }), attributes: {} },
+        "weather.home": { state: "rainy", attributes: { temperature: 10.5 } },
+        "sensor.power_consumed": { state: "0", attributes: { unit_of_measurement: "W" } },
+      };
+
+      window.__calls = [];
+      const log = document.createElement("div");
+      log.id = "log";
+      const only = q.get("only");
+      for (const [id, caption, cfg, states] of SCENES) {
+        if (only && only !== id) continue;
+        const fig = document.createElement("figure");
+        fig.id = id;
+        fig.innerHTML = `<figcaption>${id}: ${caption}</figcaption>`;
+        const el = document.createElement("tesla-car-card");
+        el.setConfig(cfg);
+        fig.append(el);
+        document.getElementById("main").append(fig);
+        const hass = {
+          language: "nl",
+          states: { ...COMMON, ...states },
+          // stub: records, never sends anything
+          callService(domain, service, data) {
+            const c = { scene: id, domain, service, data };
+            window.__calls.push(c);
+            log.textContent += `callService ${JSON.stringify(c)}\n`;
+            return Promise.resolve();
+          },
+        };
+        // after the card is in the page, so it can read the theme colour (light/dark)
+        requestAnimationFrame(() => (el.hass = hass));
+      }
+      document.getElementById("main").append(log);
+    </script>
+  </body>
+</html>

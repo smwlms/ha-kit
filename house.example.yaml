@@ -523,6 +523,11 @@ spa:
   display_name: Jacuzzi # (optional) name in Home Assistant, sets the entity ids; default name with a capital
   probes: true # (optional) two DS18B20 probes (water GPIO4, air GPIO18); false = none; default true
   lid: true # (optional) reed contact on the lid (GPIO19); false = none; default true
+  # (optional) noise floor of the spa's current meter in A and the reading below which it counts as 0 A; the
+  # firmware computes Power = sqrt(I^2 - floor^2) x V. Defaults measured on a real SV3; 0 and 0 = no correction.
+  # How to measure yours: spa-spanet/README.md, "Power and energy".
+  current_noise_floor: 6.4
+  current_dead_band: 7.0
 
 # (required for tariff-be) Belgian dynamic tariff: one source for Jinja (templates) and JS (energy screens).
 # Public coefficients of a dynamic contract; adapt to your own contract. Spot price (Belpex) in c€/kWh:
@@ -570,7 +575,7 @@ energy:
   #   start_w     (optional) a start is counted when the power rises above this; default 100
   # At least one of power_w and energy_kwh. Empty = only the charger, heat pump and ventilation of their modules.
   consumers:
-    - { name: Spa, power_w: sensor.spa_heater_power, icon: mdi:hot-tub, start_w: 2000 }
+    - { name: Spa, power_w: sensor.spa_power, energy_kwh: sensor.spa_energy, icon: mdi:hot-tub, start_w: 2000 }
     - { name: Washing machine, energy_kwh: sensor.washing_machine_energy, icon: mdi:washing-machine }
   # (optional, energy) url paths of the two dashboards energy/deploy.py writes (they need a hyphen);
   # defaults energy-screen and energy-analysis

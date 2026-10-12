@@ -9,7 +9,11 @@ Speaks the plain-text EXP1 protocol at 38400 8N1 (see ../spanet.h and wayne-love
   W64:v / W65:v -> power save begin / end (h*256+m)                  reply "v"
   W60:n / W90:n -> filtration hours / cycle                          reply "n"
   W12           -> sanitise (CLEAN) cycle                            reply "W12"
-  S2x:n         -> pumps                                             reply "S2x-OK"
+  S22/S23/S24:n -> pump A/B/C 0 off, 1 on, 4 auto (A only)          reply "S2x-OK"
+
+Field layout as read on a real SV3 (2026-10-11): R2 field 1 = current in 0.1 A including the noise floor of the
+current meter (`--noise-floor`, added in quadrature), R4 field 10 = W x 10, R4 fields 11-13 = 10 Wh units, R5 fields
+18-20 = pump status (0 off, 1 on, 4 auto), R5 field 16 = CLEAN running (status "W.CLN", pumps A and B on).
 
 Thermal model: 5.25 kW heater into `--volume` litres, heat loss to `--ambient` (lid on).
 Heating follows the spa rules: NORM heats below setpoint (0.2 K hysteresis), AWAY never,
@@ -68,6 +72,8 @@ class Spa:
     heating: bool = False
     filtering: bool = False
     sanitise_until: float = 0.0
+    pumps: list[int] = field(default_factory=lambda: [4, 0, 0])  # R5 fields 18-20: A auto, B and C off
+    noise_floor_a: float = 6.4       # the current meter of a real SV3 reads ~6.4 A when idle
     energy_kwh: float = 0.0
     energy_today_kwh: float = 0.0
     sim_time: dt.datetime = field(default_factory=dt.datetime.now)
@@ -115,18 +121,22 @@ class Spa:
     # -- protocol --------------------------------------------------------------------------
     def rf(self) -> str:
         t = self.sim_time
-        status = "Heating" if self.heating else ("Filtering" if self.filtering else "Waiting")
+        cleaning = time.time() < self.sanitise_until
+        status = "W.CLN" if cleaning else ("Heating" if self.heating else ("Filtering" if self.filtering else "Auto"))
         ec = round(HEATER_W / 240 * 10) if self.heating else 0
-        amps = round((self.power_w / 240) * 10)
+        real_a = self.power_w / 240
+        amps = round((real_a ** 2 + self.noise_floor_a ** 2) ** 0.5 * 10)  # what the spa's meter reports, in 0.1 A
+        pumps = [1, 1, self.pumps[2]] if cleaning else self.pumps
         wt = round(self.water * 10)
         r2 = [amps, 240, 38, 70, t.isoweekday() % 7, t.hour, t.minute, t.second, t.day, t.month, t.year,
               round(self.water * 10 + (15 if self.heating else 0)), 9999, 1, 0, 490, 207, 34, 6000, 602, 23, 20, 0, 0, 0, 0, 44, 35, 45]
         r3 = [32, 1, 4, 4, 4, "SW V5 17 05 31", "SV3", "18480001", "20000826", 1, 0, 0, 0, 0, 0, "NA", 7, 0, 470,
               status, 4, ec, 7, 7, 0, 0]
-        r4 = [MODES[self.mode], 0, 0, 0, 1, 0, 3547, 4, 20, round(self.power_w), round(self.energy_kwh * 100),
+        r4 = [MODES[self.mode], 0, 0, 0, 1, 0, 3547, 4, 20, amps * 240, round(self.energy_kwh * 100),
               round(self.energy_today_kwh * 1000 / 10), 1686, 0, 8388608, 0, 0, 5, 0, 98, 0, 10084, 4, 80, 100, 0, 0, 4]
-        r5 = [0, 1, 0, 1, 0, 0, 0, 0, 0, int(self.blocked()), 1, int(self.heating), int(self.filtering), 0, wt,
-              int(time.time() < self.sanitise_until), 3, 4, 0, 0, 0, 0, 0, 1, 2, 6]
+        r5 = [0, 1, 0, 1, int(self.pumps[0] == 1), int(self.pumps[1] == 1), 0, int(self.pumps[2] == 1), 0,
+              int(self.blocked()), 0, int(self.heating), int(self.filtering), 0, wt, int(cleaning), 3, *pumps,
+              0, 0, 0, 1, 2, 6]
         r6 = [1, 5, 0, 2, 5, self.filt_hours, self.filt_cycle, round(self.setpoint * 10), 1, self.psav,
               self.psav_begin, self.psav_end, self.sleep1[0], self.sleep2[0], self.sleep1[1], self.sleep2[1],
               self.sleep1[2], self.sleep2[2], 0, 30, 0, 0, 1, 0, 2, 3, 0]
@@ -158,6 +168,12 @@ class Spa:
                 self.sanitise_until = time.time() + 20 * 60
                 return "W12\r\n"
             key, _, val = cmd.partition(":")
+            if key in ("S22", "S23", "S24"):
+                i, v = int(key[2]) - 2, int(val)
+                if v not in ((0, 1, 4) if i == 0 else (0, 1)):
+                    return "?\r\n"
+                self.pumps[i] = v
+                return f"{key}-OK\r\n"
             if key.startswith("S2") and len(key) == 3:
                 return f"{key}-OK\r\n"
             v = int(val)
@@ -280,8 +296,10 @@ def main() -> int:
     ap.add_argument("--setpoint", type=float, default=38.0)
     ap.add_argument("--ambient", type=float, default=12.0)
     ap.add_argument("--volume", type=float, default=1400.0, help="water volume in litres")
+    ap.add_argument("--noise-floor", type=float, default=6.4,
+                    help="noise floor of the spa's current meter in A, added in quadrature (default 6.4, 0 = none)")
     a = ap.parse_args()
-    spa = Spa(water=a.water, setpoint=a.setpoint, ambient=a.ambient, volume_l=a.volume)
+    spa = Spa(water=a.water, setpoint=a.setpoint, ambient=a.ambient, volume_l=a.volume, noise_floor_a=a.noise_floor)
     if a.selftest:
         return selftest()
     if a.dump:

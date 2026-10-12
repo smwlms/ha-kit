@@ -40,7 +40,7 @@ The kit is only useful if you own (some of) the devices below. A core module wor
 | `appliances-home-connect` | a Home Connect dishwasher, washing machine or dryer (Bosch, Siemens, Neff, Gaggenau) with remote start; HA 2026.4 or newer; `notifications` | Home Connect | No: brand-bound |
 | `results` | a module that provides `tariff` (e.g. `tariff-be`); grid import/export energy meters | P1 meter | Only together with a tariff module |
 | `home-screen` | a storage-mode dashboard; chips follow the modules you installed | any | Yes: core, no devices |
-| `e-ink-display` | an Android e-ink tablet with touch, the Companion app or Fully Kiosk Browser; a relay for its charger (optional) | screen tested in a browser only | Yes: any tablet works; the page follows your modules |
+| `e-ink-display` | an Android e-ink tablet with touch, the Companion app or Fully Kiosk Browser; a relay for its charger (optional) | the screen runs as a dashboard at the source; no tablet installed yet | Yes: any tablet works; the page follows your modules |
 
 You get the most out of it with:
 

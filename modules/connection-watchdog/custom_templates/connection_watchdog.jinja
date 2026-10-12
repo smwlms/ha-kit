@@ -1,0 +1,91 @@
+<% from '_connection_watchdog.jinja' import sources, ignore, S with context %>
+{#- Connection watchdog (ha-kit module connection-watchdog, see connection-watchdog/LOGIC.md). Filled in from house.yaml
+    by tools/fill.py; uploaded by connection-watchdog/deploy.py to /config/custom_templates/connection_watchdog.jinja.
+    evaluate(previous, ev) -> JSON list with the status of every source.
+      previous = the attribute 'sources' of sensor.connection_watchdog (memory of the current outage)
+      ev       = data of a 'connection_watchdog_update' event ({updates: [{source, kind: attempt|notified|recovered}]}) or {}
+    Status: ok / unreachable / frozen. A config entry in setup_retry is retried by Home Assistant itself: no reload then. -#}
+
+{#- Minutes since an ISO timestamp or datetime (none when unknown). -#}
+{% macro minutes(t) -%}
+{%- set ts = as_timestamp(t, none) -%}
+{{- ((as_timestamp(now()) - ts) / 60) | round(1) if ts is not none else none -}}
+{%- endmacro %}
+
+{% macro evaluate(previous, ev) -%}
+{%- set S = <@ S | tojson @> -%}
+{#- The sources of house.yaml (connection_watchdog.sources); fill in again and deploy after a change. -#}
+{%- set cfg = <@ sources | tojson @> -%}
+{%- set ignore = <@ ignore | tojson @> -%}
+{%- set now_iso = now().replace(microsecond=0).isoformat() -%}
+{%- set ev = ev if ev is mapping else {} -%}
+{%- set updates = ev.get('updates', []) if ev.get('updates', []) is iterable else [] -%}
+{%- set ns = namespace(prev={}, out=[], known=[], cfg=[]) -%}
+{%- for b in (previous if previous is iterable and previous is not string else []) if b is mapping and b.get('id') -%}
+  {%- set ns.prev = dict(ns.prev, **{b.id: b}) -%}
+{%- endfor -%}
+{#- Config entries per source: the ones given in house.yaml + the ones that own the keys. When the keys left the entity
+    registry (an integration that came back without its entities), the entries remembered from the last run. -#}
+{%- for b in cfg -%}
+  {%- set own = (b.entries + (b['keys'] | map('config_entry_id') | reject('none') | list)) | unique | list -%}
+  {%- set own = own or ns.prev.get(b.id, {}).get('entries', []) -%}
+  {%- set ns.cfg = ns.cfg + [dict(b, entries=own)] -%}
+  {%- set ns.known = ns.known + own -%}
+{%- endfor -%}
+{#- Test source (input_select.connection_watchdog_test): its data time stands still on 'frozen', it is unavailable on
+    'unreachable'. Reloads are simulated (logbook only). -#}
+{%- if states('input_select.connection_watchdog_test') in ['ok', 'unreachable', 'frozen'] -%}
+  {%- set ns.cfg = ns.cfg + [{'id': 'test', 'name': S.test_name, 'keys': ['sensor.connection_watchdog_test'], 'entries': [],
+        'rule': 'any', 'silence': 0, 'time': 'sensor.connection_watchdog_test', 'time_max': 2, 'wait': 1,
+        'notify_after': 3, 'max': 2, 'interval': 1, 'impact': S.test_impact, 'action': S.test_action}] -%}
+{%- endif -%}
+{#- Generic catch: a config entry that owns unavailable entities, is not loaded and is in no source. -#}
+{%- set extra = states | selectattr('state', 'eq', 'unavailable') | map(attribute='entity_id') | map('config_entry_id')
+      | reject('none') | unique | reject('in', ns.known + ignore) | list -%}
+{%- for e in extra if (config_entry_attr(e, 'state') | string) not in ['loaded', 'not_loaded']
+      and not config_entry_attr(e, 'disabled_by') and config_entry_attr(e, 'domain') not in ignore -%}
+  {%- set ns.cfg = ns.cfg + [{'id': 'entry_' ~ e,
+        'name': S.name_generic | replace('{title}', config_entry_attr(e, 'title') | string) | replace('{domain}', config_entry_attr(e, 'domain') | string),
+        'keys': [], 'entries': [e], 'rule': 'any', 'silence': 0, 'wait': 5, 'notify_after': 15, 'max': 2, 'interval': 10,
+        'impact': S.impact_generic, 'action': S.action_default}] -%}
+{%- endfor -%}
+{%- for b in ns.cfg -%}
+  {#- Status, in this order: unreachable (entry not loaded, or keys unavailable), frozen (no new value), frozen (old data). -#}
+  {%- set est = b.entries | map('config_entry_attr', 'state') | map('string') | list -%}
+  {%- set broken = est | reject('eq', 'loaded') | list -%}
+  {%- set gone = b['keys'] | reject('has_value') | list -%}
+  {%- set rep = expand(b['keys'] | select('has_value') | list) | map(attribute='last_reported') | list -%}
+  {%- set silent = minutes(rep | max) | float(0) if rep else 0 -%}
+  {%- set stale = minutes(states(b.time)) | float(0) if b.get('time') and has_value(b.time) else 0 -%}
+  {%- if broken -%}
+    {%- set status, reason = 'unreachable', S.reason_not_loaded | replace('{states}', broken | unique | join(', ')) -%}
+  {%- elif gone and (b.rule == 'any' or gone | count == b['keys'] | count) -%}
+    {%- set status, reason = 'unreachable', S.reason_unavailable | replace('{n}', gone | count | string) | replace('{total}', b['keys'] | count | string) -%}
+  {%- elif b.silence and rep and silent > b.silence -%}
+    {%- set status, reason = 'frozen', S.reason_silent | replace('{min}', silent | int | string) -%}
+  {%- elif b.get('time_max') and stale > b.time_max -%}
+    {%- set status, reason = 'frozen', S.reason_stale | replace('{min}', stale | int | string) -%}
+  {%- else -%}
+    {%- set status, reason = 'ok', '' -%}
+  {%- endif -%}
+  {#- Memory of this outage: since runs on while the source stays ok or stays broken (unreachable <-> frozen is the
+      same outage); attempts and notified come back from the automation through the event. -#}
+  {%- set v = ns.prev.get(b.id, {}) -%}
+  {%- set same = v and (v.get('status') == 'ok') == (status == 'ok') -%}
+  {%- set since = v.since if same and v.get('since') else now_iso -%}
+  {%- set mine = updates | selectattr('source', 'defined') | selectattr('source', 'eq', b.id) | map(attribute='kind') | list -%}
+  {%- set attempts = 0 if status == 'ok' else v.get('attempts', 0) + (mine | select('eq', 'attempt') | list | count) -%}
+  {%- set last = none if status == 'ok' else (now_iso if 'attempt' in mine else v.get('last_attempt')) -%}
+  {%- set notified = (v.get('notified', false) or 'notified' in mine) and 'recovered' not in mine -%}
+  {%- set reloadable = (b.entries | count > 0 or b.id == 'test') and 'setup_retry' not in est -%}
+  {%- set item = {'id': b.id, 'name': b.name, 'status': status, 'since': since, 'attempts': attempts, 'max': b.max,
+       'last_attempt': last, 'notified': notified, 'entries': b.entries} -%}
+  {%- if status != 'ok' or notified -%}
+    {%- set item = dict(item, reason=reason, impact=b.impact, action=b.action, reloadable=reloadable,
+         domain=(config_entry_attr(b.entries[0], 'domain') or '') if b.entries else '',
+         wait=b.wait, notify_after=b.notify_after, interval=b.interval) -%}
+  {%- endif -%}
+  {%- set ns.out = ns.out + [item] -%}
+{%- endfor -%}
+{{- ns.out | to_json -}}
+{%- endmacro %}

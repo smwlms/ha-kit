@@ -117,6 +117,12 @@ charging_off: { en: "off", nl: uit }
 chip_charging_aria: { en: "Smart charging: {what}", nl: "Slim laden: {what}" }
 chip_week: { en: our week, nl: onze week }
 chip_week_aria: { en: "Our week, week {n}", nl: "Onze week, week {n}" }
+chip_connections: { en: connections, nl: verbindingen }
+connections_ok: { en: ok, nl: ok }
+connections_problem: { en: problem, nl: probleem }
+connections_problems: { en: problems, nl: problemen }
+connections_info_ok: { en: "Every watched connection works.", nl: "Alle bewaakte verbindingen werken." }
+connections_info_down: { en: "Not working: {names}.", nl: "Werkt niet: {names}." }
 
 # --- energy card ---
 energy: { en: Energy, nl: Energie }

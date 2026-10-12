@@ -29,3 +29,4 @@ climate: yes
 appliances: other
 results: yes
 e_ink_display: yes
+connection_watchdog: yes

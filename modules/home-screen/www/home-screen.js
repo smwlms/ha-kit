@@ -294,6 +294,16 @@
         const day = this._dayType(this._a(r.climate_indoor_peak, "day_type"));
         chips.push({ id: "climate", naam: this.t("chip_climate_name"), minder: 3, icon: mode === "heating" ? "warm" : mode === "cooling" ? "koud" : "vloer", value: `${this._nf(peak)}°`, label: this.t("chip_climate"), titel: this.t("chip_climate_name"), info: this.t("climate_info", { t: this._nf(peak), day, floor: this._floorMode(mode) }), entity: r.climate_indoor_peak, path: this._path("climate"), pathLabel: this.t("climate") });
       }
+      // Connections (connection-watchdog): calm and the first to drop out while everything works; warn with the
+      // number of problems otherwise (a chip with a tone never drops out).
+      if (f.watchdog && Number.isFinite(this._n(r.watchdog))) {
+        const n = this._n(r.watchdog);
+        const names = this._a(r.watchdog, "problems") || [];
+        const common = { id: "connections", naam: this.t("chip_connections"), titel: this.t("chip_connections"), entity: r.watchdog, path: this._path("connections"), pathLabel: this.t("chip_connections") };
+        if (n > 0)
+          chips.push({ ...common, icon: "waarschuwing", value: `${n}`, label: this.t(n === 1 ? "connections_problem" : "connections_problems"), tone: "warn", info: this.t("connections_info_down", { names: names.join(", ") }) });
+        else chips.push({ ...common, minder: 4, icon: "vink", value: this.t("connections_ok"), label: this.t("chip_connections"), info: this.t("connections_info_ok") });
+      }
       // Shortcuts (vul): by default they only fill free spots of the last row (lowest vul first).
       if (f.cameras) {
         const cams = this._cameraIds();

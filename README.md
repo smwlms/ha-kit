@@ -42,6 +42,7 @@ The kit is only useful if you own (some of) the devices below. A core module wor
 | `results` | a module that provides `tariff` (e.g. `tariff-be`); grid import/export energy meters | P1 meter | Only together with a tariff module |
 | `home-screen` | a storage-mode dashboard; chips follow the modules you installed | any | Yes: core, no devices |
 | `e-ink-display` | an Android e-ink tablet with touch, the Companion app or Fully Kiosk Browser; a relay for its charger (optional) | the screen runs as a dashboard at the source; no tablet installed yet | Yes: any tablet works; the page follows your modules |
+| `connection-watchdog` | `notifications`; no devices: it watches the integrations you name in `house.yaml` and catches every other one that does not load | about twenty integrations at the source, local and cloud (P1 reader, battery, charger, Teslemetry, Overkiz, Shelly, myVAILLANT, UniFi, Sonos, Nord Pool, …) | Yes: core, any integration |
 
 You get the most out of it with:
 
@@ -51,7 +52,7 @@ You get the most out of it with:
 - a UniFi Protect doorbell (`doorbell`, `parcel-service`);
 - blinds or curtains as `cover.*` entities and phones with the Companion app (`shading`, `presence`, `notifications`).
 
-Without a Tesla, `tesla-route`, `tesla-driveway-lock`, `tesla-car-card` and the auto-open of `gate` do nothing; the brand adapters (`charger-zappi`, `heat-pump-vaillant`, `ventilation-zehnder`, `spa-spanet`, `doorbell`) are only worth installing with that exact hardware, and `tariff-be` only with a Flemish dynamic contract. `shading`, `presence`, `notifications`, `energy`, `climate`, `home-screen` and `e-ink-display` follow your roles and work with any brand.
+Without a Tesla, `tesla-route`, `tesla-driveway-lock`, `tesla-car-card` and the auto-open of `gate` do nothing; the brand adapters (`charger-zappi`, `heat-pump-vaillant`, `ventilation-zehnder`, `spa-spanet`, `doorbell`) are only worth installing with that exact hardware, and `tariff-be` only with a Flemish dynamic contract. `shading`, `presence`, `notifications`, `energy`, `climate`, `connection-watchdog`, `home-screen` and `e-ink-display` follow your roles and work with any brand.
 
 ## Screenshots
 
@@ -132,6 +133,7 @@ The local checks (fill in, YAML, templates, `deploy.py --dry-run`, `esphome conf
 | `results`             | savings in EUR, day goals, cost against the invoice, other contracts and last year                   | `tariff`                                           | yes      | in production at the source |
 | `home-screen`         | start screen: a chip or card per installed module, energy tiles and price, controls, arrival card    | - (feature flags from `modules:`)                  | yes      | in production at the source |
 | `e-ink-display`       | touch e-ink wall display: one high-contrast page (weather, agenda, who is home, gate, energy, price), refresh interval as a helper, optional smart charging of the tablet through a relay | - (blocks follow `modules:` and the roles) | yes | in production at the source (screen only); not tested on the device |
+| `connection-watchdog` | watches every integration your automations lean on (unreachable, frozen, stale data), reloads it a few times, one bundled notification per outage and a quiet one when it is back, card and home-screen chip | `notifications` | yes | in production at the source since 2026-10-11 (the watchdog runs every minute in the author's house; the kit module itself is not deployed there yet) |
 
 Phase 4 (energy, tariff, charging, heat pump, hot water, climate, appliances, results, home screen) is split and its contracts are fixed in [docs/phase4-contracts.md](docs/phase4-contracts.md). Every phase-4 module is built and offered by `choose.py`; the logic runs in production at the source; the kit versions are being migrated. A core module that needs a capability (`tariff`, `ev-charger`, `heat-pump`, `hot-water-heater`) is only chosen together with a brand or region module you picked yourself.
 
@@ -163,8 +165,9 @@ One module at a time, and only continue when the test plan in its `LOGIC.md` pas
     7. **`appliances-home-connect`**: after `notifications`, and after `energy-plan`, the tariff module and `presence` when you use them; first the Home Connect developer app (module README).
     8. **`energy`**: the two dashboards; needs apexcharts-card and power-flow-card-plus from HACS.
     9. **`results`**: after the tariff module; savings count from the first event after the deploy.
-    10. **`home-screen` last**, after the modules whose chips you want: its chips follow `modules:`, so after adding a module fill in again and run `home-screen/deploy.py` again.
-    11. **`e-ink-display`** (optional), after the modules whose blocks you want; like `home-screen`, fill in again and deploy it again after adding a module.
+    10. **`connection-watchdog`** (optional): after `notifications`, and best after the modules whose integrations you want to watch; `deploy.py --view` writes the view. Switch off a hand-made reload automation for the same integration first.
+    11. **`home-screen` last**, after the modules whose chips you want: its chips follow `modules:`, so after adding a module fill in again and run `home-screen/deploy.py` again.
+    12. **`e-ink-display`** (optional), after the modules whose blocks you want; like `home-screen`, fill in again and deploy it again after adding a module.
 
     See "Build order and parallel work" in [docs/phase4-contracts.md](docs/phase4-contracts.md).
 
@@ -180,7 +183,8 @@ What one module provides and another reads. When you rename one of these, change
 | price sensor in EUR/kWh with the attributes `starts` and `prices` (same length: start time and price per slot; `prijzen` is still read) | `sensor.power_price_import` / `_export` of a `tariff` module (default when the roles are empty); else an own sensor | `notifications` (`entities.price_import`, `price_export`) |
 | filter sensor `sensor.<prefix>_filter_replacement_remaining_days`                            | `ventilation-zehnder` (firmware)         | `notifications`: default when `entities.ventilation_filter_days` is empty |
 | `binary_sensor.shading_warm`, `input_boolean.shading_closed_<room>`, `input_boolean.shading_automatic`, `shading_manual_<room>`, `input_number.shading_indoor_warm_from`, `shading_outdoor_warm_from`, `shading_max_cloud_cover` | `shading`                          | `climate` (shading block, optional: no `depends_on`), `results` (count, `shading_closed_<room>`), `home-screen` (shading chip) |
-| `script.send_notification` (title, message, extra; `only_home: true` = only the recipients whose person is home), macro `at_home()` | `notifications`         | `ev-charging`, `hot-water`, `climate` (optional: logbook only without it), `appliances-home-connect` (required: `only_home`, `at_home()`) |
+| `script.send_notification` (title, message, extra; `only_home: true` = only the recipients whose person is home), macro `at_home()` | `notifications`         | `ev-charging`, `hot-water`, `climate` (optional: logbook only without it), `appliances-home-connect` (required: `only_home`, `at_home()`), `connection-watchdog` (required) |
+| `sensor.connection_watchdog` (state = number of problems; attributes `summary`, `problems`, `sources`) | `connection-watchdog` | `home-screen` (chip "connections", only with `connection-watchdog` in `modules:`) |
 | `script.doorbell_reply` with the parcel steps (field `pressed_by`), `script.doorbell_hub`, `script.doorbell_tv`, `input_text.doorbell_visit`, `input_text.doorbell_description`, `input_select.doorbell_<key>_parcel`, macros `targets()` and `names()` in `doorbell.jinja` (who gets a notification); `script.gate_pulse` and `script.gate_close_manual` (field `reason`; the old `reden` is still read), `binary_sensor.gate_open`, notification action `GATE_CLOSE` | `doorbell`, `gate` | `parcel-service` |
 | gate row of the arrival card: `binary_sensor.gate_<car>_navigating_home`, `binary_sensor.gate_<car>_away_long_enough`, `binary_sensor.gate_open`, `input_boolean.gate_auto_open_enabled`, `input_boolean.gate_auto_open_dry_run`, `input_datetime.gate_last_auto_open`, `input_number.gate_away_minutes`, `input_number.gate_far_distance`, `script.gate_open_manual`, `script.gate_close_manual` | `gate` | `tesla-route` (`lovelace/arrival.yaml`, only with `gate` in `modules:`) |
 | `script.parcel_garage` (running = a delivery holds the gate open), `input_datetime.parcel_expected`, `input_number.parcel_service_ajar`, `input_number.parcel_service_open`, `input_text.parcel_service_ring` | `parcel-service` | `gate` (`gate_open_too_long` stays silent while the script runs), `doorbell` (parcel steps of the ring automation and the buttons) |
@@ -265,8 +269,9 @@ The points below are about the kit versions (new entity ids, new Home Assistant 
 | change by hand vs the kit's own call         | ev-charging, charger-zappi                   | a mode change more than 150 s after the kit's last `script.ev_charger_set_mode` counts as manual; the cloud lag of the Zappi decides whether 150 s is enough. A screen button goes through `script.ev_charging_manual_mode` (event `ha_kit_ev_charging_manual`) |
 | recorder scripts on SQLite                   | energy-plan, climate                         | read-only access to `/config/home-assistant_v2.db` from a command_line sensor; statistics ids and the 5-minute / hourly tables |
 | `home_connect.start_selected_program`        | appliances-home-connect                      | HA 2026.4+; `start_in` / `finish_in` with a selected program and remote start on; the device found with `device_id()` of the program select |
-| dashboards written by `deploy.py`            | energy, climate, results, appliances-home-connect, home-screen, e-ink-display | `lovelace/config/save` on a storage dashboard (backup first); new dashboards with a hyphen in the url_path; resources under `/local/ha-kit/<module>/` (restart once when `/config/www` did not exist) |
+| dashboards written by `deploy.py`            | energy, climate, results, appliances-home-connect, home-screen, e-ink-display, connection-watchdog | `lovelace/config/save` on a storage dashboard (backup first); new dashboards with a hyphen in the url_path; resources under `/local/ha-kit/<module>/` (restart once when `/config/www` did not exist) |
 | e-ink page on a real tablet                  | e-ink-display                                | `numeric_state` with an `input_number` as limit, the fail-safe on `last_changed`, and the page on a real e-ink tablet (refresh mode, ghosting, touch); see its `LOGIC.md` |
+| entries from the keys, `extra` in `script.send_notification` | connection-watchdog | `config_entry_id` of a key whose entity left the registry (the remembered entries are used); `push.interruption-level` passed through `extra` to the Companion app; the sensor's memory after a restart |
 
 ## Status of the translation
 

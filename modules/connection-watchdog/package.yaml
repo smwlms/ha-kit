@@ -1,0 +1,8 @@
+<# Helpers of the module. Uploaded by connection-watchdog/deploy.py to /config/packages/connection_watchdog.yaml. #>
+# Connection watchdog: helpers (ha-kit module connection-watchdog, see connection-watchdog/LOGIC.md).
+# No `initial`: deploy.py sets the default (off) once. The options are states, so they stay English in every language.
+input_select:
+  connection_watchdog_test:
+    name: <@ t('helper_test_name') | tojson @>
+    icon: mdi:test-tube
+    options: ["off", "ok", "unreachable", "frozen"]

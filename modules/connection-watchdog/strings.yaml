@@ -1,0 +1,71 @@
+# User-facing texts of the module connection-watchdog: {key: {en: ..., nl: ...}}. In the module's files: t('key').
+# {placeholders} are filled in by Home Assistant (sensor, automation) or by the card, never by fill.py.
+language_code: { en: "en", nl: "nl" }
+locale: { en: "en-GB", nl: "nl-BE" }
+# Entities and helpers
+sensor_name: { en: "Connections", nl: "Verbindingen" }
+sensor_test_name: { en: "Connection watchdog test", nl: "Verbindingen test" }
+helper_test_name: { en: "Connection watchdog: test source", nl: "Verbindingen: testbron" }
+automation_alias: { en: "Connection watchdog: repair and notify", nl: "Verbindingen: herstellen en melden" }
+automation_description:
+  en: "Reads sensor.connection_watchdog. Reloads the config entries of a source that has been down for 'wait' min, at most 'max' times per outage, 'interval' min apart. Notifies once per outage after 'notify_after' min (other sources down long enough join the same notification), and quietly when a notified source is back for 5 min. Reports back with one event connection_watchdog_update per run. See connection-watchdog/LOGIC.md."
+  nl: "Leest sensor.connection_watchdog. Herlaadt de config entries van een bron die al 'wait' min stuk is, hooguit 'max' keer per uitval, 'interval' min uit elkaar. Meldt één keer per uitval na 'notify_after' min (andere bronnen die lang genoeg stuk zijn gaan mee), en stil zodra een gemelde bron 5 min terug is. Meldt terug met één event connection_watchdog_update per run. Zie connection-watchdog/LOGIC.md."
+# Status words (the states themselves stay ok / unreachable / frozen)
+status_ok: { en: "ok", nl: "ok" }
+status_unreachable: { en: "unreachable", nl: "onbereikbaar" }
+status_frozen: { en: "frozen", nl: "bevroren" }
+summary_ok: { en: "All connected", nl: "Alles verbonden" }
+summary_one: { en: "1 problem", nl: "1 probleem" }
+summary_many: { en: "{n} problems", nl: "{n} problemen" }
+# Why a source is not ok (attribute reason)
+reason_not_loaded: { en: "integration does not start ({states})", nl: "integratie start niet ({states})" }
+reason_unavailable: { en: "{n} of {total} not available", nl: "{n} van {total} niet beschikbaar" }
+reason_silent: { en: "no new value for {min} min", nl: "geen nieuwe waarde sinds {min} min" }
+reason_stale: { en: "data is {min} min old", nl: "gegevens zijn {min} min oud" }
+# Generic catch, default texts and the test source
+name_generic: { en: "{title} ({domain})", nl: "{title} ({domain})" }
+impact_generic: { en: "Unknown: this integration is not in the list of sources.", nl: "Onbekend: deze integratie staat niet in de bronnenlijst." }
+action_default: { en: "Look at Settings > Devices & services.", nl: "Kijk bij Instellingen > Apparaten en diensten." }
+test_name: { en: "Test source", nl: "Testbron" }
+test_impact: { en: "Nothing: this is a test.", nl: "Niets: dit is een test." }
+test_action: { en: "Set the test source back to off.", nl: "Zet de testbron terug op off." }
+# Notification (script.send_notification) and persistent notification
+notify_title_one: { en: "Connection lost: {name}", nl: "Verbinding weg: {name}" }
+notify_title_many: { en: "{n} connections lost", nl: "{n} verbindingen weg" }
+notify_title_back_one: { en: "Back: {name}", nl: "Hersteld: {name}" }
+notify_title_back_many: { en: "{n} connections back", nl: "{n} verbindingen hersteld" }
+notify_since: { en: "{status} since {time} ({reason}).", nl: "{status} sinds {time} ({reason})." }
+notify_tried: { en: "Home Assistant reloaded it {n}× without result.", nl: "HA herlaadde al {n}× zonder resultaat." }
+notify_retrying: { en: "Home Assistant keeps retrying by itself.", nl: "HA probeert zelf opnieuw te verbinden." }
+notify_do: { en: "Do: {action}", nl: "Doe: {action}" }
+notify_also: { en: "Still down: {names}.", nl: "Ook nog weg: {names}." }
+notify_back_with: { en: "Back: {names}.", nl: "Weer in orde: {names}." }
+notify_back_since: { en: "Back since {time}: {names}.", nl: "Weer in orde sinds {time}: {names}." }
+persistent_title_one: { en: "1 connection lost", nl: "1 verbinding weg" }
+persistent_title_many: { en: "{n} connections lost", nl: "{n} verbindingen weg" }
+persistent_overview: { en: "Overview", nl: "Overzicht" }
+logbook_name: { en: "Connection watchdog", nl: "Verbindingen" }
+logbook_reload: { en: "reloads {name} (attempt {n}/{max})", nl: "herlaadt {name} (poging {n}/{max})" }
+logbook_test: { en: "test source: reload simulated, nothing reloaded", nl: "testbron: herlaadpoging gesimuleerd, niets herladen" }
+# Card and view
+view_title: { en: "Connections", nl: "Verbindingen" }
+card_description: { en: "Connection watchdog: problems with reload buttons, and every source", nl: "Verbindingen: problemen met herlaadknoppen, en alle bronnen" }
+card_problems: { en: "Problems", nl: "Problemen" }
+card_all: { en: "All sources", nl: "Alle bronnen" }
+col_source: { en: "Source", nl: "Bron" }
+col_status: { en: "Status", nl: "Status" }
+col_since: { en: "Since", nl: "Sinds" }
+card_all_ok: { en: "All connected. Home Assistant checks {n} sources every minute.", nl: "Alles verbonden. HA kijkt elke minuut {n} bronnen na." }
+card_reloads: { en: "Reloaded {n} of {max}.", nl: "Herladen: {n} van {max}." }
+card_reloads_done: { en: "Reloaded {n} of {max}; Home Assistant stops trying.", nl: "Herladen: {n} van {max}; HA probeert niet meer." }
+card_retrying: { en: "Home Assistant keeps retrying by itself.", nl: "HA probeert zelf opnieuw te verbinden." }
+card_notified: { en: "Notification sent.", nl: "Gemeld." }
+card_do: { en: "Do:", nl: "Doe:" }
+card_reload: { en: "Reload", nl: "Opnieuw laden" }
+card_integration: { en: "Integration", nl: "Integratie" }
+card_no_sensor: { en: "sensor.connection_watchdog does not exist yet: run connection-watchdog/deploy.py.", nl: "sensor.connection_watchdog bestaat nog niet: draai connection-watchdog/deploy.py." }
+settings_title: { en: "Settings", nl: "Instellingen" }
+settings_switch: { en: "Repair and notify", nl: "Herstellen en melden" }
+settings_test_help:
+  en: "Set the test source to unreachable or frozen: after 1 min two simulated reloads (logbook), after 3 min one notification. Back to ok: after 5 min a quiet notification. Then set it to off."
+  nl: "Zet de testbron op unreachable of frozen: na 1 min twee gesimuleerde herlaadbeurten (logboek), na 3 min één melding. Terug op ok: na 5 min een stille melding. Zet hem daarna op off."

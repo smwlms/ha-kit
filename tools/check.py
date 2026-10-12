@@ -56,10 +56,10 @@ LANGUAGES = ["en", "nl"]
 EXPECTED_CHOICE = ["base", "tesla-route", "gate", "doorbell", "presence", "shading", "notifications",
                    "tesla-driveway-lock", "tesla-car-card", "ventilation-zehnder", "tariff-be", "energy-plan", "energy", "charger-zappi",
                    "ev-charging", "heat-pump-vaillant", "hot-water", "climate", "appliances-home-connect", "results",
-                   "home-screen", "e-ink-display"]
+                   "connection-watchdog", "home-screen", "e-ink-display"]
 EXPECTED_CHOICE_NO_BRANDS = ["base", "tesla-route", "gate", "doorbell", "presence", "shading", "notifications",
                              "tesla-driveway-lock", "tesla-car-card", "ventilation-zehnder", "energy-plan", "energy", "climate",
-                             "home-screen", "e-ink-display"]
+                             "connection-watchdog", "home-screen", "e-ink-display"]
 CHOOSE_CASES = [("choose.answers.yaml", EXPECTED_CHOICE), ("choose.no-brands.answers.yaml", EXPECTED_CHOICE_NO_BRANDS)]
 
 failures: list[str] = []

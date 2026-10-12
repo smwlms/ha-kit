@@ -1,0 +1,58 @@
+<% from '_connection_watchdog.jinja' import S with context %>
+# Connection watchdog: sensors (ha-kit module connection-watchdog, see connection-watchdog/LOGIC.md). Filled in from
+# house.yaml by tools/fill.py; uploaded by connection-watchdog/deploy.py to /config/templates/connection_watchdog.yaml
+# (module base: template: !include_dir_merge_list templates/).
+# sensor.connection_watchdog: number of sources that are not ok; attribute sources = status per source. The sources
+# and their thresholds are in custom_templates/connection_watchdog.jinja (from house.yaml).
+# automation.connection_watchdog_repair_and_notify reloads and notifies, and reports back with ONE event
+# connection_watchdog_update per run (updates: [{source, kind: attempt|notified|recovered}]).
+# Load: trigger-based, one render per minute, no state tracking.
+- trigger:
+    - trigger: time_pattern
+      minutes: "/1"
+    - trigger: homeassistant
+      event: start
+    - trigger: event
+      event_type: event_template_reloaded
+    - trigger: event
+      event_type: connection_watchdog_update
+      id: update
+    - trigger: state
+      entity_id: input_select.connection_watchdog_test
+  action:
+    - variables:
+        r: >-
+          {% from 'connection_watchdog.jinja' import evaluate %}
+          {{ evaluate(state_attr('sensor.connection_watchdog', 'sources') or [],
+                      trigger.event.data if trigger.id == 'update' else {}) | from_json }}
+  sensor:
+    - name: <@ t('sensor_name') | tojson @>
+      unique_id: connection_watchdog
+      default_entity_id: sensor.connection_watchdog
+      icon: "{{ 'mdi:lan-connect' if r | rejectattr('status', 'eq', 'ok') | list | count == 0 else 'mdi:lan-disconnect' }}"
+      state: "{{ r | rejectattr('status', 'eq', 'ok') | list | count }}"
+      attributes:
+        summary: >-
+          {% set n = r | rejectattr('status', 'eq', 'ok') | list | count %}
+          {{ <@ S.summary_ok | tojson @> if n == 0 else (<@ S.summary_one | tojson @> if n == 1 else <@ S.summary_many | tojson @> | replace('{n}', n | string)) }}
+        problems: "{{ r | rejectattr('status', 'eq', 'ok') | map(attribute='name') | list }}"
+        sources: "{{ r }}"
+
+# Test source (connection-watchdog/LOGIC.md "Test plan"): input_select.connection_watchdog_test = off / ok /
+# unreachable / frozen. The state is the time of the last 'data'; frozen keeps the old time, unreachable makes it
+# unavailable.
+- trigger:
+    - trigger: time_pattern
+      seconds: "/30"
+    - trigger: state
+      entity_id: input_select.connection_watchdog_test
+  sensor:
+    - name: <@ t('sensor_test_name') | tojson @>
+      unique_id: connection_watchdog_test
+      default_entity_id: sensor.connection_watchdog_test
+      icon: mdi:test-tube
+      device_class: timestamp
+      availability: "{{ not is_state('input_select.connection_watchdog_test', 'unreachable') }}"
+      state: >-
+        {% if is_state('input_select.connection_watchdog_test', 'frozen') and as_timestamp(this.state, none) is not none %}{{ this.state }}
+        {%- else %}{{ now().replace(microsecond=0).isoformat() }}{% endif %}

@@ -1,0 +1,70 @@
+<#- Shared by every file of the module connection-watchdog: the sources of house.yaml, checked and with their
+    defaults, the ignore list, where a tap goes, and the user-facing texts the sensor and the automation need.
+    Import: <% from '_connection_watchdog.jinja' import cw, sources, ignore, tap_url, view_path, S with context %>
+
+    A source in house.yaml (connection_watchdog.sources[]):
+      id            lower case, digits and '_'; unique; not 'test' and not starting with 'entry_' (both are taken)
+      name          shown in notifications and on the card
+      keys          entities that must be available; their config entries are the ones that get reloaded
+      rule          any (default: one unavailable key is a problem) or all (only when every key is unavailable)
+      silence       minutes: the newest last_reported of the keys may not be older; empty or 0 = event-driven, no check
+    Every value ends up as a Jinja literal in custom_templates/connection_watchdog.jinja (tojson): strings, numbers,
+    lists and mappings only, never null (silence 0 = no check, data_time absent = no data check).
+      data_time     entity whose STATE is the timestamp of the data itself (a cloud API that keeps writing old
+                    data); data_max = its maximum age in minutes (required with data_time)
+      entries       extra config entry ids (an integration without entities, e.g. an AI service)
+      wait, notify_after, max, interval   minutes before the first reload, minutes before the notification,
+                    reloads per outage, minutes between two reloads (defaults 5, 15, 6, 10)
+      impact, action  what stops working, and what to do (your own words, in your language) -#>
+<% set cw = connection_watchdog if connection_watchdog is defined and connection_watchdog else {} %>
+<% set sources = [] %>
+<% set seen = [] %>
+<% for s in cw.get('sources') or [] %>
+<% set where = 'connection_watchdog.sources[' ~ loop.index0 ~ ']' %>
+<% if s is not mapping %><@ fail(where ~ ' must be a mapping with at least id, name and keys') @><% endif %>
+<% set sid = (s.get('id') or '') | string %>
+<% if not (sid | regex_search('^[a-z0-9][a-z0-9_]*$')) %><@ fail(where ~ '.id ' ~ (sid | tojson) ~ ' may only contain lower case letters, digits and _') @><% endif %>
+<% if sid == 'test' or sid.startswith('entry_') %><@ fail(where ~ '.id ' ~ sid ~ ' is taken by the module (test source, generic catch)') @><% endif %>
+<% if sid in seen %><@ fail('connection_watchdog.sources: id ' ~ sid ~ ' appears twice') @><% endif %>
+<% set _ = seen.append(sid) %>
+<% if not s.get('name') %><@ fail(where ~ '.name is required') @><% endif %>
+<% set keys = [] %>
+<% for k in s.get('keys') or [] %><% set _ = keys.append(safe_entity(k, where ~ '.keys')) %><% endfor %>
+<% set entries = [] %>
+<% for e in s.get('entries') or [] %>
+<% if not ((e | string) | regex_search('^[A-Za-z0-9]+$')) %><@ fail(where ~ '.entries: ' ~ (e | tojson) ~ ' is not a config entry id') @><% endif %>
+<% set _ = entries.append(e | string) %>
+<% endfor %>
+<% if not keys and not entries %><@ fail(where ~ ' needs keys (entities) or entries (config entry ids)') @><% endif %>
+<% set rule = s.get('rule') or 'any' %>
+<% if rule not in ['any', 'all'] %><@ fail(where ~ '.rule must be any or all') @><% endif %>
+<% set item = {'id': sid, 'name': s.name | string, 'keys': keys, 'entries': entries, 'rule': rule,
+   'silence': (s.silence | float) if s.get('silence') else 0,
+   'wait': (s.get('wait') or 5) | float, 'notify_after': (s.get('notify_after') or 15) | float,
+   'max': (s.get('max') or 6) | int, 'interval': (s.get('interval') or 10) | float,
+   'impact': (s.get('impact') or '') | string, 'action': (s.get('action') or t('action_default')) | string} %>
+<% if s.get('data_time') %>
+<% if not s.get('data_max') %><@ fail(where ~ '.data_max (minutes) is required with data_time') @><% endif %>
+<% set _ = item.update({'time': safe_entity(s.data_time, where ~ '.data_time'), 'time_max': s.data_max | float}) %>
+<% endif %>
+<% set _ = sources.append(item) %>
+<% endfor %>
+<# Left out of the generic catch: a config entry id or an integration (domain), e.g. an old entry you keep on purpose. #>
+<% set ignore = [] %>
+<% for x in cw.get('ignore') or [] %>
+<% if not ((x | string) | regex_search('^[A-Za-z0-9_]+$')) %><@ fail('connection_watchdog.ignore: ' ~ (x | tojson) ~ ' is not a config entry id or an integration domain') @><% endif %>
+<% set _ = ignore.append(x | string) %>
+<% endfor %>
+<% set view_path = safe_name(cw.get('view_path') or 'connections', 'connection_watchdog.view_path') %>
+<% set tap_url = (cw.get('tap_url') or ('/lovelace/' ~ view_path)) | string %>
+<% if not (tap_url | regex_search('^/[A-Za-z0-9_./?=&#-]*$')) %><@ fail('connection_watchdog.tap_url must be a path in your Home Assistant (letters, digits, _ . / ? = & # -), e.g. /lovelace/connections') @><% endif %>
+<# Texts the sensor and the automation need inside Home Assistant templates: one mapping, written with tojson. #>
+<% set S = {} %>
+<% for k in ['status_ok', 'status_unreachable', 'status_frozen', 'summary_ok', 'summary_one', 'summary_many',
+   'reason_not_loaded', 'reason_unavailable', 'reason_silent', 'reason_stale', 'name_generic', 'impact_generic',
+   'action_default', 'test_name', 'test_impact', 'test_action',
+   'notify_title_one', 'notify_title_many', 'notify_title_back_one', 'notify_title_back_many', 'notify_since',
+   'notify_tried', 'notify_retrying', 'notify_do', 'notify_also', 'notify_back_with', 'notify_back_since',
+   'persistent_title_one', 'persistent_title_many', 'persistent_overview', 'logbook_name', 'logbook_reload', 'logbook_test'] %>
+<% set _ = S.update({k: t(k)}) %>
+<% endfor %>

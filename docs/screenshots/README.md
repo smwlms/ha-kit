@@ -77,3 +77,12 @@ module files with a mocked Home Assistant.
 <tr><td valign="top" width="50%"><a href="kit-demo/results/desktop.png"><img src="kit-demo/results/desktop.png" width="400" alt="Results"></a><br><sub>Results</sub></td><td valign="top" width="50%"><a href="kit-demo/results/desktop-variant.png"><img src="kit-demo/results/desktop-variant.png" width="400" alt="Results with the events of the day (what the house did today)"></a><br><sub>Results with the events of the day (what the house did today)</sub></td></tr>
 <tr><td valign="top" width="50%"><a href="kit-demo/results/phone-dark-advanced.png"><img src="kit-demo/results/phone-dark-advanced.png" width="200" alt="Phone, dark theme, extended view"></a><br><sub>Phone, dark theme, extended view</sub></td></tr>
 </table>
+
+### `connection-watchdog`
+
+Theme Graphite (light and dark), fictional sources.
+
+<table>
+<tr><td valign="top" width="50%"><a href="kit-demo/connection-watchdog/desktop-problems.png"><img src="kit-demo/connection-watchdog/desktop-problems.png" width="400" alt="Problems with Reload and Integration buttons, and every source with its status (Graphite light)"></a><br><sub>Problems with Reload and Integration buttons, and every source with its status (Graphite light)</sub></td><td valign="top" width="50%"><a href="kit-demo/connection-watchdog/desktop-ok.png"><img src="kit-demo/connection-watchdog/desktop-ok.png" width="400" alt="All connected (Graphite light)"></a><br><sub>All connected (Graphite light)</sub></td></tr>
+<tr><td valign="top" width="50%"><a href="kit-demo/connection-watchdog/phone-problems-dark.png"><img src="kit-demo/connection-watchdog/phone-problems-dark.png" width="200" alt="Phone, Graphite dark: a frozen cloud source and an integration from the generic catch"></a><br><sub>Phone, Graphite dark: a frozen cloud source and an integration from the generic catch</sub></td></tr>
+</table>

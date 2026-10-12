@@ -63,6 +63,8 @@
       - house_remaining_kwh
       - source
       - forecast_factor
+      - forecast_ratio
+      - forecast_too_pessimistic
       - pv_today_kwh
       - days
       - error

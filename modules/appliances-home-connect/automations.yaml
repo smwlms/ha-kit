@@ -1,10 +1,12 @@
-<% from '_appliances.jinja' import apps, cfg, has_energy, has_battery, has_presence, battery_soc, solar_power with context %>
+<% from '_appliances.jinja' import apps, cfg, has_energy, has_battery, has_saturated, has_presence, battery_soc, solar_power
+   with context %>
 <% set auto_apps = apps | selectattr('smart_start', 'equalto', 'auto') | list %>
 <% set ask_apps = apps | selectattr('smart_start', 'equalto', 'ask') | list %>
 <% set txt = {} %>
 <% for k in ['button_now', 'button_smart', 'logbook_name', 'word_ready_by_arrival',
              'notify_offer_title', 'notify_offer_message', 'notify_cancelled_title', 'notify_cancelled_message',
-             'reason_safety_net', 'reason_missed', 'reason_surplus', 'reason_battery', 'reason_notification',
+             'reason_safety_net', 'reason_missed', 'reason_surplus', 'reason_battery', 'reason_battery_saturated',
+             'reason_margin', 'reason_notification',
              'notify_door_title', 'notify_door_message', 'notify_error_title',
              'error_error', 'error_actionrequired', 'error_aborting', 'notify_done_title', 'notify_done_message',
              'notify_reminder_title', 'notify_reminder_message', 'notify_aborted_message', 'notify_maintenance_message',
@@ -93,11 +95,31 @@
       for:
         minutes: 5
       id: sun
-<% if has_battery %>
+<% if has_saturated %>
+    - trigger: state
+      entity_id: binary_sensor.energy_plan_battery_saturated
+      to: "on"
+      for:
+        minutes: 5
+      id: sun
+<% endif %>
     - trigger: template
       value_template: >-
         {%- from 'energy_plan.jinja' import watts -%}
-        {{ states('<@ battery_soc @>') | float(0) > states('input_number.appliances_battery_minimum') | float(60)
+        {%- set m = states('sensor.energy_plan_margin') -%}
+        {{ is_number(m) and m | float >= states('input_number.appliances_program_kwh') | float(<@ module.defaults['input_number.appliances_program_kwh'] @>)
+           and state_attr('sensor.energy_plan_margin', 'after_sun') not in [true, 'true', 'True']
+           and watts('<@ solar_power @>') | float(0) > 1000 }}
+      for:
+        minutes: 2
+      id: sun
+<% if has_battery %>
+    # Without a day plan (margin unavailable): the battery level.
+    - trigger: template
+      value_template: >-
+        {%- from 'energy_plan.jinja' import watts -%}
+        {{ not is_number(states('sensor.energy_plan_margin'))
+           and states('<@ battery_soc @>') | float(0) > states('input_number.appliances_battery_minimum') | float(60)
            and watts('<@ solar_power @>') | float(0) >= 1000 }}
       for:
         minutes: 2
@@ -146,20 +168,37 @@
           {%- set ns = namespace(l=[]) -%}
           {%- for k in order if is_state(cfg[k].waiting, 'on') -%}{%- set ns.l = ns.l + [k] -%}{%- endfor -%}
           {{ ns.l }}
+<% if has_energy %>
+        # Which sun route allows a start now, first match: surplus, saturated (the home battery charges at its
+        # maximum and the house still exports, for 5 min), margin (the day plan has input_number.appliances_program_kwh
+        # to spare after house and battery, the panels give more than 1 kW, the sun is still on them), battery (only
+        # while the margin has no value: the battery level rule). '' = no route. LOGIC.md, "Start on sun".
+        route: >-
+          {%- from 'energy_plan.jinja' import watts -%}
+          {%- set m = states('sensor.energy_plan_margin') -%}
+          {%- set pv = watts('<@ solar_power @>') | float(0) -%}
+          {%- set sat = 'binary_sensor.energy_plan_battery_saturated' -%}
+          {%- if is_state('binary_sensor.energy_plan_surplus', 'on') -%}surplus
+          {%- elif <@ 'true' if has_saturated else 'false' @> and is_state(sat, 'on')
+                and as_timestamp(states[sat].last_changed) <= as_timestamp(now()) - 300 -%}saturated
+          {%- elif is_number(m) and m | float >= states('input_number.appliances_program_kwh') | float(<@ module.defaults['input_number.appliances_program_kwh'] @>)
+                and state_attr('sensor.energy_plan_margin', 'after_sun') not in [true, 'true', 'True'] and pv > 1000 -%}margin
+<% if has_battery %>
+          {%- elif not is_number(m)
+                and states('<@ battery_soc @>') | float(0) > states('input_number.appliances_battery_minimum') | float(60)
+                and pv >= 1000 and not is_state('binary_sensor.energy_plan_battery_behind', 'on') -%}battery
+<% endif %>
+          {%- endif -%}
+<% endif %>
     - choose:
 <% if has_energy %>
-        # Sun or battery: start the first waiting appliance; the next one only when no appliance of the kit started
-        # in the last 15 min (not two heating up on the same surplus).
-        - alias: sun or battery
+        # Sun: start the first waiting appliance; the next one only when no appliance of the kit started in the last
+        # 15 min (not two heating up on the same surplus).
+        - alias: sun
           conditions:
             - condition: trigger
               id: sun
-            - >-
-              {%- from 'energy_plan.jinja' import watts -%}
-              {{ is_state('binary_sensor.energy_plan_surplus', 'on')<% if has_battery %>
-                 or (states('<@ battery_soc @>') | float(0) > states('input_number.appliances_battery_minimum') | float(60)
-                     and watts('<@ solar_power @>') | float(0) >= 1000
-                     and not is_state('binary_sensor.energy_plan_battery_behind', 'on'))<% endif %> }}
+            - "{{ route != '' }}"
           sequence:
             - variables:
                 recent: >-
@@ -171,7 +210,9 @@
                   {{ ns.n > 0 }}
                 first: "{{ waiting[0] if waiting | count > 0 else '' }}"
                 reason: >-
-                  {{ txt.reason_surplus if is_state('binary_sensor.energy_plan_surplus', 'on') else txt.reason_battery }}
+                  {%- set kwh = (states('sensor.energy_plan_margin') | float(0) | round(1) | string) | replace('.', txt.decimal_separator) -%}
+                  {{ {'surplus': txt.reason_surplus, 'saturated': txt.reason_battery_saturated,
+                      'margin': txt.reason_margin | replace('{kwh}', kwh), 'battery': txt.reason_battery}[route] }}
             - if:
                 - "{{ first != '' and not recent }}"
               then:

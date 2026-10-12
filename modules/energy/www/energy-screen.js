@@ -573,6 +573,7 @@
       m.sunEnd = timeOf(m.bf.sun_end);
       m.marge = !R.plan_margin || m.bf.after_sun ? NaN : this._n(R.plan_margin);
       m.behind = this._s(R.battery_behind) === "on";
+      m.saturated = this._s(R.battery_saturated) === "on";
       // A steady value does not update last_updated: look at the freshest of the live power sensors.
       const newest = Math.max(
         ...[R.solar_power, R.grid_import, R.grid_export, R.battery_power, ...m.phases.map((p) => p.id)]
@@ -1466,6 +1467,10 @@
               : []),
             R.battery_behind
               ? this._row(I.warn(m.behind ? C.amber : C.muted, 18), this.t("battery_first"), this.t(m.behind ? "word_yes" : "word_no"), R.battery_behind, m.behind ? C.amber : null)
+              : "",
+            // Saturated: the battery cannot take more sun, so battery behind is off (energy-plan LOGIC.md).
+            R.battery_saturated
+              ? this._row(I.batt(m.saturated ? C.batt : C.muted, 18, 1), this.t("battery_saturated"), this.t(m.saturated ? "word_yes" : "word_no"), R.battery_saturated)
               : "",
           ],
           controls: this._settingsOf("energy_plan"),

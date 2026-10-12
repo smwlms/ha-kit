@@ -69,4 +69,12 @@ input_number:
     step: 0.5
     mode: box
     unit_of_measurement: kWh
+  appliances_program_kwh: # start when the solar day plan has this much to spare after house and battery (default 1)
+    name: <@ t('helper_program_kwh') | tojson @>
+    icon: mdi:solar-power-variant
+    min: 0
+    max: 10
+    step: 0.1
+    mode: box
+    unit_of_measurement: kWh
 <% endif %>

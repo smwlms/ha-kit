@@ -2,7 +2,7 @@
 
 ## In one sentence
 
-From the grid, solar and battery power and five to ten days of recorder statistics, the module keeps five shared signals current (export average, surplus on/off, house consumption, solar left today after the house and the battery, battery behind) so that the modules that switch things all decide on the same numbers.
+From the grid, solar and battery power and five to ten days of recorder statistics, the module keeps six shared signals current (export average, surplus on/off, house consumption, solar left today after the house and the battery, battery behind, battery saturated) so that the modules that switch things all decide on the same numbers.
 
 ## Flow chart
 
@@ -20,6 +20,10 @@ flowchart LR
   PY --> M[sensor.energy_plan_margin]
   M --> BB{margin below safety?<br/>sun still on the panels?<br/>SoC below 98 %?}
   BB --> BEH[binary_sensor.energy_plan_battery_behind<br/>only with a battery]
+  AVG --> BSAT{export avg >= 0.3 kW?<br/>battery charges >= 1 kW?<br/>SoC below 98 %?}
+  BP[battery power role] --> BSAT
+  BSAT --> SAT[binary_sensor.energy_plan_battery_saturated<br/>only with battery SoC and power]
+  SAT -.on: keeps off.-> BEH
 ```
 
 ## Triggers
@@ -30,7 +34,8 @@ flowchart LR
 | `sensor.energy_plan_export_avg` | every change of the export, and when samples age out of the 10-minute window | statistics integration |
 | `binary_sensor.energy_plan_surplus` | every change of the average or of its two helpers | |
 | `sensor.energy_plan_margin` | every 5 minutes (`scan_interval: 300`); `deploy.py` forces one run | the script reads statistics that change every 5 minutes; more often adds nothing |
-| `binary_sensor.energy_plan_battery_behind` | every change of the margin, the SoC or its two helpers | |
+| `binary_sensor.energy_plan_battery_behind` | every change of the margin, the SoC, battery saturated or its two helpers | |
+| `binary_sensor.energy_plan_battery_saturated` | every change of the export average, the battery power or the SoC; on after 3 min, off after 10 min | |
 
 There are no automations: nothing is switched.
 
@@ -64,8 +69,8 @@ Question: will the battery be full by the time the sun leaves the panels, and ho
 1. **A usable history day** has at least 240 of 288 solar slots (gaps and restarts are skipped) and at least one slot at or above `sun_end_w`.
 2. **Sun end.** Per history day: the last slot with solar at or above `sun_end_w` (150 W), minus that day's astronomical sunset (NOAA approximation from `house.lat/lon`) = the offset. Today's sun end = today's sunset + the median offset. Trees, roofs and the panels' orientation make it earlier than sunset; the median ignores a single dark evening.
 3. **Solar left, history.** Per history day the ratio solar after / solar before this time of day (only days with more than 0.3 kWh before). With more than 0.5 kWh of solar today so far: today so far × the median ratio, capped at 1.3 × the best afternoon of the history. Before that (early morning): the median afternoon of the history.
-4. **Solar left, forecast** (only with both forecast roles). Forecast.Solar (free) refreshes once an hour. At the refresh moment: factor = solar actually produced until then / forecast for that part of the day, bounded to 0.5-1.5 and 1 while less than 1 kWh was forecast. Forecast left = remaining forecast × factor − the solar produced since the refresh. Without that last subtraction the remaining forecast stays the same for an hour while the sun keeps producing, and the margin falls in a saw-tooth of up to several kWh every hour. The refresh moment is `solar_forecast_updated`, or else the moment the remaining forecast last changed.
-5. **Solar left = the lower of 3 and 4.** The forecast sees today's clouds but not the evening shade on the panels; the history sees the shade but not today's weather. When in doubt the battery gets priority. `source` says which one won.
+4. **Solar left, forecast** (only with both forecast roles). Forecast.Solar (free) refreshes once an hour. At the refresh moment: factor = solar actually produced until then / forecast for that part of the day, bounded to 0.5-1.5 and 1 while less than 0.5 kWh was forecast (`forecast_factor`; the unbounded value is `forecast_ratio`). Forecast left = remaining forecast × factor − the solar produced since the refresh. Without that last subtraction the remaining forecast stays the same for an hour while the sun keeps producing, and the margin falls in a saw-tooth of up to several kWh every hour. The refresh moment is `solar_forecast_updated`, or else the moment the remaining forecast last changed.
+5. **Solar left = the lower of 3 and 4**, with one exception. The forecast sees today's clouds but not the evening shade on the panels; the history sees the shade but not today's weather. When in doubt the battery gets priority. `source` says which one won. **Exception, forecast too pessimistic**: when `forecast_ratio` is 1.3 or more (today's solar beat the forecast by 30 % or more), the history is used and `forecast_too_pessimistic` is true. Forecast.Solar sometimes halves a sunny day; the factor is bounded to 1.5, so it cannot repair that, and the lower-of-two rule would then hold the battery back all afternoon on a day it fills easily.
 6. **House left**: the median, over the history days, of the house consumption without the car from this time of day to that day's own sun end.
 7. **Battery needed** = (100 − SoC) % × usable kWh / charge efficiency; 0 without a battery.
 8. **Margin** = solar left − house left − battery needed, in kWh, two decimals. Negative: the battery will not be full. After the sun end (`after_sun: true`) solar and house left are 0, so the margin is −battery needed: always a number, because Home Assistant rejects a non-numeric state on a sensor with a unit.
@@ -75,12 +80,25 @@ Question: will the battery be full by the time the sun leaves the panels, and ho
 
 | Condition | Battery behind |
 | --------- | -------------- |
-| SoC ≥ 98 %, or the margin has no value, or `after_sun` | off |
+| SoC ≥ 98 %, or the margin has no value, or `after_sun`, or battery saturated is on | off |
 | was off, margin < safety (0.5 kWh) | on |
 | was on, margin < safety + hysteresis (1.0 kWh) | stays on |
 | was on, margin ≥ safety + hysteresis | off |
 
-Why the safety margin: the plan is an estimate; at 0 kWh the battery would just make it on paper. Why the one-sided hysteresis: once a charger has given the battery priority, it should not hand the sun back at the first optimistic estimate (that made the charger toggle). Why never at 98 %: a full battery cannot be behind, whatever the estimate.
+Why the safety margin: the plan is an estimate; at 0 kWh the battery would just make it on paper. Why the one-sided hysteresis: once a charger has given the battery priority, it should not hand the sun back at the first optimistic estimate (that made the charger toggle). Why never at 98 %: a full battery cannot be behind, whatever the estimate. Why never while saturated: the battery already takes all it can, so holding the sun back for it only sends more to the grid.
+
+### Battery saturated (only with `entities.battery_soc` and `battery_power_w`)
+
+| Condition (all of them) | Battery saturated |
+| --- | --- |
+| `sensor.energy_plan_export_avg` ≥ 0.3 kW | on after 3 min |
+| the battery charges at ≥ 1000 W (power role with `energy.battery_power_sign`) | |
+| SoC below 98 % | |
+| any of them no longer true | off after 10 min |
+
+What it means: the home battery already charges at the power it can take and the house still exports, so more sun would not reach the battery. The margin can be negative at that moment (the battery will not be full by the sun end because its charge power, not the sun, is the limit), and battery behind would then keep consumers off while the surplus goes to the grid. Saturated turns battery behind off; consumers may then use the export.
+
+Why not count the battery charging as surplus: the surplus band stays "what goes to the grid"; saturated only lifts the battery-behind veto. Why the delays: battery clouds report slowly (every 30-60 s), and a charger that follows battery behind must not toggle with every refresh. The thresholds are fixed in `templates/energy_plan.yaml` (`sat_export_kw`, `sat_charge_w`): 0.3 kW is above meter noise, 1 kW rules out a battery that only trickles at the top of its charge curve.
 
 ## Settings
 
@@ -99,7 +117,7 @@ The defaults are in `module.yaml` (`defaults:`), set once by `deploy.py`; the te
 | `energy_plan.charge_efficiency` | 0.95 | battery charge efficiency in "battery needed" |
 | `energy_plan.history_days` | 10 | days of 5-minute statistics; more needs a higher `recorder: purge_keep_days` |
 
-Fixed in the script (constants at the top of `energy_plan.py`): 240 slots for a usable day, 0.3 kWh before now for a ratio, 0.5 kWh today before the ratio is trusted, the 1.3 cap, the forecast factor bounds 0.5-1.5. Fixed in the template: 98 % for "full".
+Fixed in the script (constants at the top of `energy_plan.py`): 240 slots for a usable day, 0.3 kWh before now for a ratio, 0.5 kWh today before the ratio is trusted, the 1.3 cap, the forecast factor bounds 0.5-1.5, 0.5 kWh of forecast before the forecast factor is trusted, a forecast ratio of 1.3 for "too pessimistic". Fixed in the template: 98 % for "full", 0.3 kW export and 1000 W charging for "saturated".
 
 ## Edge cases
 
@@ -119,6 +137,7 @@ Fixed in the script (constants at the top of `energy_plan.py`): 240 slots for a 
 - Control the home battery (the battery in the source setup is not controllable).
 - Forecast tomorrow: the plan is for today until the sun end; the charge plan uses `solar_forecast_tomorrow` itself.
 - Work with MariaDB or PostgreSQL as recorder (only the margin and battery behind need SQLite).
+- Feed battery saturated to `ev-charging` or `hot-water` directly: they read battery behind, which saturated already turns off. `appliances-home-connect` uses it as a start route of its own.
 - Know the car's own charging plan, the price or the capacity tariff (`tariff-be`, `ev-charging`).
 
 ## Test plan
@@ -133,4 +152,6 @@ Until this passed on a real Home Assistant, the status stays "built, not tested 
 6. With a battery: when the margin goes below 0.5 kWh, battery behind turns on; it goes off only from 1.0 kWh; it is off at 98 % and after `sun_end`.
 7. After the sun end: `after_sun: true`, the margin equals −`battery_needed_kwh`, battery behind off.
 8. Without a forecast (empty both forecast roles, fill in, deploy): `pv_remaining_forecast_kwh` null, `source: history`, a value all the same.
+9. Battery saturated (with the battery power role): on a sunny day with the battery charging at its maximum and the house exporting, it turns on after 3 min and `battery_behind` turns off (attribute `battery_saturated: true`); when the battery tapers below 1 kW or reaches 98 %, it turns off 10 min later. `tests/energy-plan.yaml` covers the template with `tools/check.py`.
+10. Forecast too pessimistic: on a day where the forecast is far below the real solar, `forecast_ratio` ≥ 1.3, `forecast_too_pessimistic: true` and `source: history`.
 9. Unavailable on purpose: fill in a solar role without statistics (a sensor without `state_class`), fill in and deploy: the sensor is unavailable; the command in the Terminal app prints `no statistics for …`. Put the right role back.

@@ -45,6 +45,9 @@ PROVIDED = ["sensor.energy_plan_export_kw", "sensor.energy_plan_export_avg", "bi
 <% if battery %>
 PROVIDED.append("binary_sensor.energy_plan_battery_behind")
 <% endif %>
+<% if battery and battery_power %>
+PROVIDED.append("binary_sensor.energy_plan_battery_saturated")
+<% endif %>
 
 
 def check_statistics() -> None:

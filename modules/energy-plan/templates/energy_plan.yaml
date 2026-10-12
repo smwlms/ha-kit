@@ -1,6 +1,10 @@
 <% from '_energy_plan.jinja' import grid_import, grid_export, solar, house_role, battery, battery_power,
    discharge_factor, charger with context %>
 <% set d = module.defaults %>
+<# Battery saturated (only with entities.battery_soc and battery_power_w): fixed thresholds, see LOGIC.md. #>
+<% set saturated = battery and battery_power %>
+<% set sat_export_kw = 0.3 %>
+<% set sat_charge_w = 1000 %>
 <# Template sensors of the energy plan -> /config/templates/energy_plan.yaml. Power roles may be W or kW: the macro
    watts() (custom_templates/energy_plan.jinja) reads them with their unit. The fallbacks in float(...) are the
    defaults of module.yaml, for the moment before deploy.py has set the helpers. #>
@@ -75,10 +79,36 @@
         off_below_kw: >
           {{ (states('input_number.energy_plan_surplus_kw') | float(<@ d['input_number.energy_plan_surplus_kw'] @>)
               - states('input_number.energy_plan_surplus_hysteresis_kw') | float(<@ d['input_number.energy_plan_surplus_hysteresis_kw'] @>)) | round(2) }}
+<% if saturated %>
+    # Battery saturated: the home battery already charges at what it can take and the house still exports, so more
+    # sun would not reach it. On when the 10-minute export average is at least <@ sat_export_kw @> kW, the battery
+    # charges at least <@ sat_charge_w @> W and the SoC is below 98 %. delay_on/delay_off: battery clouds report
+    # slowly, and a charger that follows "battery behind" must not toggle with every refresh. While it is on, battery
+    # behind is off. It does NOT make battery charging count as surplus: see LOGIC.md, "Battery saturated".
+    - name: <@ t('binary_battery_saturated') | tojson @>
+      unique_id: energy_plan_battery_saturated
+      default_entity_id: binary_sensor.energy_plan_battery_saturated
+      icon: mdi:battery-arrow-up-outline
+      delay_on: "00:03:00"
+      delay_off: "00:10:00"
+      state: >
+        {% from 'energy_plan.jinja' import watts %}
+        {% set avg = states('sensor.energy_plan_export_avg') %}
+        {% set soc = states('<@ battery @>') %}
+        {% set charge = <@ -discharge_factor @> * (watts('<@ battery_power @>') | float(0)) %}
+        {{ is_number(avg) and avg | float >= <@ sat_export_kw @> and charge >= <@ sat_charge_w @>
+           and is_number(soc) and soc | float < 98 }}
+      attributes:
+        export_avg_kw: "{{ states('sensor.energy_plan_export_avg') | float(none) }}"
+        battery_charge_w: >
+          {% from 'energy_plan.jinja' import watts %}
+          {{ (<@ -discharge_factor @> * (watts('<@ battery_power @>') | float(0))) | round(0) }}
+<% endif %>
 <% if battery %>
     # Battery behind: the battery will not be full by the time the sun leaves the panels. On when the margin is
     # below input_number.energy_plan_battery_safety_kwh while the sun is still on the panels; off again only when
-    # the margin is above safety + hysteresis. Never on at 98 % or more, after the sun, or without a margin.
+    # the margin is above safety + hysteresis. Never on at 98 % or more, after the sun, or without a margin<% if saturated %>,
+    # and never while battery saturated is on (the battery cannot take more sun: holding it back would only export)<% endif %>.
     - name: <@ t('binary_battery_behind') | tojson @>
       unique_id: energy_plan_battery_behind
       default_entity_id: binary_sensor.energy_plan_battery_behind
@@ -89,12 +119,15 @@
         {% set soc = states('<@ battery @>') | float(0) %}
         {% set limit = states('input_number.energy_plan_battery_safety_kwh') | float(<@ d['input_number.energy_plan_battery_safety_kwh'] @>) %}
         {% set band = states('input_number.energy_plan_battery_hysteresis_kwh') | float(<@ d['input_number.energy_plan_battery_hysteresis_kwh'] @>) %}
-        {% if soc >= 98 or not is_number(m) or state_attr(s, 'after_sun') %}false
+        {% if soc >= 98 or not is_number(m) or state_attr(s, 'after_sun')<% if saturated %> or is_state('binary_sensor.energy_plan_battery_saturated', 'on')<% endif %> %}false
         {% elif this.state == 'on' %}{{ m | float < limit + band }}
         {% else %}{{ m | float < limit }}{% endif %}
       attributes:
         margin_kwh: "{{ states('sensor.energy_plan_margin') | float(none) }}"
         sun_end: "{{ state_attr('sensor.energy_plan_margin', 'sun_end') }}"
+<% if saturated %>
+        battery_saturated: "{{ is_state('binary_sensor.energy_plan_battery_saturated', 'on') }}"
+<% endif %>
         on_below_kwh: "{{ states('input_number.energy_plan_battery_safety_kwh') | float(<@ d['input_number.energy_plan_battery_safety_kwh'] @>) }}"
         off_above_kwh: >
           {{ (states('input_number.energy_plan_battery_safety_kwh') | float(<@ d['input_number.energy_plan_battery_safety_kwh'] @>)

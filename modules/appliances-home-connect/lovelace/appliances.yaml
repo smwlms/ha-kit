@@ -193,6 +193,14 @@
             - type: numeric-input
               style: buttons
         - type: tile
+          entity: input_number.appliances_program_kwh
+          name: <@ t('card_program_kwh') | tojson @>
+          hide_state: true
+          features_position: inline
+          features:
+            - type: numeric-input
+              style: buttons
+        - type: tile
           entity: input_datetime.appliances_solar_peak
           name: <@ t('card_solar_peak') | tojson @>
 <% endif %>

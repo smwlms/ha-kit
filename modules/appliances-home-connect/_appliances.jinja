@@ -1,6 +1,6 @@
 <#- Shared by every file of the module: the appliances of house.yaml with their Home Connect entity ids.
     Import: <% from '_appliances.jinja' import apps, cfg, has_energy, has_tariff, has_presence, has_battery,
-    solar_power, fc_remaining, fc_tomorrow, battery_soc with context %>
+    has_saturated, solar_power, fc_remaining, fc_tomorrow, battery_soc with context %>
 
     Home Connect names its entities after the device name (the prefix) and the entity name in the language Home
     Assistant had when the integration was added: sensor.<prefix>_operation_state in English, sensor.<prefix>_status
@@ -116,5 +116,7 @@
 <% set battery_soc = ents.get('battery_soc') or '' %>
 <% set solar_power = ents.get('solar_power_w') or '' %>
 <% set has_battery = has_energy and battery_soc != '' and solar_power != '' %>
+<#- binary_sensor.energy_plan_battery_saturated exists only with a battery and its power role (energy-plan). -#>
+<% set has_saturated = has_battery and (ents.get('battery_power_w') or '') != '' %>
 <% set fc_remaining = ents.get('solar_forecast_remaining_today') or '' %>
 <% set fc_tomorrow = ents.get('solar_forecast_tomorrow') or '' %>

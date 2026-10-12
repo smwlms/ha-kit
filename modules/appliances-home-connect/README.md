@@ -17,7 +17,7 @@ How every decision is made, the start-time optimizer and the test plan are in [L
 | Appliance with **remote start** | Home Connect only starts an appliance whose "Remote start" is on | Many washing machines need it switched on at the appliance for every load (`smart_start: ask`) |
 | Companion app | notification buttons Smart start and Start now | iPhone or Android |
 | HA OS or Supervised + the **File editor** app | `deploy.py` uploads the package and the macro | Without it: copy the files yourself, see `deploy.py --dry-run` |
-| `energy-plan` (optional) | wait for solar surplus or a full battery | Without it: no solar start |
+| `energy-plan` (optional) | wait for solar surplus, a saturated battery or enough sun to spare in the day plan | Without it: no solar start |
 | A **tariff** module, e.g. `tariff-be` (optional) | cheapest quarter before the deadline | Without it: as late as possible before the deadline |
 | `presence` (optional) | ready by the learned arrival per weekday | Without it: "auto" is a fixed time (`auto_time`) |
 
@@ -47,7 +47,7 @@ The Home Connect device is found with `device_id()` from the program select of t
 | Reads | From | Why |
 | ----- | ---- | --- |
 | `script.send_notification` (`title`, `message`, `extra`, `only_home`) and the macro `at_home()` | `notifications` | notifications to who is home |
-| `binary_sensor.energy_plan_surplus`, `binary_sensor.energy_plan_battery_behind`, `sensor.energy_plan_margin` (`after_sun`, `pv_remaining_kwh`), macro `watts()` | `energy-plan` (optional) | solar start |
+| `binary_sensor.energy_plan_surplus`, `binary_sensor.energy_plan_battery_behind`, `binary_sensor.energy_plan_battery_saturated`, `sensor.energy_plan_margin` (`after_sun`, `pv_remaining_kwh`), macro `watts()` | `energy-plan` (optional) | solar start |
 | `sensor.power_price_import` (`starts`, `prices`) | a module that provides `tariff` (optional) | cheapest block |
 | `input_datetime.arrival_<day>` | `presence` (optional) | ready by the arrival |
 
@@ -65,6 +65,7 @@ The appliances are read and started through the Home Connect cloud (BSH) via the
 | `home_connect.language` | `en` or `nl`: the language Home Assistant had when Home Connect was added (entity names); default `house.language` |
 | `home_connect.entities` | a pattern per role for every appliance (`{p}` = prefix), wins over the built-in table |
 | `entities.battery_soc`, `solar_power_w` | battery start (optional, with energy-plan) |
+| `entities.battery_power_w` | start when the battery is saturated (optional, with energy-plan and `battery_soc`) |
 | `entities.solar_forecast_remaining_today`, `solar_forecast_tomorrow` | expected sun today and tomorrow (optional; without the first: `pv_remaining_kwh` of energy-plan; without the second: no sun window tomorrow) |
 
 `smart_start: auto` plans by itself once the appliance is on, its door has been closed and remote start on for 2 minutes (a dishwasher with remote start always on). `smart_start: ask` sends a notification with the buttons when remote start is switched on (a washing machine that needs it for every load).
@@ -98,7 +99,7 @@ The English column follows the integration's entity names; the Dutch one was see
 | tariff | no cheapest block: the program starts as late as possible and is done just in time |
 | both | "ready by" only: start = deadline − duration (a washing machine that is done when you come home), plus all notifications |
 | `presence` | `auto` = `appliances[].auto_time` (default 17:00) every day |
-| a battery role | only surplus starts a waiting appliance, not "battery above the minimum" |
+| a battery role | only surplus and the day-plan margin start a waiting appliance, not "battery saturated" or "battery above the minimum" |
 
 ## What you do in the UI
 

@@ -3,6 +3,8 @@
 
 <@ module.description @>.
 
+**Needs:** a myenergi Zappi with the `CJNE/ha-myenergi` integration (HACS). Brand adapter for the Zappi only.
+
 This module is a **brand adapter**: it provides the capability `ev-charger` for the myenergi Zappi. It turns the Zappi's own entities (whose ids contain its serial number) into the normalised `sensor.ev_charger_*` entities and one script, `script.ev_charger_set_mode`. The smart logic (when to charge, from the sun, the cheap window or a charge plan) lives in the core module `ev-charging`; this adapter never decides when to charge, it only translates. The only thing it decides itself is Zappi-specific: 1 or 3 phases on solar surplus (with `ev-charging` installed).
 
 How every decision is made is in [LOGIC.md](LOGIC.md). The test plan is there too.

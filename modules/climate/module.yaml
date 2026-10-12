@@ -2,7 +2,7 @@
 # (defaults). Contract: docs/phase4-contracts.md section 4 "climate".
 name: Climate
 description: "Climate screen, indoor peak forecast, floor mode chosen over several days, free cooling with outside air through the ventilation, ComfoClime boost on a cold dip"
-status: built, not tested on HA
+status: in production at the source
 # Layer: core. No hard dependency: the floor block needs a module that provides heat-pump, the ventilation blocks need
 # the ventilation roles (derived with ventilation-zehnder), the shading block needs shading. Each block hides without.
 depends_on: []

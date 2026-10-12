@@ -1,7 +1,7 @@
 # Module metadata, read by tools/fill.py (--list shows it as a table), tools/choose.py (ask:) and tools/check.py.
 name: Base
 description: Configuration skeleton (packages, templates, command_line), five themes (Organic, Garden, Coast, Heath, Graphite) and the shared cw-* components
-status: built
+status: live since 2026-10-05
 depends_on: []
 requires:
   integrations: []

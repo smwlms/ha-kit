@@ -12,7 +12,9 @@
 
 <@ module.description @>.
 
-**Status: built, not tested on HA.** Contract: [docs/phase4-contracts.md](../../docs/phase4-contracts.md), section 4 "climate". How every decision is made: [LOGIC.md](LOGIC.md).
+**Needs:** a weather integration with an hourly and a daily forecast and Recorder on SQLite; a heat pump and ventilation are optional.
+
+**Status: in production at the source.** The same logic runs daily in the author's house as the hand-made setup this module was derived from; the kit module itself is not deployed there yet. Contract: [docs/phase4-contracts.md](../../docs/phase4-contracts.md), section 4 "climate". How every decision is made: [LOGIC.md](LOGIC.md).
 
 - Layer: core (brand-free)
 - Depends on: - (every block is optional and hides without its provider)

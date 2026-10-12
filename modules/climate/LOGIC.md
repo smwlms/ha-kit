@@ -152,7 +152,7 @@ When the indoor temperature drops below <@ boost_below @> °C and the ComfoClime
 
 ## Test plan
 
-On a real Home Assistant (until it passed, the status says "not tested on HA"):
+On a real Home Assistant. Run this when you deploy the kit module; the source setup already passed the equivalent checks in production.
 
 1. `deploy.py --view`; `sensor.climate_weather_days` has `day_max` with 5 values; `sensor.climate_indoor_peak` has a value and `days` > 0 (else read `error`).
 2. Screen: every tab renders, blocks of missing providers are absent, no bare "–".

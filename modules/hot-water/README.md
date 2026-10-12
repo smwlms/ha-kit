@@ -2,7 +2,9 @@
 
 <@ module.description @>.
 
-**Status: built, not tested on HA.** The tank stores heat: when the sun would otherwise go to the grid (or power is very cheap) it heats to a high maximum, outside those moments it only keeps a comfort minimum, and the morning and the bath are covered in the cheapest hour before them with a safety net after. It never touches a brand entity: it calls the two scripts of the `hot-water-heater` capability (`heat-pump-vaillant` today) and reads the plan of `energy-plan`. One automation, `hot_water_buffer`, is the only caller of those scripts.
+**Needs:** a hot-water tank heated by a heat pump or an element, through a `hot-water-heater` adapter (today `heat-pump-vaillant`), and `energy-plan`.
+
+**Status: in production at the source.** The same logic runs daily in the author's house as the hand-made setup this module was derived from; the kit module itself is not deployed there yet. The tank stores heat: when the sun would otherwise go to the grid (or power is very cheap) it heats to a high maximum, outside those moments it only keeps a comfort minimum, and the morning and the bath are covered in the cheapest hour before them with a safety net after. It never touches a brand entity: it calls the two scripts of the `hot-water-heater` capability (`heat-pump-vaillant` today) and reads the plan of `energy-plan`. One automation, `hot_water_buffer`, is the only caller of those scripts.
 
 How every decision is made, the economics and the test plan are in [LOGIC.md](LOGIC.md).
 

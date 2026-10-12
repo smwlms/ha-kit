@@ -1,7 +1,7 @@
 # Module metadata, read by tools/fill.py (--list shows it as a table), tools/choose.py (ask:) and by spa-spanet/deploy.py.
 name: Spa (SpaNET)
 description: ESP32 on the EXP1 port of a SpaNET SV3 spa (read and set, own probes, lid); SpaNET SV only
-status: built, bench test only
+status: in production at the source since 2026-10-11
 depends_on: []
 requires:
   integrations: [ESPHome, ESPHome Device Builder app (or esphome on a computer)]

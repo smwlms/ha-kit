@@ -2,6 +2,8 @@
 
 <@ module.description @>.
 
+**Needs:** the Companion app; per notification kind a price sensor (`starts`/`prices`), a grid-export sensor or a ventilation filter sensor. Works with any brand.
+
 <!-- Filled in by tools/fill.py (kept in a comment so a markdown formatter leaves it alone).
 <% from '_notifications.jinja' import m, kinds, kinds_text, filter_days, filter_derived with context %>
 <% set filter_sentence = ('derived from the module ventilation-zehnder: `' ~ filter_days ~ '`') if filter_derived else (('`' ~ filter_days ~ '` (from house.yaml)') if filter_days else 'none') %>

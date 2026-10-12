@@ -11,6 +11,8 @@
 
 <@ module.description @>.
 
+**Needs:** an ESP32 DevKit, HLK-LD2450 radar, BH1750 light sensor and GY-SHT31-D temperature/humidity sensor, and ESPHome.
+
 A DIY build of the Everything Presence Lite (LD2450 radar + BH1750 light sensor) with an SHT31 for temperature and humidity, in a printed case with a separate chamber for the SHT31. One firmware base (`esphome/kamersensor.yaml`); for every room with `sensor: true`, `fill.py` writes a small file `esphome/kamersensor-<room>.yaml` that includes that base.
 
 How it works and the test plan: [LOGIC.md](LOGIC.md).

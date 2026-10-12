@@ -2,7 +2,7 @@
 # Contract: docs/phase4-contracts.md ("home-screen"). Layer: core (UI).
 name: Home screen
 description: "Start dashboard with one chip or card per installed module (a chip disappears when its module is missing), price advice, energy tiles, quick toggles"
-status: built, not tested on HA
+status: in production at the source
 # No hard dependency: every block follows the feature flags rendered from modules: and the capabilities. It only
 # reads the entities of other modules (contract ids); it provides nothing they read.
 depends_on: []

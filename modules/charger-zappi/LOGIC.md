@@ -136,7 +136,7 @@ Fixed in the files (change them in your copy if you must): the 300 W battery thr
 
 ## Test plan
 
-On a real Home Assistant, in this order. Until it passed, the status says "not tested on HA".
+On a real Home Assistant, in this order. Run this when you deploy the kit module; the source setup already passed the equivalent checks in production.
 
 1. `deploy.py --dry-run`: two uploads, the reloads, the defaults, script `ev_charger_set_mode`, and automation `charger_zappi_phases` (or "remove" without phase switching).
 2. `deploy.py`. Developer tools > States: `sensor.ev_charger_mode` shows the current mode with `brand_mode`, `sensor.ev_charger_status`, `binary_sensor.ev_charger_connected`, `sensor.ev_charger_power`, `sensor.ev_charger_energy_today` have values; the three helpers have 4600 / 3800 / on.

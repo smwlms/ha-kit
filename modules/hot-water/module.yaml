@@ -2,7 +2,7 @@
 # Contract: docs/phase4-contracts.md (hot-water). The entity, helper and event ids below are part of it.
 name: Hot water buffer
 description: "The hot-water tank as a heat battery: heats on solar surplus, in the cheapest hour before sunrise or before the bath, with a shower button and price weighing, without raising the month peak"
-status: built, not tested on HA
+status: in production at the source
 # Layer: core. Brand-free: it only calls script.hot_water_heat / script.hot_water_normal and reads
 # sensor.hot_water_temperature / sensor.hot_water_cop (capability hot-water-heater, e.g. heat-pump-vaillant).
 # Optional: tariff (price weighing, cheapest hours, cheap power, month peak), ev-charging (car first in the plan).

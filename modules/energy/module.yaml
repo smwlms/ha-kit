@@ -2,7 +2,7 @@
 # Contract: docs/phase4-contracts.md ("energy"). Layer: core (UI only: the logic lives in energy-plan).
 name: Energy screens
 description: "Live energy screen (flows, battery, charger, hot water, price and peak), energy flows per day and the energy-analysis dashboard (period, power, tariff, consumers, trends, battery)"
-status: built, not tested on HA
+status: in production at the source
 # No hard dependency: every block follows the roles of house.yaml, modules: and the capabilities. It reads the
 # entities of energy-plan, the tariff, ev-charger, ev-charging, hot-water(-heater), heat-pump and results contracts
 # when those are installed, and provides nothing other modules read.

@@ -2,6 +2,8 @@
 
 <@ module.description @>.
 
+**Needs:** a Tesla through Teslemetry, and a gate or garage door that a relay (e.g. a Shelly 1) can pulse; an end-position contact is optional.
+
 A Tesla that navigates home opens the gate by itself when it enters the approach zone. When it drives in without navigating home, a notification asks whether the gate should open. With an end-position sensor the gate also closes when you drive off, and you get a notification when it stays open too long. Quick buttons on the phone: open the gate, close the gate, unlock the charge cable, leaving.
 
 How every decision is made is in [LOGIC.md](LOGIC.md). The test plan is there too.

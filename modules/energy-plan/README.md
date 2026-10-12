@@ -2,7 +2,9 @@
 
 <@ module.description @>.
 
-**Status: built, not tested on HA.** One owner for the energy signals that charging, hot water, appliances, the energy screens and the results all read: the export average and "surplus on/off", the house consumption, and the solar day plan (how much solar energy is left today after the house and the home battery, and whether the battery falls behind). It has no screens and switches nothing: other modules decide what to do with it.
+**Needs:** a P1 meter or grid import/export power sensors and a solar power sensor; Recorder on SQLite; a home battery with a state of charge is optional.
+
+**Status: in production at the source.** The same logic runs daily in the author's house as the hand-made setup this module was derived from; the kit module itself is not deployed there yet. One owner for the energy signals that charging, hot water, appliances, the energy screens and the results all read: the export average and "surplus on/off", the house consumption, and the solar day plan (how much solar energy is left today after the house and the home battery, and whether the battery falls behind). It has no screens and switches nothing: other modules decide what to do with it.
 
 How every decision is made, the battery-full model and the test plan are in [LOGIC.md](LOGIC.md).
 

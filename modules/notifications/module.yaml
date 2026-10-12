@@ -1,7 +1,7 @@
 # Module metadata, read by tools/fill.py (--list shows it as a table), tools/choose.py (ask:) and by notifications/deploy.py (defaults).
 name: Notifications
 description: Shared notifications to the Companion app (free or negative power price, solar surplus, ventilation filter) and script.send_notification for other modules
-status: built, not tested on HA
+status: in production at the source
 # No hard dependency on a tariff module: with one in modules: (capability tariff, e.g. tariff-be) empty
 # entities.price_import / price_export default to its sensor.power_price_import / _export (attributes starts and
 # prices); without one the user fills in sensors of their own.

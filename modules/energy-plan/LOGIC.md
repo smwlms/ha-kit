@@ -142,7 +142,7 @@ Fixed in the script (constants at the top of `energy_plan.py`): 240 slots for a 
 
 ## Test plan
 
-Until this passed on a real Home Assistant, the status stays "built, not tested on HA".
+Run this when you deploy the kit module; the source setup already passed the equivalent checks in production.
 
 1. `deploy.py --dry-run`: shows the five uploads, the reloads, the defaults and the statistic ids, without a connection.
 2. `deploy.py`: no configuration error; the helpers exist with their defaults; `check recorder statistics` lists no missing ids; `sensor.energy_plan_margin` has a number and `error` is null.

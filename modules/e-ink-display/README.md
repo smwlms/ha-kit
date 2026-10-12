@@ -2,7 +2,9 @@
 
 <@ module.description @>.
 
-**Status: built (screen tested in a browser by the source), not tested on the device.** The page is a port of a screen
+**Needs:** an Android e-ink tablet with touch and the Companion app or Fully Kiosk Browser; a relay for its charger is optional.
+
+**Status: in production at the source (screen only); not tested on the device.** The page is a port of a screen
 that runs live in a browser (tapping, navigation, refresh tested there); the kit version is filled in, rendered with a
 mocked Home Assistant in headless Chromium at 1600 x 1200 and 1200 x 1600 (both languages, a full and a minimal house)
 and checked in grayscale. Not yet on a real e-ink tablet, and the charging automation not yet on a real Home Assistant.

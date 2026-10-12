@@ -1,6 +1,6 @@
 # Logic: Heat pump (Vaillant)
 
-Status: built, not tested on HA. The scripts and sensors were run against mocked states (one and two zones, en and nl); the test plan below has not been run on a real heat pump yet.
+Status: in production at the source. The same logic runs daily in the author's house as the hand-made setup this module was derived from; the kit module itself is not deployed there yet. The scripts and sensors were also run against mocked states (one and two zones, en and nl); the test plan below has not been run with the kit module yet.
 
 ## In one sentence
 

@@ -2,7 +2,9 @@
 
 What the smart logic did today and what it saved, in plain language: EUR saved per kind (car on own solar, hot water on surplus or at the cheapest hour, …), whether the day goals were met, consumption and electricity cost per day, week and month, the same kWh on a variable and a fixed contract, this month against last year, and per month the calculation next to the invoice. The logbook lines of the installed modules show "what the house did".
 
-**Status: built, not tested on HA.** Contract: [docs/phase4-contracts.md](../../docs/phase4-contracts.md) (results, events). Every decision and every formula: [LOGIC.md](LOGIC.md).
+**Needs:** a module that provides `tariff` (e.g. `tariff-be`) and grid import/export energy meters.
+
+**Status: in production at the source.** The same logic runs daily in the author's house as the hand-made setup this module was derived from; the kit module itself is not deployed there yet. Contract: [docs/phase4-contracts.md](../../docs/phase4-contracts.md) (results, events). Every decision and every formula: [LOGIC.md](LOGIC.md).
 
 - Layer: core
 - Depends on: `tariff` (a region module such as `tariff-be`)

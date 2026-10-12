@@ -1,0 +1,161 @@
+<% from '_connection_watchdog.jinja' import S, tap_url with context %>
+# Connection watchdog: automation (ha-kit module connection-watchdog, see connection-watchdog/LOGIC.md).
+# Written by connection-watchdog/deploy.py through the config API (same as the automation editor).
+# Reads sensor.connection_watchdog, reloads, notifies through script.send_notification (module notifications) and
+# reports back to the sensor with one event connection_watchdog_update per run.
+- id: connection_watchdog_repair_and_notify
+  alias: <@ t('automation_alias') | tojson @>
+  description: <@ t('automation_description') | tojson @>
+  mode: single
+  max_exceeded: silent
+  triggers:
+    # 20 s after the sensor's render on the minute.
+    - trigger: time_pattern
+      minutes: "/1"
+      seconds: 20
+  actions:
+    - variables:
+        # Texts in house.language (strings.yaml); {placeholders} are replaced below.
+        s: <@ S | tojson @>
+        sources: "{{ state_attr('sensor.connection_watchdog', 'sources') or [] }}"
+        t_now: "{{ as_timestamp(now()) }}"
+        # Due for a reload: broken for 'wait' min, reloadable (not in setup_retry), attempts left, 'interval' min since
+        # the last attempt.
+        reload: >-
+          {% set ns = namespace(l=[]) %}
+          {% for x in sources if x.status != 'ok' and x.reloadable and x.attempts < x.max
+               and t_now - as_timestamp(x.since) >= x.wait * 60
+               and (x.last_attempt is none or t_now - as_timestamp(x.last_attempt) >= x.interval * 60) %}
+            {% set ns.l = ns.l + [{'id': x.id, 'name': x.name, 'entries': x.entries, 'attempt': x.attempts + 1, 'max': x.max}] %}
+          {% endfor %}
+          {{ ns.l }}
+        down: "{{ sources | rejectattr('status', 'eq', 'ok') | list }}"
+        # New to notify: broken for 'notify_after' min and not notified yet. When there is one, the others that are
+        # broken for at least max(5 min, notify_after / 2) join the same notification (one storm, one notification).
+        new: >-
+          {% set ns = namespace(l=[]) %}
+          {% for x in down if not x.notified and t_now - as_timestamp(x.since) >= x.notify_after * 60 %}
+            {% set ns.l = ns.l + [x] %}
+          {% endfor %}
+          {% if ns.l %}
+            {% for x in down if not x.notified and x not in ns.l and t_now - as_timestamp(x.since) >= [300, x.notify_after * 30] | max %}
+              {% set ns.l = ns.l + [x] %}
+            {% endfor %}
+          {% endif %}
+          {{ ns.l }}
+        # Back: notified before and ok for 5 min.
+        back: >-
+          {% set ns = namespace(l=[]) %}
+          {% for x in sources if x.status == 'ok' and x.notified and t_now - as_timestamp(x.since) >= 300 %}
+            {% set ns.l = ns.l + [x] %}
+          {% endfor %}
+          {{ ns.l }}
+    - alias: Reload what is due
+      repeat:
+        for_each: "{{ reload }}"
+        sequence:
+          - variables:
+              source: "{{ repeat.item }}"
+          - action: logbook.log
+            data:
+              name: "{{ s.logbook_name }}"
+              entity_id: sensor.connection_watchdog
+              message: >-
+                {{ s.logbook_reload | replace('{name}', source.name) | replace('{n}', source.attempt | string)
+                   | replace('{max}', source.max | string) }}
+          - if:
+              - condition: template
+                value_template: "{{ source.entries | count > 0 }}"
+            then:
+              - repeat:
+                  for_each: "{{ source.entries }}"
+                  sequence:
+                    - action: homeassistant.reload_config_entry
+                      data:
+                        entry_id: "{{ repeat.item }}"
+                      continue_on_error: true
+            else:
+              # Only the test source has no entries: a simulated attempt.
+              - action: logbook.log
+                data:
+                  name: "{{ s.logbook_name }}"
+                  entity_id: sensor.connection_watchdog
+                  message: "{{ s.logbook_test }}"
+    - alias: One bundled notification
+      if:
+        - condition: template
+          value_template: "{{ new | count > 0 or back | count > 0 }}"
+      then:
+        - variables:
+            title: >-
+              {% if new | count == 1 %}{{ s.notify_title_one | replace('{name}', new[0].name) }}
+              {%- elif new %}{{ s.notify_title_many | replace('{n}', new | count | string) }}
+              {%- elif back | count == 1 %}{{ s.notify_title_back_one | replace('{name}', back[0].name) }}
+              {%- else %}{{ s.notify_title_back_many | replace('{n}', back | count | string) }}{% endif %}
+            message: >-
+              {% set ns = namespace(r=[]) %}
+              {% for x in new %}
+                {% set word = s['status_' ~ x.status] | default(x.status) %}
+                {% set head = s.notify_since | replace('{status}', word) | replace('{time}', as_timestamp(x.since) | timestamp_custom('%H:%M'))
+                     | replace('{reason}', x.reason) %}
+                {% set head = (x.name ~ ': ' ~ head) if new | count > 1 else (head[:1] | upper ~ head[1:]) %}
+                {% set tried = s.notify_tried | replace('{n}', x.attempts | string) if x.attempts > 0
+                     else (s.notify_retrying if not x.reloadable and x.entries else '') %}
+                {% set ns.r = ns.r + [[head, x.impact, tried, s.notify_do | replace('{action}', x.action)] | select | join(' ')] %}
+              {% endfor %}
+              {% set also = down | rejectattr('id', 'in', new | map(attribute='id') | list) | map(attribute='name') | list %}
+              {% if also %}{% set ns.r = ns.r + [s.notify_also | replace('{names}', also | join(', '))] %}{% endif %}
+              {% if back %}
+                {% set names = back | map(attribute='name') | join(', ') %}
+                {% set ns.r = ns.r + [s.notify_back_with | replace('{names}', names) if new
+                     else s.notify_back_since | replace('{time}', as_timestamp(back[0].since) | timestamp_custom('%H:%M')) | replace('{names}', names)] %}
+              {% endif %}
+              {{ ns.r | join('\n\n') }}
+        # Through the module notifications: its recipients. tag replaces the previous one on the phone; passive = quiet.
+        - action: script.send_notification
+          continue_on_error: true
+          data:
+            title: "{{ title }}"
+            message: "{{ message }}"
+            extra:
+              tag: connection_watchdog
+              group: connection_watchdog
+              url: <@ tap_url | tojson @>
+              push:
+                interruption-level: "{{ 'active' if new else 'passive' }}"
+        # Safety net for a notification that does not arrive: a persistent notification in Home Assistant with the
+        # current list, updated on every notification run and gone once nothing is down.
+        - if:
+            - condition: template
+              value_template: "{{ down | count > 0 }}"
+          then:
+            - action: persistent_notification.create
+              data:
+                notification_id: connection_watchdog
+                title: >-
+                  {{ s.persistent_title_one if down | count == 1 else s.persistent_title_many | replace('{n}', down | count | string) }}
+                message: >-
+                  {% set ns = namespace(r=[]) %}
+                  {% for x in down %}
+                    {% set ns.r = ns.r + ['**' ~ x.name ~ '**: ' ~ (s['status_' ~ x.status] | default(x.status)) ~ ', '
+                         ~ as_timestamp(x.since) | timestamp_custom('%d-%m %H:%M') ~ ' (' ~ x.reason ~ '). '
+                         ~ ([x.impact, s.notify_do | replace('{action}', x.action)] | select | join(' '))] %}
+                  {% endfor %}
+                  {{ (ns.r + [s.persistent_overview ~ ': [<@ tap_url @>](<@ tap_url @>)']) | join('\n\n') }}
+          else:
+            - action: persistent_notification.dismiss
+              data:
+                notification_id: connection_watchdog
+    - alias: Report back to sensor.connection_watchdog
+      if:
+        - condition: template
+          value_template: "{{ reload | count > 0 or new | count > 0 or back | count > 0 }}"
+      then:
+        - event: connection_watchdog_update
+          event_data:
+            updates: >-
+              {% set ns = namespace(u=[]) %}
+              {% for x in reload %}{% set ns.u = ns.u + [{'source': x.id, 'kind': 'attempt'}] %}{% endfor %}
+              {% for x in new %}{% set ns.u = ns.u + [{'source': x.id, 'kind': 'notified'}] %}{% endfor %}
+              {% for x in back %}{% set ns.u = ns.u + [{'source': x.id, 'kind': 'recovered'}] %}{% endfor %}
+              {{ ns.u }}

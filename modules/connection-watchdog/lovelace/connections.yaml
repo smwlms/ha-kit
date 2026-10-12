@@ -1,0 +1,24 @@
+<# The view of the connection watchdog, rendered from house.yaml. JSON is valid YAML: the whole view is one tojson
+   so no value needs YAML quoting. #>
+<% from '_connection_watchdog.jinja' import view_path with context %>
+<% set strings = {} %>
+<% for k in ['locale', 'status_ok', 'status_unreachable', 'status_frozen', 'card_problems', 'card_all', 'col_source', 'col_status',
+   'col_since', 'card_all_ok', 'card_reloads', 'card_reloads_done', 'card_retrying', 'card_notified', 'card_do', 'card_reload',
+   'card_integration', 'card_no_sensor'] %>
+<% set _ = strings.update({k: t(k)}) %>
+<% endfor %>
+<% set card = {'type': 'custom:connection-watchdog-card', 'entity': 'sensor.connection_watchdog', 'strings': strings} %>
+<% set view = {'title': t('view_title'), 'path': view_path, 'icon': 'mdi:lan-connect', 'type': 'sections', 'max_columns': 2,
+   'sections': [
+     {'type': 'grid', 'cards': [card], 'column_span': 2},
+     {'type': 'grid', 'cards': [
+       {'type': 'heading', 'heading': t('settings_title'), 'icon': 'mdi:cog-outline'},
+       {'type': 'tile', 'entity': 'automation.connection_watchdog_repair_and_notify', 'name': t('settings_switch'), 'icon': 'mdi:autorenew',
+        'features': [{'type': 'toggle'}], 'grid_options': {'columns': 12}},
+       {'type': 'tile', 'entity': 'input_select.connection_watchdog_test', 'icon': 'mdi:test-tube',
+        'features': [{'type': 'select-options'}], 'grid_options': {'columns': 12}},
+       {'type': 'markdown', 'content': t('settings_test_help')}]}]} %>
+# View "<@ view_path @>" with custom:connection-watchdog-card (ha-kit module connection-watchdog). Written by
+# connection-watchdog/deploy.py --view into a dashboard (default: the Overview), or paste it yourself: Edit dashboard >
+# three dots > Raw configuration editor, add it under views:. Fill in again after changing house.yaml.
+<@ view | tojson(indent=2) @>

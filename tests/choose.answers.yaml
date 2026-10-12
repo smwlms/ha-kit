@@ -27,3 +27,4 @@ climate: yes
 appliances: Home Connect (Bosch, Siemens, Neff, Gaggenau)
 results: yes
 e_ink_display: yes
+connection_watchdog: yes

@@ -1,0 +1,30 @@
+# Module metadata, read by tools/fill.py (--list), tools/choose.py (ask:), tools/check.py and
+# connection-watchdog/deploy.py (defaults).
+name: Connection watchdog
+description: "Watches every integration your automations lean on: unreachable, frozen (no new value) or stale data; reloads the integration a few times, one bundled notification per outage, a quiet one when it is back, a card and a chip on the home screen"
+status: in production at the source
+# Layer: core. Brand-free: it reads the entities you name in house.yaml (connection_watchdog.sources) and the config
+# entries Home Assistant keeps for them; it never names an integration itself.
+depends_on: [notifications]
+provides: []
+requires:
+  integrations:
+    - "Home Assistant Companion app (through the module notifications)"
+  hardware: []
+optional: true
+generate: []
+ask:
+  - id: connection_watchdog
+    question: "Watch your integrations (reload what drops out, one notification per outage)?"
+# Fields of house.yaml this module reads (example: house.example.yaml).
+house_fields:
+  - "connection_watchdog.sources[] (optional): id, name, keys, rule, silence, data_time, data_max, entries, wait, notify_after, max, interval, impact, action"
+  - "connection_watchdog.ignore (optional), tap_url (optional), view_path (optional)"
+  - "house.language"
+# Start values that deploy.py sets ONCE, when the helper is new.
+defaults:
+  input_select.connection_watchdog_test: "off"
+# The other side of the optional switches, filled in by tools/check.py in its all-modules house: no sources of your
+# own (only the generic catch and the test source).
+check_variant:
+  connection_watchdog: { sources: [], ignore: [] }

@@ -37,6 +37,7 @@ None: no automations. The card re-renders when one of its own entities changes (
 | `tariff`, `heat_pump` | capability `tariff`, `heat-pump` |
 | `energy` | `energy-plan` in modules |
 | `hot_water` | `hot-water` in modules |
+| `watchdog` | `connection-watchdog` in modules |
 | `cameras`, `media`, `todo` | `home_screen.cameras`, `media_players`, `todo` filled in |
 
 A block whose flag is off gets no roles in the config, so the card cannot draw it. A block whose entity is missing or has no value is not drawn either (never a bare dash); a row inside a card says "no measurement yet".
@@ -58,8 +59,9 @@ A block whose flag is off gets no roles in the config, so the card cannot draw i
 | media | `home_screen.media_players` | number playing, or quiet | none of the players exists | page (path `media`), else sheet |
 | our week | `presence` | ISO week number | - | `/lovelace/our-week` |
 | smart charging | `ev-charging` | kW while charging, else the first plan target %, else on/off | no charger and no switch | page (path `charging`), else sheet |
+| connections | `connection-watchdog` | ok (calm), or the number of problems (warn) | no number in `sensor.connection_watchdog` | sheet with the names that do not work; Open goes to `/lovelace/<connection_watchdog.view_path>` |
 
-Calm chips drop out first on a narrow phone (`minder`: climate 3, blinds 2, gate when closed 1); a chip with a tone never drops out. Cameras, media, our week and smart charging are shortcuts (`vul` 1-4): by default they only fill free spots of the last row. Each HA user can change all of this (picker of `cw-status`, saved as `cw-status-home` in the user data).
+Calm chips drop out first on a narrow phone (`minder`: connections when ok 4, climate 3, blinds 2, gate when closed 1); a chip with a tone never drops out. Cameras, media, our week and smart charging are shortcuts (`vul` 1-4): by default they only fill free spots of the last row. Each HA user can change all of this (picker of `cw-status`, saved as `cw-status-home` in the user data).
 
 ### Cards
 

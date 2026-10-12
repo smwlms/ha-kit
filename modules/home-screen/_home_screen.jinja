@@ -23,6 +23,7 @@
   'energy': 'energy-plan' in modules,
   'hot_water': 'hot-water' in modules,
   'heat_pump': 'heat-pump' in caps,
+  'watchdog': 'connection-watchdog' in modules,
   'cameras': (HS.get('cameras') or '') | length > 0,
   'media': (HS.get('media_players') or []) | length > 0,
   'todo': (HS.get('todo') or '') | length > 0,
@@ -78,6 +79,9 @@
 <% if has.heat_pump %>
 <% set _ = roles.update({'heat_pump_state': 'sensor.heat_pump_state'}) %>
 <% endif %>
+<% if has.watchdog %>
+<% set _ = roles.update({'watchdog': 'sensor.connection_watchdog'}) %>
+<% endif %>
 <% if has.todo %><% set _ = roles.update({'todo': HS.todo}) %><% endif %>
 <# --- lists from house.yaml --- #>
 <% set person_list = [] %>
@@ -113,6 +117,7 @@
 <% if has.energy or has.tariff %><% set _ = paths.update({'energy': '/energy'}) %><% endif %>
 <% if has.presence %><% set _ = paths.update({'presence': '/lovelace/our-week'}) %><% endif %>
 <% if has.todo %><% set _ = paths.update({'todo': '/todo?entity_id=' ~ HS.todo}) %><% endif %>
+<% if has.watchdog %><% set _ = paths.update({'connections': '/lovelace/' ~ ((connection_watchdog.get('view_path') if connection_watchdog is defined and connection_watchdog else none) or 'connections')}) %><% endif %>
 <% for k, v in (HS.get('paths') or {}).items() %>
 <% if v %><% set _ = paths.update({k: v}) %><% endif %>
 <% endfor %>
@@ -159,6 +164,7 @@
   'chip_cameras', 'chip_cameras_aria', 'chip_media', 'chip_media_playing', 'media_quiet', 'chip_media_aria_playing', 'chip_media_aria_quiet',
   'chip_charging', 'charging_kw', 'charging_target', 'charging_smart', 'charging_on', 'charging_off', 'chip_charging_aria',
   'chip_week', 'chip_week_aria',
+  'chip_connections', 'connections_ok', 'connections_problem', 'connections_problems', 'connections_info_ok', 'connections_info_down',
   'energy', 'details', 'solar_kw', 'solar_title', 'solar_info', 'battery_title', 'battery_gives', 'battery_charges', 'battery_rests', 'battery_info',
   'grid_title', 'grid_from', 'grid_to', 'grid_none', 'grid_kw', 'grid_info_from', 'grid_info_to', 'grid_info_none', 'house_kw', 'house_title', 'house_info',
   'price_now', 'price_now_title', 'price_cheapest', 'price_cheapest_tomorrow', 'price_cheapest_title', 'price_cheapest_info', 'price_back', 'price_back_title', 'price_back_info',

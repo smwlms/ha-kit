@@ -68,6 +68,7 @@ modules:
   - climate # section climate:
   - appliances-home-connect # needs notifications; section appliances:
   - results # needs tariff; section results:
+  - connection-watchdog # (optional) watches integrations, reloads them, one notification; needs notifications; section connection_watchdog:
   - home-screen # start screen; build it last (its chips follow modules:); section home_screen:
   - e-ink-display # (optional) touch e-ink wall display; section e_ink_display:
 
@@ -513,6 +514,61 @@ notifications:
   # (stroomprijs, overschot) still work.
   kinds: [power_price, surplus, filter]
   tap_url: /lovelace/energy # (optional) where a tap on the notification goes; empty = the app just opens
+
+# (optional, connection-watchdog) What the watchdog checks every minute. Without sources it still catches every
+# integration that is not loaded and owns unavailable entities (generic catch). Per source:
+#   id (required): lower case, digits, _; not "test" and not starting with "entry_"
+#   name (required): shown in the notification and on the card
+#   keys (required unless entries): entities that must be available; the config entries that own them get reloaded
+#   rule (optional): any (default: one unavailable key is a problem) or all (only when every key is unavailable)
+#   silence (optional): minutes without a new value (last_reported) before the source counts as frozen. Leave it
+#     empty for integrations that only write on a change (event streams, speakers, appliances)
+#   data_time + data_max (optional): an entity whose state is the time of the data itself, and its maximum age in
+#     minutes, for a cloud API that keeps writing old figures without becoming unavailable
+#   entries (optional): config entry ids for an integration without entities (the id is in the address of its page:
+#     Settings > Devices & services > the integration, #config_entry=<id>)
+#   wait / notify_after / max / interval (optional): minutes before the first reload (5), minutes before the
+#     notification (15), reloads per outage (6), minutes between two reloads (10)
+#   impact, action (optional): what stops working and what to do, in your own words (your language)
+connection_watchdog:
+  sources:
+    - id: p1
+      name: Digital meter (P1)
+      keys: [sensor.grid_import_power, sensor.grid_export_power] # newest last_reported counts: one stays 0 W at times
+      silence: 2
+      notify_after: 10
+      max: 3
+      impact: Smart charging and the peak guard no longer see the grid.
+      action: Unplug the P1 reader for a moment and plug it back in.
+    - id: blinds
+      name: Blinds
+      keys: [cover.blind_living_room, cover.blind_bedroom]
+      rule: all
+      silence: 10
+      impact: Blinds do not follow the schedule or the sun.
+      action: Take the blinds box off power for a moment.
+    - id: home_battery
+      name: Home battery (cloud)
+      keys: [sensor.home_battery_level]
+      silence: 15
+      data_time: sensor.home_battery_last_upload # the time of the last upload by the inverter
+      data_max: 30
+      impact: Charge plans count with old battery figures.
+      action: Look in the app of the inverter whether the battery is online.
+    - id: speakers
+      name: Speakers
+      keys: [media_player.living_room, media_player.kitchen]
+      rule: all # no silence: speakers only write on a change
+      max: 3
+      action: Look in the speaker app whether it sees the speakers.
+    - id: ai
+      name: AI service
+      entries: [0123456789abcdef0123456789abcdef] # invented; an integration without entities
+      max: 3
+      impact: Descriptions of camera images stop.
+  ignore: [androidtv_remote] # (optional) integrations (domain) or config entry ids left out of the generic catch
+  tap_url: /lovelace/connections # (optional) where a tap on the notification goes; default /lovelace/<view_path>
+  view_path: connections # (optional) path of the view deploy.py --view writes; default connections
 
 # (optional, gate) Closing after leaving first looks at two photos of entities.garage_camera: is the gate already
 # closing (someone's remote)? Only with a gate sensor and a garage camera.

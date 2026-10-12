@@ -21,11 +21,13 @@ h2 { margin: 0; padding: 12px 16px 4px; font-size: 16px; font-weight: 600; color
 button { font: inherit; font-size: 14px; min-height: 36px; padding: 0 14px; border-radius: 18px; cursor: pointer;
   border: 1px solid var(--divider-color, rgba(0, 0, 0, .2)); background: transparent; color: var(--primary-text-color); }
 button:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 14px; color: var(--primary-text-color); }
+table { width: 100%; border-collapse: collapse; font-size: 14px; color: var(--primary-text-color); }
 th, td { padding: 8px 16px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--divider-color, rgba(0, 0, 0, .12)); overflow-wrap: anywhere; }
 th { font-size: 13px; font-weight: 600; color: var(--secondary-text-color); }
 tr:last-child td { border-bottom: none; }
-th:first-child, td:first-child { width: 46%; }
+/* Status and time never break inside a word; the name takes the rest of the width (narrow phone included). */
+th:first-child, td:first-child { width: 100%; }
+td:nth-child(2), td:nth-child(3), th:nth-child(2), th:nth-child(3) { white-space: nowrap; }
 .status { display: inline-flex; align-items: center; gap: 4px; }
 ha-icon { --mdc-icon-size: 18px; flex: none; }
 /* Theme tokens of the module base (contrast >= 4.5:1 per theme), else Home Assistant's own colours. */

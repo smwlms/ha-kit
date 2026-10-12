@@ -14,6 +14,10 @@ Why it exists: an integration that drops out is often noticed late. Three ways i
 
 How every decision is made, and the test plan, are in [LOGIC.md](LOGIC.md).
 
+![The card in the theme Graphite (light), fictional sources](../../docs/screenshots/kit-demo/connection-watchdog/desktop-problems.png)
+
+More in the [screenshot gallery](../../docs/screenshots/README.md#connection-watchdog), also in Graphite dark on a phone.
+
 ## Requirements
 
 | What | Why | Note |

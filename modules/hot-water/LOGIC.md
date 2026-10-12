@@ -208,7 +208,7 @@ Cloud budget per day (a heater that counts its commands, like `heat-pump-vaillan
 
 Simulated (in the builder's environment, not part of the repo): 50 decision cases with mocked states (start on surplus, battery first and plan room, heater fit, price weighing, rest, session cap, cheap power with grid allowance, month peak, every stop reason, morning cheapest hour and safety net, shower button, bath with "the sun will do it", boost end and timeout, master switch, no tariff, no battery with an element) and 24 cases for the template sensors and the logbook texts in English and Dutch.
 
-On a real Home Assistant (until this passed the status stays "not tested on HA"):
+On a real Home Assistant. Run this when you deploy the kit module; the source setup already passed the equivalent checks in production.
 
 1. Deploy (`deploy.py`), check that every sensor of the contract exists and `sensor.hot_water_energy_needed` matches (max - tank) × k.
 2. Developer tools > Template: `{% from 'hot_water.jinja' import decide %}{{ decide('start') }}` on a sunny afternoon: `action: start` only when the conditions above hold; change a helper (e.g. `hot_water_surplus_from_kw` above the export) and see it turn `none`.

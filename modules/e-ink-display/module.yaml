@@ -2,7 +2,7 @@
 # Layer: core (UI). Brand-free: any Android e-ink tablet (or any browser) that runs the HA app or a kiosk browser.
 name: E-ink display
 description: "Touch e-ink wall display: one high-contrast page (weather, agenda, who is home, gate, energy, price) with a refresh interval you set, and optional smart charging of the tablet through a relay"
-status: built (screen tested in a browser by the source), not tested on the device
+status: in production at the source (screen only); not tested on the device
 # No hard dependency: every block follows modules:, the capabilities and the roles in house.yaml. It only reads the
 # entities of other modules (contract ids); it provides nothing they read.
 depends_on: []

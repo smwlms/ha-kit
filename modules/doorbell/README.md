@@ -2,6 +2,8 @@
 
 <@ module.description @>.
 
+**Needs:** a UniFi Protect doorbell with LCD (G4 Doorbell Pro for the package camera), the Companion app and a Local Calendar; Google Generative AI, Sonos, Nest Hub and Google TV are optional.
+
 When someone rings, the phones of everyone who wants it immediately get a notification with a photo of that moment and buttons to reply (text on the screen of the doorbell). Every person chooses when: always, only when home, only when away, only on a parcel day, or never (see "Who gets a notification"). The speakers, the Nest Hub and the TV announce it too. A few seconds later Home Assistant silently replaces the notification with what Gemini sees in the photo, e.g. "Someone with a parcel". Every visit goes with its photo into a list on the dashboard. How and why: `LOGIC.md`.
 
 All texts people see or hear (notifications, buttons, spoken sentences, LCD texts, the card) follow `house.language` (`strings.yaml`, `en` and `nl`).

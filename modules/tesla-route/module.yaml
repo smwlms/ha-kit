@@ -1,7 +1,7 @@
 # Module metadata, read by tools/fill.py (--list shows it as a table), tools/choose.py (ask:).
 name: Tesla route
 description: Route of the driving Teslas (own integration teslemetry_route), map card and arrival card
-status: built
+status: live since 2026-10-05
 # The arrival card shows a gate row when module gate is installed, but works without it (no hard dependency).
 depends_on: []
 requires:

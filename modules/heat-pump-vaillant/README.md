@@ -3,11 +3,13 @@
 
 <@ module.description @>.
 
+**Needs:** a Vaillant flexoTHERM or aroTHERM with a sensoNET/VR921 gateway and the myVAILLANT integration (`mypyllant`, HACS). Brand adapter for Vaillant only.
+
 A **brand adapter**: it turns the myVAILLANT entities of a Vaillant flexoTHERM or aroTHERM into the kit's two heat-pump capabilities, `heat-pump` (floor band, quick veto, state, estimated power, status rows) and `hot-water-heater` (tank temperature, heat, back to normal, COP). It decides nothing itself: the module `climate` chooses the floor band, the module `hot-water` decides when the tank heats. Those core modules only see the ids below, so another brand can replace this module without touching them.
 
 How every step works is in [LOGIC.md](LOGIC.md), with the test plan.
 
-**Status: <@ module.status @>.** The scripts were run against mocked states (floor band, quick veto, heat, normal, write limit, one and two zones), not yet against a real heat pump.
+**Status: <@ module.status @>.** The same logic runs at the source with a real heat pump; the kit scripts were run against mocked states (floor band, quick veto, heat, normal, write limit, one and two zones), not yet with the kit module on a real heat pump.
 
 - Layer: brand adapter
 - Depends on: -

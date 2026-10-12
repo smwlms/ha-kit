@@ -1,7 +1,7 @@
 # Module metadata, read by tools/fill.py (--list shows it as a table), tools/choose.py (ask:) and by gate/deploy.py (defaults).
 name: Gate
 description: Opens the gate automatically when a Tesla navigates home, closes it after leaving, quick buttons for the phone
-status: built
+status: live since 2026-10-05
 # Not tesla-route: the gate logic reads the Teslemetry entities directly, not sensor.<car>_tesla_route.
 # The arrival card (module tesla-route) shows the gate row when this module is installed.
 depends_on: []

@@ -2,7 +2,7 @@
 # (defaults). Contract: docs/phase4-contracts.md (ev-charging). The entity and helper ids are part of it.
 name: EV charging
 description: "Smart EV charging: solar surplus with battery priority, grid assist in a cheap window, month-peak guard, charge plan per car to a departure time (by hand or from a calendar), car charge current on surplus"
-status: built, not tested on HA
+status: in production at the source
 # Layer: core. Optional: tariff (cheap assist, prices for the plan, month-peak guard), gate (owns the Tesla command
 # counter), notifications (script.send_notification), Teslemetry roles charge_current / charge_limit / charger_power.
 depends_on: [ev-charger, energy-plan]

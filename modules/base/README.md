@@ -2,6 +2,8 @@
 
 <@ module.description @>.
 
+**Needs:** Home Assistant 2025.x or newer; HA OS or Supervised with the File editor app for `deploy.py`. No specific devices.
+
 Every other module builds on this one: it puts its helpers in `packages/`, its sensors in `templates/` or `command_line/`, and its cards use the `cw-*` colours and components from this module.
 
 ## Requirements

@@ -15,4 +15,4 @@
 - [ ] New `house.yaml` fields are documented in `house.example.yaml` (what, required or optional, which module) and listed under `house_fields:` in `module.yaml`
 - [ ] User-facing texts go through `t()` with an `en` text in `strings.yaml` (`nl` welcome)
 - [ ] No `initial` on helpers the user tunes; start values in `defaults:` (set once by `deploy.py`)
-- [ ] `LOGIC.md` describes every decision; its test plan was followed on a real Home Assistant, or the README status says "not tested on HA"
+- [ ] `LOGIC.md` describes every decision; its test plan was followed on a real Home Assistant, or the status stays `built` (use `in production at the source` only when the logic really runs in production)

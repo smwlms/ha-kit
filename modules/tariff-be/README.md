@@ -3,6 +3,8 @@
 
 <@ module.description @>.
 
+**Needs:** a Flemish dynamic electricity contract, the Nord Pool integration (area BE) and a digital meter with a P1 port.
+
 One module answers "what does a kWh cost now and in the coming hours" and "how much may I still draw this quarter hour without raising the month peak" for a Flemish household with a dynamic contract and a digital meter. Charging, hot water, appliances, notifications and the result screens read its sensors; none of them knows the formula.
 
 How every number is made, with the formula and where each coefficient comes from, is in [LOGIC.md](LOGIC.md). The test plan is there too.

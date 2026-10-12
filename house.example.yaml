@@ -55,7 +55,7 @@ modules:
   - ventilation-zehnder
   # - spa-spanet   # (optional) only with a SpaNET SV controller; see section spa: at the bottom
   # Phase 4 (energy, tariff, charging, heat pump, hot water, climate, appliances, results): every module is built
-  # (not tested on HA yet). Contracts: docs/phase4-contracts.md. A brand or region module provides a capability that
+  # (the logic runs in production at the source; the kit modules are being migrated). Contracts: docs/phase4-contracts.md. A brand or region module provides a capability that
   # a core module needs; the build order is in README.md.
   - tariff-be # region: Flemish dynamic tariff + capacity tariff (provides tariff); section tariff:
   - energy-plan # surplus, house power, solar left today, battery behind; needs entities.solar_power_w

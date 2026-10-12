@@ -2,6 +2,8 @@
 
 <@ module.description @>.
 
+**Needs:** a Tesla connected through Teslemetry (streaming); the Companion app and a Mapbox token are optional.
+
 <!-- Filled in by tools/fill.py (kept in a comment so a markdown formatter leaves it alone).
 <% set withgate = 'gate' in modules %>
 <% set gatenote = 'Module gate is in your modules: the arrival card gets the gate row.' if withgate else 'Module gate is not in your modules: the arrival card shows trips home as a regular trip, without gate row.' %>

@@ -209,7 +209,7 @@ Through `script.send_notification` when `notifications` is installed, always a l
 
 ## Test plan
 
-Simulated with mocked states (see the module README, "Tests done"); not yet on a real Home Assistant. On HA, with the car plugged in:
+Simulated with mocked states (see the module README, "Tests done"). Run this when you deploy the kit module; the source setup already passed the equivalent checks in production. On HA, with the car plugged in:
 
 1. Deploy, check that `sensor.ev_charging_car` shows the prefix of the car, `sensor.ev_charging_available_power_avg` has a value and `sensor.ev_charging_wanted` is `solar_only` with owner `surplus`.
 2. Set `binary_sensor.energy_plan_battery_behind` to on in Developer tools > States (set state): the wanted solar share goes to 100 and the charger's share (Zappi Minimum Green Level) follows within a minute.

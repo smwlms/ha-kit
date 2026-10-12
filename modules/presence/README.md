@@ -2,6 +2,8 @@
 
 <@ module.description @>.
 
+**Needs:** the Companion app on every phone (location Always) and two Local Calendars; Teslemetry is optional. Works with any brand through person entities.
+
 <!-- Filled in by tools/fill.py (kept in a comment so a markdown formatter leaves it alone).
 <% set vt = t('view_title') %>
 <% set kh = t('kind_home') %>

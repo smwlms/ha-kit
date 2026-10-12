@@ -2,8 +2,10 @@
 
 <@ module.description @>.
 
-**Status: built, not tested on HA.** Filled in, rendered and tapped through in a headless browser with a mocked Home
-Assistant (both languages, the example house and a minimal house); not yet on a real Home Assistant. Contract:
+**Needs:** a storage-mode dashboard; chips and cards follow the modules you installed. No devices of its own.
+
+**Status: in production at the source.** The same logic runs daily in the author's house as the hand-made setup this module was derived from; the kit module itself is not deployed there yet. Filled in, rendered and tapped through in a headless browser with a mocked Home
+Assistant (both languages, the example house and a minimal house); the kit module itself is not deployed on the author's Home Assistant yet. Contract:
 [docs/phase4-contracts.md](../../docs/phase4-contracts.md), section "home-screen".
 
 - Layer: core (UI). Depends on: - (every block follows `modules:` and the capabilities). Provides: -.

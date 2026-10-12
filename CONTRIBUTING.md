@@ -40,7 +40,7 @@ modules/<module>/
 | -------------- | ----------------------------------------------------------------------------------------------------------- |
 | `name`         | short name (required)                                                                                       |
 | `description`  | one line, what it does for the user (required)                                                              |
-| `status`       | `built`, `built, not tested on HA`, `template`, `skeleton` (contract only, not offered by `choose.py`), …: shown by `fill.py --list` and in the README table |
+| `status`       | `live since YYYY-MM-DD` (the kit module runs on a real Home Assistant), `in production at the source` (the function runs in production in the source setup the module was derived from; the kit module is not deployed there yet), `built` (plus a reason, e.g. `built, never flashed`: not in use), `template`, `skeleton` (contract only, not offered by `choose.py`), …: shown by `fill.py --list` and in the README table |
 | `depends_on`   | modules (or capabilities) whose helpers, scripts or sensors this one reads; `fill.py` stops when one is not in `modules:` or no chosen module provides it |
 | `provides`     | capabilities this module implements (`tariff`, `ev-charger`, …), see "Layers"                              |
 | `requires`     | `integrations:` and `hardware:` lists (shown by `--list`, used by `choose.py`)                              |
@@ -152,7 +152,7 @@ Every module explains every decision, so someone else can check and change it. S
 5. **Settings** (helpers, defaults, `house.yaml` fields)
 6. **Edge cases**
 7. **What it does not do**
-8. **Test plan** (on a real Home Assistant; until it passed, the status says "not tested on HA")
+8. **Test plan** (on a real Home Assistant; a contributor without a production install of the function keeps the status `built` until it passed; use `in production at the source` only when the logic really runs in production)
 
 ## Testing
 

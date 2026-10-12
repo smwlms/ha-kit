@@ -2,7 +2,9 @@
 
 <@ module.description @>.
 
-**Status: built, not tested on HA.** One module for the Home Connect appliances of the house (any number of dishwashers, washing machines and dryers): it plans the start of the program you selected on the appliance (sun or a full home battery first, then the ready-by time, then the price), starts it from a notification button, and reports a door left open, a finished program (with reminders while the door stays closed), errors and maintenance (salt, rinse aid, machine care, i-Dos).
+**Needs:** a Home Connect dishwasher, washing machine or dryer (Bosch, Siemens, Neff, Gaggenau) with remote start, Home Assistant 2026.4 or newer, and the `notifications` module.
+
+**Status: in production at the source.** The same logic runs daily in the author's house as the hand-made setup this module was derived from; the kit module itself is not deployed there yet. One module for the Home Connect appliances of the house (any number of dishwashers, washing machines and dryers): it plans the start of the program you selected on the appliance (sun or a full home battery first, then the ready-by time, then the price), starts it from a notification button, and reports a door left open, a finished program (with reminders while the door stays closed), errors and maintenance (salt, rinse aid, machine care, i-Dos).
 
 How every decision is made, the start-time optimizer and the test plan are in [LOGIC.md](LOGIC.md).
 

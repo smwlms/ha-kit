@@ -1,7 +1,7 @@
 # Module metadata, read by tools/fill.py (--list shows it as a table), tools/choose.py (ask:) and by shading/deploy.py (defaults).
 name: Shading
 description: Blinds and curtains per room on a schedule, curtains that follow the blinds, blinds closed on sun and heat
-status: built, not tested on HA
+status: in production at the source
 # The planned module climate reads this module's helpers (binary_sensor.shading_warm, input_boolean.shading_closed_*),
 # so climate will depend on shading, not the other way round.
 depends_on: []

@@ -2,7 +2,9 @@
 
 The live energy screen (flow diagram, home battery, charger and car, hot water and heat pump, price and peak, today's totals, a detail sheet per block), the energy flows per day, and the energy-analysis dashboard with six views: period, power, tariff, consumers, trends and battery.
 
-**Status: built, not tested on HA.** Rendered and checked in a headless browser with a mocked Home Assistant (see LOGIC.md, "Test plan"); the test on a real Home Assistant is still to do.
+**Needs:** a P1 meter or energy meter; HACS cards apexcharts-card and power-flow-card-plus. Blocks hide when a role or module is missing.
+
+**Status: in production at the source.** The same logic runs daily in the author's house as the hand-made setup this module was derived from; the kit module itself is not deployed there yet. Rendered and checked in a headless browser with a mocked Home Assistant (see LOGIC.md, "Test plan"); the kit module itself is not deployed on the author's Home Assistant yet.
 
 - Layer: core (UI only: every decision lives in `energy-plan`, `ev-charging`, `hot-water`, the tariff module)
 - Depends on: - (each block follows its role in `house.yaml` or its module in `modules:`)

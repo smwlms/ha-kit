@@ -1,7 +1,7 @@
 # Module metadata, read by tools/fill.py (--list shows it as a table), tools/choose.py (ask:) and by tesla-driveway-lock/deploy.py (defaults).
 name: Tesla driveway lock
 description: A Tesla left unlocked on the driveway locks itself after X min, or right when the gate closes; a garage photo (which car stands inside) decides first (optional)
-status: built, not tested on HA
+status: live since 2026-10-07
 # gate: counter.tesla_commands_today (Tesla commands per day) lives there, see CONTRIBUTING.md ("Contracts");
 # its deploy.py --setup also enables the Teslemetry shift state this module reads.
 depends_on: [gate]

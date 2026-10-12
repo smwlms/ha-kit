@@ -147,7 +147,7 @@ All entity names are English, in every `house.language`. Most come from the yozi
 
 ## Test plan
 
-The entity ids follow the friendly name "<@ friendly @>" (example: `sensor.<@ entity_prefix @>_supply_air_temperature`). Steps with ComfoClime only when `ventilation.comfoclime` is on<@ clime_note @>. Status: base firmware running at the source; ComfoClime writes not flashed yet; not tested on HA as a kit module.
+The entity ids follow the friendly name "<@ friendly @>" (example: `sensor.<@ entity_prefix @>_supply_air_temperature`). Steps with ComfoClime only when `ventilation.comfoclime` is on<@ clime_note @>. Status: base firmware in production at the source (running since August 2026); ComfoClime writes not flashed yet; the kit module itself is not deployed there yet.
 
 | # | Test | How | Expected |
 | --- | --- | --- | --- |

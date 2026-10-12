@@ -1,6 +1,6 @@
 # Phase 4: module split and contracts
 
-Status: **contracts fixed; every phase-4 module built** (wave 1: `tariff-be`, `energy-plan`, `charger-zappi`, `heat-pump-vaillant`, `home-screen`; wave 2: `ev-charging`, `hot-water`, `climate`, `appliances-home-connect`, `energy`; wave 3: `results`), all `built, not tested on HA`. Their clarifications are merged below: per module in section 4 the **Notes from wave 1** (what wave 1 expected) and **Built** (what the builder added to the contract: extra entities, attributes and states; no fixed id, state or event of this file was changed). Their `house.yaml` fields are in `house.example.yaml`. This file is the single source for anyone who builds a second brand, region or a module that reads these: energy, tariff, EV charging, heat pump, hot water, climate, appliances, results and the home screen.
+Status: **contracts fixed; every phase-4 module built** (wave 1: `tariff-be`, `energy-plan`, `charger-zappi`, `heat-pump-vaillant`, `home-screen`; wave 2: `ev-charging`, `hot-water`, `climate`, `appliances-home-connect`, `energy`; wave 3: `results`), all `in production at the source` (the same logic runs daily in the author's house as the hand-made setup; the kit modules are not deployed there yet). Their clarifications are merged below: per module in section 4 the **Notes from wave 1** (what wave 1 expected) and **Built** (what the builder added to the contract: extra entities, attributes and states; no fixed id, state or event of this file was changed). Their `house.yaml` fields are in `house.example.yaml`. This file is the single source for anyone who builds a second brand, region or a module that reads these: energy, tariff, EV charging, heat pump, hot water, climate, appliances, results and the home screen.
 
 Sources are the maintainer's own live setup (outside this repository): the export of the live automations and helpers, the template sensors and Jinja macros of the price, results, charge plan and climate, the two recorder scripts (battery full by sun end, indoor forecast), the energy, climate, results and home screens with their `cw-*` analysis topics, the dashboard builders and the design notes of cheap power, results, charge plan, the charger, the heat pump, climate and the dashboards. They contain personal data; see "Personal data in the sources" before porting anything.
 
@@ -291,9 +291,9 @@ Event data for the optional result kinds (a producer that sends them makes the l
 
 ## 6. Build order and parallel work
 
-Wave 1 (no phase-4 dependencies, start together): `tariff-be`, `energy-plan`, `charger-zappi`, `heat-pump-vaillant`, `home-screen` (render from flags; real data later). **Built and integrated** (not tested on HA).
-Wave 2: `ev-charging`, `hot-water`, `climate`, `appliances-home-connect`, `energy`. **Built and integrated** (not tested on HA).
-Wave 3: `results`. **Built and integrated** (not tested on HA).
+Wave 1 (no phase-4 dependencies, start together): `tariff-be`, `energy-plan`, `charger-zappi`, `heat-pump-vaillant`, `home-screen` (render from flags; real data later). **Built and integrated** (in production at the source).
+Wave 2: `ev-charging`, `hot-water`, `climate`, `appliances-home-connect`, `energy`. **Built and integrated** (in production at the source).
+Wave 3: `results`. **Built and integrated** (in production at the source).
 
 Deploy order on a house (README "Build order"): `tariff-be`, `energy-plan`, the adapters (`charger-zappi`, `heat-pump-vaillant`), `ev-charging`, `hot-water`, `climate` (after the heat-pump module, `ventilation-zehnder` and `shading`), `appliances-home-connect` (after `notifications`), `energy`, `results`, `home-screen` last. After adding `ev-charging`, fill in again and deploy `notifications` (it leaves out a notification then).
 
@@ -305,7 +305,7 @@ Every builder can start in wave 1 against the contracts above (entity ids are fi
 2. Need a new `house.yaml` field? Put it in `modules/<name>/house.fragment.yaml` (never copied). Need a change outside your folder (another module, a tool, the README)? Write it in `modules/<name>/HOUSE-CHANGES.md`. The integrator merges both.
 3. Keep the entity ids, helper ids, event names and states of this document. A change to a contract is a change to this file first (ask the integrator).
 4. Optional switches that need both branches tested: add `check_variant:` to your `module.yaml` (`{section: {key: value}}`), not to `tools/check.py`.
-5. When you replace a skeleton: set `status:` to `built, not tested on HA`, add `deploy.py` (with `--dry-run`) and keep `tools/check.py` passing. `choose.py` starts offering the module as soon as its status no longer starts with `skeleton`; add the answer for its question to `tests/choose.answers.yaml` and `tests/choose.no-brands.answers.yaml` and the module to `EXPECTED_CHOICE` (and, when it needs no missing capability, `EXPECTED_CHOICE_NO_BRANDS`) in `tools/check.py`.
+5. When you replace a skeleton: set `status:` to `built` (`in production at the source` only if the logic really runs in production for you), add `deploy.py` (with `--dry-run`) and keep `tools/check.py` passing. `choose.py` starts offering the module as soon as its status no longer starts with `skeleton`; add the answer for its question to `tests/choose.answers.yaml` and `tests/choose.no-brands.answers.yaml` and the module to `EXPECTED_CHOICE` (and, when it needs no missing capability, `EXPECTED_CHOICE_NO_BRANDS`) in `tools/check.py`.
 6. No personal data: see below; run `tools/scan.py` (with the denylist) before every commit.
 
 ## 7. Personal data in the sources (never copy)

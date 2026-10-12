@@ -16,6 +16,9 @@ mains_voltage: { en: Mains voltage, nl: Netspanning }
 mains_current: { en: Total current, nl: Stroom totaal }
 heater_current: { en: Heater current, nl: Stroom verwarming }
 heater_power: { en: Heater power, nl: Vermogen verwarming }
+# Real draw of the whole spa (current corrected for the noise floor of its meter) and the own energy counter.
+power: { en: Power, nl: Verbruik }
+energy: { en: Energy, nl: Energie }
 current_limit: { en: Current limit (C.LMT), nl: Stroomlimiet (C.LMT) }
 power_raw: { en: Power (raw), nl: Vermogen (ruw) }
 energy_total_raw: { en: Energy total (raw), nl: Energie totaal (ruw) }
@@ -23,8 +26,15 @@ energy_today_raw: { en: Energy today (raw), nl: Energie vandaag (ruw) }
 wifi_signal: { en: WiFi signal, nl: Wifi-signaal }
 heating: { en: Heating, nl: Verwarmt }
 sleep_timer_active: { en: Sleep timer active, nl: Slaaptimer actief }
-auto_filtration: { en: Automatic filtration, nl: Filtratie automatisch }
 water_present: { en: Water present, nl: Water aanwezig }
+# Pump status (R5 fields 18-20): the states off / on / auto are the same in every language.
+pump_a: { en: Pump A, nl: Pomp A }
+pump_b: { en: Pump B, nl: Pomp B }
+pump_c: { en: Pump C, nl: Pomp C }
+blower: { en: Blower, nl: Blower }
+light: { en: Light, nl: Licht }
+cleaning: { en: Cleaning (CLEAN), nl: Reinigt }
+touchpad_used: { en: Touchpad used, nl: Touchpad bediend }
 connected: { en: Connected to spa, nl: Verbonden met spa }
 power_save_window: { en: Power save window, nl: Power Save-venster }
 sleep_timer_1: { en: Sleep timer 1, nl: Slaaptimer 1 }

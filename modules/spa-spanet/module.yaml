@@ -15,7 +15,7 @@ ask:
     need: SpaNET SV
 # Fields of house.yaml this module reads (example: section spa: in house.example.yaml). All optional.
 house_fields:
-  - spa.name, display_name, probes, lid (all optional)
+  - spa.name, display_name, probes, lid, current_noise_floor, current_dead_band (all optional)
 # Secrets the firmware needs in /config/esphome/secrets.yaml (example: secrets.example.yaml).
 secrets: [wifi_ssid, wifi_password, wifi_hotspot_password, ota_password, spa_api_encryption_key]
 pins:

@@ -55,7 +55,13 @@ static void check_sample(const spanet::Status &s) {
   NEAR(s.power_raw, 4500.0f);
   CHECK(s.sleep_active == 0);
   CHECK(s.heating == 0);
-  CHECK(s.auto_filtration == 1);
+  CHECK(s.touchpad == 1);
+  CHECK(s.blower == 0);
+  CHECK(s.light == 0);
+  CHECK(s.cleaning == 0);
+  CHECK(spanet::pump_state(s.pump_status[0]) == "auto");
+  CHECK(spanet::pump_state(s.pump_status[1]) == "off");
+  CHECK(spanet::pump_state(s.pump_status[2]) == "off");
   NEAR(s.water_temp, 37.6f);
   NEAR(s.filt_hours, 8.0f);
   CHECK(s.filt_cycle == 1);
@@ -111,6 +117,46 @@ int main() {
     CHECK(s.sleep1_days == "127");
     CHECK(s.sleep1_window == "06:00 - 10:00");
     CHECK(s.model == "SV3");
+  }
+  std::printf("5. R5 and R6 of a real SV3 (SW V6 21 04 21, 2026-10-11): times stored with +100\n");
+  {
+    spanet::Status s;
+    CHECK(spanet::parse_line(",R5,0,1,0,1,0,0,0,0,0,0,0,0,1,0,377,0,5,4,0,0,0,0,0,1,2,6,:", s) == spanet::Line::R5);
+    NEAR(s.water_temp, 37.7f);
+    CHECK(spanet::pump_state(s.pump_status[0]) == "auto");  // the spa decides; not proof of flow
+    CHECK(s.touchpad == 0);
+    CHECK(s.cleaning == 0);
+    CHECK(spanet::parse_line(
+              ",R6,5,5,0,2,5,3,1,370,1,1,35584,5376,128,128,5783,5632,1792,40093,158,30,0,0,2,0,2,3,0,410,:", s) ==
+          spanet::Line::R6);
+    NEAR(s.setpoint, 37.0f);
+    NEAR(s.filt_hours, 3.0f);
+    CHECK(s.filt_cycle == 1);
+    CHECK(s.power_save == 1);
+    CHECK(s.psav_window == "--:-- - 21:00");      // 35584 = 0x8B00: the touchpad shows "39:00", invalid
+    CHECK(s.sleep1_days == "128");                // 128 = off
+    CHECK(s.sleep1_window == "22:51 - 07:00");    // 5783 = 0x1697: 0x97 = 151 = 51 + 100
+    CHECK(s.sleep2_window == "22:00 - --:--");    // 40093 = 0x9C9D: 156 and 157, invalid
+    CHECK(spanet::hhmm(5406) == "21:30");         // 21 x 256 + 30: written without +100
+    CHECK(spanet::hhmm(0x1582) == "21:30");       // 0x82 = 130 = 30 + 100
+    CHECK(spanet::valid_hhmm(2816) && !spanet::valid_hhmm(35584));
+  }
+  std::printf("6. CLEAN: pumps A and B run with status 1 while fields 5 and 6 stay 0\n");
+  {
+    spanet::Status s;
+    CHECK(spanet::parse_line(",R5,0,1,0,1,0,0,0,0,0,0,0,0,1,0,377,1,5,1,1,0,0,0,0,1,2,6,:", s) == spanet::Line::R5);
+    CHECK(s.cleaning == 1);
+    CHECK(spanet::pump_state(s.pump_status[0]) == "on");
+    CHECK(spanet::pump_state(s.pump_status[1]) == "on");
+    CHECK(spanet::pump_state(s.pump_status[2]) == "off");
+  }
+  std::printf("7. Real power: noise floor of the current meter (floor 6.4 A, dead band 7.0 A)\n");
+  {
+    NEAR(spanet::real_power_w(6.4f, 228.0f, 6.4f, 7.0f), 0.0f);            // idle: only the floor
+    NEAR(spanet::real_power_w(6.9f, 228.0f, 6.4f, 7.0f), 0.0f);            // floor wandering: dead band
+    CHECK(std::fabs(spanet::real_power_w(24.0f, 216.0f, 6.4f, 7.0f) - 4996.0f) < 5.0f);  // sqrt(24^2-6.4^2) x 216
+    NEAR(spanet::real_power_w(10.0f, 230.0f, 0.0f, 0.0f), 2300.0f);        // floor 0: current x voltage
+    CHECK(std::isnan(spanet::real_power_w(NAN, 230.0f, 6.4f, 7.0f)));
   }
   std::printf(failures == 0 ? "\nAll tests passed.\n" : "\n%d test(s) FAILED.\n", failures);
   return failures == 0 ? 0 : 1;

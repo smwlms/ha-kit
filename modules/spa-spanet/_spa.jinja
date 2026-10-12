@@ -9,3 +9,10 @@
 <% set entity_prefix = make_prefix(device_name, s.get('display_name')) %>
 <% set probes = s.get('probes', true) %>
 <% set lid = s.get('lid', true) %>
+<# Noise floor of the spa's current meter and the dead band below which a reading counts as 0 A (README, "Power and
+    energy"). Defaults measured on a real SV3; 0 and 0 = no correction (current x voltage). #>
+<% set current_noise_floor = s.get('current_noise_floor', 6.4) %>
+<% set current_dead_band = s.get('current_dead_band', 7.0) %>
+<% for key, value in [('current_noise_floor', current_noise_floor), ('current_dead_band', current_dead_band)] %>
+<% if value is boolean or value is not number or value < 0 or value > 40 %><@ fail('spa.' ~ key ~ ': a number of amperes between 0 and 40, e.g. 6.4') @><% endif %>
+<% endfor %>

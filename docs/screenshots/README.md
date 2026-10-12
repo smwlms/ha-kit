@@ -49,7 +49,7 @@ module files with a mocked Home Assistant.
 ### `energy`
 
 <table>
-<tr><td valign="top" width="50%"><a href="kit-demo/energy/desktop-screen.png"><img src="kit-demo/energy/desktop-screen.png" width="400" alt="Energy screen: power flow, price, car and hot water"></a><br><sub>Energy screen: power flow, price, car and hot water</sub></td><td valign="top" width="50%"><a href="kit-demo/energy/desktop-battery-sheet.png"><img src="kit-demo/energy/desktop-battery-sheet.png" width="400" alt="Home-battery sheet: the battery charges at its maximum while the house exports, so battery first is off"></a><br><sub>Home-battery sheet: the battery charges at its maximum while the house exports, so battery first is off</sub></td></tr>
+<tr><td valign="top" width="50%"><a href="kit-demo/energy/desktop-screen.png"><img src="kit-demo/energy/desktop-screen.png" width="400" alt="Energy screen: power flow, price, car and hot water"></a><br><sub>Energy screen: power flow, price, car and hot water</sub></td><td valign="top" width="50%"><a href="kit-demo/energy/desktop-battery-sheet.png"><img src="kit-demo/energy/desktop-battery-sheet.png" width="400" alt="Energy screen with the home-battery sheet open"></a><br><sub>Energy screen with the home-battery sheet open</sub></td></tr>
 <tr><td valign="top" width="50%"><a href="kit-demo/energy/desktop-analysis-power.png"><img src="kit-demo/energy/desktop-analysis-power.png" width="400" alt="Energy analysis: power"></a><br><sub>Energy analysis: power</sub></td><td valign="top" width="50%"><a href="kit-demo/energy/desktop-analysis-tariff.png"><img src="kit-demo/energy/desktop-analysis-tariff.png" width="400" alt="Energy analysis: tariff"></a><br><sub>Energy analysis: tariff</sub></td></tr>
 </table>
 

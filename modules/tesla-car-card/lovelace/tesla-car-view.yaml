@@ -1,0 +1,67 @@
+<% from '_tesla_car_card.jinja' import car_list, opt, garage_photo, spots, settings_path with context %>
+<% set weather = entities.get('weather') %>
+<% set grid = entities.get('grid_import_w') %>
+# Cars: one card per car (custom:tesla-car-card, module tesla-car-card of the ha-kit). Filled in from house.yaml:
+# every entity id is written out, the card has nothing about your house built in.
+# Use it as a view (Edit dashboard > three dots > Raw configuration editor, add it under views:), or paste one card
+# (the part from "type: custom:tesla-car-card", without the dash) via Add card > Manual.
+# Resource /local/ha-kit/tesla-car-card/tesla-car-card.js and the pictures in /local/ha-kit/tesla-car-card/images/
+# come from tesla-car-card/deploy.py.
+title: <@ t('view_title') | tojson @>
+path: cars
+type: sections
+max_columns: 2
+sections:
+<% for a in car_list %>
+  - type: grid
+    cards:
+      - type: custom:tesla-car-card
+        grid_options: { columns: full }
+        prefix: <@ a.prefix | tojson @>
+        name: <@ a.name | tojson @>
+<% if a.get('image') %>
+        image: <@ a.image | tojson @>
+<% else %>
+        model: <@ a.model @>
+<% endif %>
+<% if garage_photo %>
+        garage_photo: input_text.tesla_garage_photo
+        garage_spots: <@ spots | list | tojson @>
+<% endif %>
+<% if weather %>
+        weather: <@ weather @>
+<% endif %>
+<% if grid %>
+        grid_power: <@ grid @>
+<% endif %>
+<% if settings_path %>
+        settings_path: <@ settings_path | tojson @>
+<% endif %>
+        entities:
+          battery: <@ car_entity(a, 'battery') @>
+          charging_state: <@ car_entity(a, 'charging_state') @>
+          charge_cable: <@ car_entity(a, 'charge_cable') @>
+          location: <@ car_entity(a, 'location') @>
+<% for role in ['lock', 'charge_switch', 'charge_limit', 'charger_power', 'charger_voltage', 'range', 'odometer', 'frunk', 'trunk', 'charge_port', 'windows', 'sentry', 'climate', 'inside_temperature', 'outside_temperature', 'defrost', 'flash_lights', 'honk', 'steering_wheel_heater', 'seat_heater_left', 'seat_heater_right', 'seat_cooler_left', 'seat_cooler_right'] %>
+<% set id = opt(a, role) | trim %>
+<% if id %>
+          <@ role @>: <@ id @>
+<% endif %>
+<% endfor %>
+<% set doors = [] %>
+<% for role in ['door_front_left', 'door_front_right', 'door_rear_left', 'door_rear_right', 'window_front_left', 'window_front_right', 'window_rear_left', 'window_rear_right'] %>
+<% set id = opt(a, role) | trim %>
+<% if id %><% set _ = doors.append(id) %><% endif %>
+<% endfor %>
+<% set tyres = [] %>
+<% for role in ['tyre_front_left', 'tyre_front_right', 'tyre_rear_left', 'tyre_rear_right'] %>
+<% set id = opt(a, role) | trim %>
+<% if id %><% set _ = tyres.append(id) %><% endif %>
+<% endfor %>
+<% if doors %>
+          doors: <@ doors | tojson @>
+<% endif %>
+<% if tyres %>
+          tyres: <@ tyres | tojson @>
+<% endif %>
+<% endfor %>

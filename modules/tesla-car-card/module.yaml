@@ -1,0 +1,33 @@
+# Module metadata, read by tools/fill.py (--list shows it as a table), tools/choose.py (ask:) and tools/check.py.
+name: Tesla car card
+description: One card per car like the Tesla app (picture with tap zones, battery, charge state with energy in the cable, controls, climate screen) and an optional plug-in reminder
+status: in production at the source since 2026-10-12
+# No hard dependency. Optional: tesla-driveway-lock (garage photo: garage icon on the card, "in the garage" for the
+# reminder), notifications (required only for the plug-in reminder, checked by fill.py), ev-charging (gear to its
+# view smart-charging).
+depends_on: []
+requires:
+  integrations:
+    - Teslemetry
+    - Home Assistant Companion app (only for the plug-in reminder, through the module notifications)
+  hardware: [Tesla]
+optional: true
+generate: []
+ask:
+  - id: tesla
+    question: Do you have a Tesla connected to Home Assistant through Teslemetry?
+  - id: car_card
+    question: Show a card per car like the Tesla app (picture, battery, charge state, buttons)?
+# Fields of house.yaml this module reads (example: house.example.yaml).
+house_fields:
+  - cars[].prefix, name, article (optional), model (model_s or model_y) or image (own picture), garage_spot (optional), entities (optional)
+  - teslemetry.battery, charging_state, charge_cable, location (required); every other role of the card (optional, see README)
+  - tesla_car_card.plug_in_reminder, reminder_after_minutes, reminder_time, reminder_below_limit, tap_url, settings_path (all optional)
+  - tesla_driveway_lock.garage_photo, garage_spots (optional, with module tesla-driveway-lock)
+  - entities.weather, entities.grid_import_w (optional)
+  - people[].notify, person (through the module notifications, only for the reminder)
+  - house.language (texts and number format)
+defaults: {}
+# tools/check.py: the other side of the optional switch, used in its all-modules house.
+check_variant:
+  tesla_car_card: { plug_in_reminder: false }

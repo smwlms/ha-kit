@@ -18,6 +18,17 @@ The optional **plug-in reminder** tells whoever is home to plug in a car that st
 
 How every decision is made is in [LOGIC.md](LOGIC.md), together with the test plan.
 
+## Screenshots
+
+Fictional data (cars Nova, Atlas, Comet), rendered with a mocked Home Assistant. More in the [screenshot gallery](../../docs/screenshots/README.md#tesla-car-card).
+
+<table>
+<tr><td valign="top" width="50%"><a href="../../docs/screenshots/kit-demo/tesla-car-card/home-solar.png"><img src="../../docs/screenshots/kit-demo/tesla-car-card/home-solar.png" width="260" alt="At home in the garage, charging 7.2 kW on the sun (green cable)"></a><br><sub>At home in the garage, charging 7.2 kW on the sun (green cable)</sub></td><td valign="top" width="50%"><a href="../../docs/screenshots/kit-demo/tesla-car-card/home-solar-more.png"><img src="../../docs/screenshots/kit-demo/tesla-car-card/home-solar-more.png" width="260" alt="More: range, odometer, tyres, charge limit"></a><br><sub>More: range, odometer, tyres, charge limit</sub></td></tr>
+<tr><td valign="top" width="50%"><a href="../../docs/screenshots/kit-demo/tesla-car-card/climate.png"><img src="../../docs/screenshots/kit-demo/tesla-car-card/climate.png" width="260" alt="Climate screen: seat and wheel heating on the interior"></a><br><sub>Climate screen: seat and wheel heating on the interior</sub></td><td valign="top" width="50%"><a href="../../docs/screenshots/kit-demo/tesla-car-card/fast-charger-dark.png"><img src="../../docs/screenshots/kit-demo/tesla-car-card/fast-charger-dark.png" width="260" alt="At a fast charger, dark theme"></a><br><sub>At a fast charger, dark theme</sub></td></tr>
+<tr><td valign="top" width="50%"><a href="../../docs/screenshots/kit-demo/tesla-car-card/trunk-confirm-dark.png"><img src="../../docs/screenshots/kit-demo/tesla-car-card/trunk-confirm-dark.png" width="260" alt="Trunk open; first tap on Trunk asks for a second tap"></a><br><sub>Trunk open; first tap on Trunk asks for a second tap</sub></td><td valign="top" width="50%"><a href="../../docs/screenshots/kit-demo/tesla-car-card/frunk-grid.png"><img src="../../docs/screenshots/kit-demo/tesla-car-card/frunk-grid.png" width="260" alt="Charging 11 kW from the grid (red cable), frunk open"></a><br><sub>Charging 11 kW from the grid (red cable), frunk open</sub></td></tr>
+<tr><td valign="top" width="50%"><a href="../../docs/screenshots/kit-demo/tesla-car-card/own-picture.png"><img src="../../docs/screenshots/kit-demo/tesla-car-card/own-picture.png" width="260" alt="Own picture (cars[].image) with fewer entities"></a><br><sub>Own picture (cars[].image) with fewer entities</sub></td></tr>
+</table>
+
 ## Requirements
 
 | What                                      | Why                                                         | Note                                                                     |

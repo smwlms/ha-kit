@@ -61,6 +61,15 @@ module files with a mocked Home Assistant.
 <tr><td valign="top" width="50%"><a href="kit-demo/climate/phone-controls.png"><img src="kit-demo/climate/phone-controls.png" width="200" alt="Phone: controls"></a><br><sub>Phone: controls</sub></td></tr>
 </table>
 
+### `tesla-car-card`
+
+<table>
+<tr><td valign="top" width="50%"><a href="kit-demo/tesla-car-card/home-solar.png"><img src="kit-demo/tesla-car-card/home-solar.png" width="300" alt="At home in the garage, charging 7.2 kW on the sun (green cable)"></a><br><sub>At home in the garage, charging 7.2 kW on the sun (green cable)</sub></td><td valign="top" width="50%"><a href="kit-demo/tesla-car-card/home-solar-more.png"><img src="kit-demo/tesla-car-card/home-solar-more.png" width="300" alt="More: range, odometer, tyres, charge limit"></a><br><sub>More: range, odometer, tyres, charge limit</sub></td></tr>
+<tr><td valign="top" width="50%"><a href="kit-demo/tesla-car-card/climate.png"><img src="kit-demo/tesla-car-card/climate.png" width="300" alt="Climate screen: seat and wheel heating on the interior"></a><br><sub>Climate screen: seat and wheel heating on the interior</sub></td><td valign="top" width="50%"><a href="kit-demo/tesla-car-card/fast-charger-dark.png"><img src="kit-demo/tesla-car-card/fast-charger-dark.png" width="300" alt="At a fast charger, dark theme"></a><br><sub>At a fast charger, dark theme</sub></td></tr>
+<tr><td valign="top" width="50%"><a href="kit-demo/tesla-car-card/trunk-confirm-dark.png"><img src="kit-demo/tesla-car-card/trunk-confirm-dark.png" width="300" alt="Trunk open; first tap on Trunk asks for a second tap"></a><br><sub>Trunk open; first tap on Trunk asks for a second tap</sub></td><td valign="top" width="50%"><a href="kit-demo/tesla-car-card/frunk-grid.png"><img src="kit-demo/tesla-car-card/frunk-grid.png" width="300" alt="Charging 11 kW from the grid (red cable), frunk open"></a><br><sub>Charging 11 kW from the grid (red cable), frunk open</sub></td></tr>
+<tr><td valign="top" width="50%"><a href="kit-demo/tesla-car-card/own-picture.png"><img src="kit-demo/tesla-car-card/own-picture.png" width="300" alt="Own picture (cars[].image) with fewer entities"></a><br><sub>Own picture (cars[].image) with fewer entities</sub></td></tr>
+</table>
+
 ### `results`
 
 <table>

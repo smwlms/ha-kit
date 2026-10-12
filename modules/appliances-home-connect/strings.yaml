@@ -18,6 +18,7 @@ helper_ready_by: { en: "{name} ready by", nl: "{name} klaar tegen" }
 helper_duration: { en: "{name} program duration", nl: "{name} programmaduur" }
 helper_battery_minimum: { en: "Appliances battery minimum", nl: "Toestellen batterij minimum" }
 helper_solar_minimum: { en: "Appliances wait for sun from", nl: "Toestellen wachten op zon vanaf" }
+helper_program_kwh: { en: "Appliances sun to spare for a program", nl: "Toestellen zon over voor een programma" }
 helper_solar_peak: { en: "Appliances sunniest moment", nl: "Toestellen zonnigste moment" }
 
 # --- Small words ---
@@ -39,6 +40,8 @@ reason_safety_net: { en: "safety net: no surplus came", nl: "vangnet: geen overs
 reason_missed: { en: "planned moment missed by a restart", nl: "gepland moment gemist door een herstart" }
 reason_surplus: { en: "solar surplus", nl: "zonne-overschot" }
 reason_battery: { en: "battery full and sun on the panels", nl: "batterij vol en zon op de panelen" }
+reason_battery_saturated: { en: "home battery charges at its maximum and the house still exports", nl: "thuisbatterij laadt op haar maximum en het huis injecteert toch" }
+reason_margin: { en: "enough sun today: {kwh} kWh to spare after the house and the battery", nl: "zon genoeg vandaag: {kwh} kWh over na huis en batterij" }
 reason_notification: { en: "from the notification", nl: "via de melding" }
 reason_dashboard: { en: "from the dashboard", nl: "via het dashboard" }
 
@@ -127,8 +130,8 @@ offer_description:
   nl: "smart_start auto: aan, deur dicht en Start op afstand 2 min aan = zelf plannen (script.appliance_smart_start). smart_start ask: Start op afstand aangezet = een melding met de knoppen Slim starten en Nu starten."
 run_alias: { en: "Appliances: carry out a smart start", nl: "Toestellen: slim starten uitvoeren" }
 run_description:
-  en: "For appliances in smart waiting: start on solar surplus, or on a full home battery while the panels give at least 1 kW; otherwise at the planned moment (safety net). Cancels when the door opens or the appliance is started by hand."
-  nl: "Voor toestellen in slim wachten: start bij zonne-overschot, of bij een volle thuisbatterij terwijl de panelen minstens 1 kW leveren; anders op het geplande moment (vangnet). Annuleert als de deur opengaat of het toestel met de hand start."
+  en: "For appliances in smart waiting: start on solar surplus, when the home battery charges at its maximum while the house exports, or when the solar day plan has enough to spare after the house and the battery while the panels give more than 1 kW (without a day plan: a full home battery); otherwise at the planned moment (safety net). Cancels when the door opens or the appliance is started by hand."
+  nl: "Voor toestellen in slim wachten: start bij zonne-overschot, als de thuisbatterij op haar maximum laadt terwijl het huis injecteert, of als het zonneplan genoeg over heeft na huis en batterij terwijl de panelen meer dan 1 kW leveren (zonder zonneplan: een volle thuisbatterij); anders op het geplande moment (vangnet). Annuleert als de deur opengaat of het toestel met de hand start."
 buttons_alias: { en: "Appliances: notification buttons", nl: "Toestellen: meldingsknoppen afhandelen" }
 buttons_description: { en: "Handles the buttons Smart start and Start now of the appliance notifications.", nl: "Verwerkt de knoppen Slim starten en Nu starten uit de toestelmeldingen." }
 door_alias: { en: "Appliances: door open during a program", nl: "Toestellen: deur open tijdens programma" }
@@ -160,6 +163,7 @@ card_planned_start: { en: "Planned start", nl: "Geplande start" }
 card_planning: { en: "Planning", nl: "Planning" }
 card_battery_minimum: { en: "Battery minimum", nl: "Batterij minimum" }
 card_solar_minimum: { en: "Wait for sun from", nl: "Wachten op zon vanaf" }
+card_program_kwh: { en: "Sun to spare for a program", nl: "Zon over voor een programma" }
 card_solar_peak: { en: "Sunniest moment", nl: "Zonnigste moment" }
 card_arrival: { en: "Arrival (learned)", nl: "Thuiskomst (geleerd)" }
 days_short: { en: "Mo,Tu,We,Th,Fr,Sa,Su", nl: "ma,di,wo,do,vr,za,zo" }

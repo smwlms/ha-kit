@@ -9,3 +9,4 @@ sensor_export_kw: { en: "Energy plan export", nl: "Energieplan injectie" }
 sensor_house_power: { en: "Energy plan house power", nl: "Energieplan huisverbruik" }
 binary_surplus: { en: "Energy plan surplus", nl: "Energieplan overschot" }
 binary_battery_behind: { en: "Energy plan battery behind", nl: "Energieplan batterij loopt achter" }
+binary_battery_saturated: { en: "Energy plan battery saturated", nl: "Energieplan batterij verzadigd" }

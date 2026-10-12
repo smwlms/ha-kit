@@ -275,6 +275,7 @@ source_forecast: { en: "forecast", nl: "voorspelling" }
 source_history: { en: "history", nl: "historiek" }
 forecast_vs_history: { en: "By the forecast · by history", nl: "Volgens de voorspelling · volgens de historiek" }
 battery_first: { en: "Battery comes first", nl: "Batterij krijgt voorrang" }
+battery_saturated: { en: "Battery charges at its maximum", nl: "Batterij laadt op haar maximum" }
 word_yes: { en: "yes", nl: "ja" }
 word_no: { en: "no", nl: "nee" }
 charger: { en: "Charger", nl: "Laadpaal" }

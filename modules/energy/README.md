@@ -53,7 +53,7 @@ After changing `house.yaml` (a role, a consumer, the language): fill in and depl
 | Reads | From | Used for |
 | ----- | ---- | -------- |
 | `sensor.power_price_import` (attributes `starts`, `prices`, `cheapest_2h`), `_export`, `sensor.power_price_level`, `sensor.capacity_*`, `input_number.tariff_*`, `window.haKitTariff` | tariff module | price card, tariff view, base-load cost, battery savings, capacity tariff |
-| `sensor.energy_plan_margin` (attributes), `binary_sensor.energy_plan_battery_behind`, `sensor.energy_plan_house_power` | energy-plan | battery card, plan in the hot-water sheet, house sparkline |
+| `sensor.energy_plan_margin` (attributes), `binary_sensor.energy_plan_battery_behind`, `binary_sensor.energy_plan_battery_saturated` (with a battery power role), `sensor.energy_plan_house_power` | energy-plan | battery card, plan in the hot-water sheet, house sparkline |
 | `sensor.ev_charger_*`, `script.ev_charger_set_mode` | ev-charger (charger-zappi) | charger card, flow diagram, car in the analysis |
 | `sensor.ev_charging_*` (the cheap power card: `sensor.ev_charging_cheap_status`), `input_boolean.ev_charging_*`, `input_select.ev_charging_owner`, `counter.tesla_commands_today`, `script.ev_charging_manual_mode` | ev-charging | car card, cheap power card, charging sheet, mode buttons |
 | `sensor.hot_water_temperature`, `binary_sensor.hot_water_heating` | hot-water-heater | hot water card |

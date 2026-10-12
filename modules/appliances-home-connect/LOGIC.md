@@ -23,7 +23,7 @@ flowchart TD
   WIN -->|"sun expected before the latest start"| WAIT["smart_waiting on, safety net = sunniest moment"]
   WIN -->|otherwise| DELAY["start_now with start_in: delay on the appliance"]
   WAIT --> RUN{automation appliance_smart_start_run}
-  RUN -->|"surplus 5 min, or battery above minimum and sun >= 1 kW"| NOW
+  RUN -->|"route: surplus, battery saturated, day-plan margin, or (no plan) battery above minimum"| NOW
   RUN -->|"safety-net time"| NOW
   RUN -->|"door opened"| CANCEL[smart_waiting off + notification]
   RUN -->|"started by hand"| OFF[smart_waiting off]
@@ -41,7 +41,7 @@ flowchart TD
 | Automation | Trigger | Why |
 | ---------- | ------- | --- |
 | `appliance_smart_start_offer` | `smart_start: auto`: power switch on, door closed or remote start on, each for 2 min; `ask`: remote start off → on | the moment the appliance is loaded and ready |
-| `appliance_smart_start_run` | surplus on for 5 min; battery above the minimum with sun ≥ 1 kW for 2 min; every 5 min; smart waiting off → on (with energy-plan); the planned time of each appliance; door open; status run or delayedstart; Home Assistant start | start on sun, the safety net, cancel, a missed moment |
+| `appliance_smart_start_run` | surplus on for 5 min; battery saturated on for 5 min (with a battery power role); the margin at or above the program kWh with sun > 1 kW for 2 min; without a margin, battery above the minimum with sun ≥ 1 kW for 2 min; every 5 min; smart waiting off → on (with energy-plan); the planned time of each appliance; door open; status run or delayedstart; Home Assistant start | start on sun, the safety net, cancel, a missed moment |
 | `appliance_notification_buttons` | `mobile_app_notification_action` with `APPLIANCE_SMART_{KEY}` or `APPLIANCE_NOW_{KEY}` | the buttons of the notifications |
 | `appliance_door_open_running` | door open for 2 min | a door left open stops the program |
 | `appliance_error` | status → error, actionrequired, aborting (not from unavailable/unknown) | the appliance needs you |
@@ -85,7 +85,16 @@ Returned: `start`, `start_ts`, `deadline`, `by` (`arrival`, `auto_time`, `hour`,
 
 ### Waiting for sun (`appliance_smart_start_run`)
 
-- **Start on sun**: `binary_sensor.energy_plan_surplus` on, or (with a battery role) the battery above `input_number.appliances_battery_minimum` (default 60 %) while `entities.solar_power_w` gives ≥ 1 kW (read in W or kW with `watts()`) and `binary_sensor.energy_plan_battery_behind` is off. Checked on the triggers and every 5 minutes.
+- **Start on sun**: the first route that matches (variable `route`, also the reason in the logbook and the notification):
+
+  | Route | Condition | Reason |
+  | ----- | --------- | ------ |
+  | `surplus` | `binary_sensor.energy_plan_surplus` on | solar surplus |
+  | `saturated` | `binary_sensor.energy_plan_battery_saturated` on for 5 min (only with `entities.battery_soc` and `battery_power_w`) | home battery charges at its maximum and the house still exports |
+  | `margin` | `sensor.energy_plan_margin` ≥ `input_number.appliances_program_kwh` (default 1 kWh), not `after_sun`, and `entities.solar_power_w` > 1 kW | enough sun today: N kWh to spare |
+  | `battery` | only while the margin has no value (no day plan): the battery above `input_number.appliances_battery_minimum` (default 60 %), ≥ 1 kW sun, battery behind off | battery full and sun on the panels |
+
+  Why the margin route: on a sunny day with a home battery there is often no export until late afternoon (the battery takes it all), yet the day plan already knows the battery will be full with energy to spare; a dishwasher can run on that at noon. Why it replaces the battery-level rule when a plan exists: 60 % at 10:00 on a grey day is not "full", the margin knows the difference. Why saturated: the battery cannot take more, the rest goes to the grid; the margin may even be negative at that moment (the battery's charge power is the limit, not the sun). Solar power is read in W or kW with `watts()`. Checked on the triggers and every 5 minutes.
 - **One at a time**: the first waiting appliance in the order of `appliances` starts; the next one only when no appliance of the module has been running for less than 15 min (not two heating up on the same surplus). The 5-minute check picks it up later.
 - **Safety net**: at `input_datetime.appliance_<key>_smart_start` a waiting appliance starts anyway (reason "safety net").
 - **Restart**: at Home Assistant start, a waiting appliance whose planned moment passed starts now.
@@ -117,7 +126,8 @@ Every notification goes through `script.appliance_notify` → `script.send_notif
 | ------- | ------- | ----- | ------- |
 | `input_select.appliance_<key>_ready_by` | `auto` | Appliance settings | deadline |
 | `input_number.appliance_<key>_duration_h` | `appliances[].duration_h`, else 3 | Appliance settings | latest start; finish in |
-| `input_number.appliances_battery_minimum` | 60 % | Appliance settings > Planning | start on the battery |
+| `input_number.appliances_battery_minimum` | 60 % | Appliance settings > Planning | start on the battery (only without a day plan) |
+| `input_number.appliances_program_kwh` | 1 kWh | Appliance settings > Planning | start on the day-plan margin |
 | `input_number.appliances_solar_minimum_kwh` | 10 kWh | Appliance settings > Planning | sun expected |
 | `input_datetime.appliances_solar_peak` | 15:00 | Appliance settings > Planning | safety net while waiting |
 | `appliances[].smart_start` | `ask` | house.yaml | plan by itself or ask |
@@ -166,7 +176,7 @@ Until this passed on a real Home Assistant, the status stays "built, not tested 
 3. Developer tools > Template: `{% from 'appliances.jinja' import start_window %}{{ start_window(2.5, 'auto', '17:00') }}` gives JSON with a start in the future and the deadline you expect.
 4. Ready by a fixed hour 2 hours from now, duration 1.5 h, a cloudy moment: `script.appliance_smart_start` gives a delayed start on the appliance (status `delayedstart`), a notification "planned at" with Start now; the dashboard says "Starts at HH:MM".
 5. Tap Start now in that notification: the delay is cancelled, the same program starts (`run`), notification "started".
-6. On a sunny morning, ready by `auto`: the notification "waits for the sun", `smart_waiting` on, the planned start is the safety net; with surplus (or the battery above the minimum and ≥ 1 kW sun) the appliance starts within 5 minutes with reason "solar surplus" or "battery full".
+6. On a sunny morning, ready by `auto`: the notification "waits for the sun", `smart_waiting` on, the planned start is the safety net; with surplus, battery saturated, or a margin of at least 1 kWh with > 1 kW sun, the appliance starts within 5 minutes with the reason of that route ("solar surplus", "home battery charges at its maximum …", "enough sun today: N kWh to spare …"). Without a day plan (margin unavailable): the battery above the minimum and ≥ 1 kW sun, reason "battery full".
 7. While waiting, open the door: waiting off, notification "smart start cancelled".
 8. `smart_start: auto`: switch the appliance on and close the door: 2 min later a plan, without a notification asking for it.
 9. `smart_start: ask`: switch remote start on: notification with Smart start and Start now; each button does what it says.

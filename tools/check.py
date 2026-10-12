@@ -16,6 +16,8 @@ What it does, in this order:
      and tests stubbed, so a typo in a filter name fails)
   4b. the macro targets() of doorbell/custom_templates/doorbell.jinja ("who gets a notification") runs on the builds
      with stubbed states(), is_state() and now(): every case of tests/doorbell-targets.yaml gives the expected people
+  4c. energy-plan: the forecast-or-history decision of energy_plan.py, and the state templates of battery saturated
+     and battery behind in the example build (stubbed states), against the cases of tests/energy-plan.yaml
   5. every .py of the kit's tools and of every build compiles (Python's compile())
   6. every <module>/deploy.py --dry-run (and --dry-run --setup where the script has --setup) exits 0 without a
      connection (HA_URL and HA_TOKEN are removed from the environment)
@@ -32,6 +34,7 @@ from __future__ import annotations
 
 import base64
 import datetime
+import importlib.util
 import json
 import os
 import re
@@ -252,6 +255,69 @@ def check_doorbell_targets(builds: list[Path], houses: dict[str, Path]) -> None:
     print(f"  doorbell targets: {n} cases" + (f", {skipped} skipped (build not filled in)" if skipped else ""))
 
 
+class _This:
+    """`this` of a template entity: only .state is read by the energy-plan templates."""
+
+    def __init__(self, state: str) -> None:
+        self.state = state
+
+
+def check_energy_plan(builds: list[Path]) -> None:
+    """tests/energy-plan.yaml: solar_left against energy_plan.py (forecast_left, choose_solar_left); battery against
+    the state templates of the filled-in example build (skipped when that build is missing)."""
+    cases = yaml.safe_load((KIT / "tests" / "energy-plan.yaml").read_text(encoding="utf-8"))
+    spec = importlib.util.spec_from_file_location("energy_plan", MODULES / "energy-plan" / "energy_plan.py")
+    ep = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ep)
+    for case in cases["solar_left"]:
+        fc_pv, _, ratio = ep.forecast_left(case["fc_rest"], case["fc_today"], case["pv_so_far"], case["pv_since"])
+        rest, source, pessimistic = ep.choose_solar_left(fc_pv, case["hist_pv"], ratio)
+        want = case["expect"]
+        if source != want["source"] or pessimistic != want["pessimistic"] or abs(rest - want["rest"]) > 0.01:
+            fail(f"tests/energy-plan.yaml '{case['name']}': source {source}, pessimistic {pessimistic}, rest "
+                 f"{rest:.2f}; expected {want['source']}, {want['pessimistic']}, {want['rest']}")
+    n_battery = 0
+    out = next((b for b in builds if b.name == "build-example"), None)
+    if out and (out / "energy-plan" / "templates" / "energy_plan.yaml").is_file():
+        docs = yaml.safe_load((out / "energy-plan" / "templates" / "energy_plan.yaml").read_text(encoding="utf-8"))
+        templates = {s["unique_id"].removeprefix("energy_plan_"): s["state"]
+                     for doc in docs for s in doc.get("binary_sensor", [])}
+        env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(out / "energy-plan" / "custom_templates")),
+                                 extensions=["jinja2.ext.loopcontrols", "jinja2.ext.do"])
+        states: dict[str, str] = {}
+        attrs: dict[str, dict] = {}
+
+        def is_number(v) -> bool:
+            try:
+                float(v)
+                return True
+            except (TypeError, ValueError):
+                return False
+
+        # The imported macro keeps the globals it saw first: set the stubs once, fill the dicts per case.
+        env.globals.update(states=lambda e: states.get(e, "unknown"), is_state=lambda e, v: states.get(e) == v,
+                           state_attr=lambda e, a: attrs.get(e, {}).get(a), is_number=is_number)
+        for case in cases["battery"]:
+            label = f"tests/energy-plan.yaml '{case['name']}'"
+            if case["sensor"] not in templates:
+                fail(f"{label}: binary_sensor.energy_plan_{case['sensor']} is not in the example build")
+                continue
+            states.clear()
+            states.update(case.get("states") or {})
+            attrs.clear()
+            attrs.update(case.get("attributes") or {})
+            try:
+                got = env.from_string(templates[case["sensor"]]).render(this=_This(case.get("this", "off"))).strip()
+            except jinja2.TemplateError as e:
+                fail(f"{label}: {e.__class__.__name__}: {e}")
+                continue
+            n_battery += 1
+            if got.lower() != str(case["expect"]).lower():
+                fail(f"{label}: {got}, expected {case['expect']}")
+    print(f"  energy-plan: {len(cases['solar_left'])} solar-left cases, {n_battery} battery cases"
+          + ("" if out else " (example build not filled in)"))
+
+
 def check_python(paths: list[Path]) -> None:
     n = 0
     for f in paths:
@@ -437,6 +503,9 @@ def main() -> None:
 
         step("4b. doorbell: who gets a notification")
         check_doorbell_targets(builds, houses)
+
+        step("4c. energy-plan: solar left and battery saturated")
+        check_energy_plan(builds)
 
         step("5. Python")
         py = sorted(TOOLS.glob("*.py")) + [f for out in builds for f in sorted(out.rglob("*.py"))]

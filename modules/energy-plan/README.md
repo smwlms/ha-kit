@@ -31,8 +31,9 @@ What this module provides (fixed ids, see `docs/phase4-contracts.md`). States ar
 | `sensor.energy_plan_export_avg` | kW | 10-minute time-weighted mean of the export | always |
 | `binary_sensor.energy_plan_surplus` | - | on above threshold + hysteresis, off below threshold − hysteresis; attributes `export_avg_kw`, `on_above_kw`, `off_below_kw` | always |
 | `sensor.energy_plan_house_power` | W | consumption of the house, the car included; attributes `source` (`role` or `computed`), `without_car` (W, with an `ev-charger` module) | always |
-| `sensor.energy_plan_margin` | kWh | solar left today after the house and the battery; attributes `after_sun`, `sun_end`, `sunset`, `sun_end_offset_min`, `battery`, `battery_needed_kwh`, `pv_remaining_kwh`, `pv_remaining_forecast_kwh`, `pv_remaining_history_kwh`, `house_remaining_kwh`, `source` (`forecast`, `history`, null after the sun), `forecast_factor`, `pv_today_kwh`, `days`, `error` | always (unavailable without a plan) |
-| `binary_sensor.energy_plan_battery_behind` | - | the battery will not be full by the sun end; attributes `margin_kwh`, `sun_end`, `on_below_kwh`, `off_above_kwh` | only with `entities.battery_soc` |
+| `sensor.energy_plan_margin` | kWh | solar left today after the house and the battery; attributes `after_sun`, `sun_end`, `sunset`, `sun_end_offset_min`, `battery`, `battery_needed_kwh`, `pv_remaining_kwh`, `pv_remaining_forecast_kwh`, `pv_remaining_history_kwh`, `house_remaining_kwh`, `source` (`forecast`, `history`, null after the sun), `forecast_factor`, `forecast_ratio` (unbounded actual/forecast), `forecast_too_pessimistic` (ratio ≥ 1.3: the history is used), `pv_today_kwh`, `days`, `error` | always (unavailable without a plan) |
+| `binary_sensor.energy_plan_battery_behind` | - | the battery will not be full by the sun end; off while battery saturated is on; attributes `margin_kwh`, `sun_end`, `battery_saturated`, `on_below_kwh`, `off_above_kwh` | only with `entities.battery_soc` |
+| `binary_sensor.energy_plan_battery_saturated` | - | the battery already charges at its maximum (≥ 1 kW) and the house still exports (10-min average ≥ 0.3 kW), SoC below 98 %; on after 3 min, off after 10 min; attributes `export_avg_kw`, `battery_charge_w` | only with `entities.battery_soc` and `battery_power_w` |
 | `sensor.energy_plan_export_kw` | kW | the export role in kW (source of the average) | always |
 | `input_number.energy_plan_surplus_kw`, `energy_plan_surplus_hysteresis_kw` | kW | thresholds of the surplus (defaults 1.5 and 0.3) | always |
 | `input_number.energy_plan_battery_safety_kwh`, `energy_plan_battery_hysteresis_kwh` | kWh | thresholds of battery behind (defaults 0.5 and 0.5) | with a battery |
@@ -50,7 +51,7 @@ What this module provides (fixed ids, see `docs/phase4-contracts.md`). States ar
 | ------- | ---- |
 | `ev-charging` | surplus, margin (solar for the car today, `sun_end`), battery behind (the battery first) |
 | `hot-water` | margin (room for the tank after the car), surplus |
-| `appliances-home-connect` | margin and surplus (solar start window) |
+| `appliances-home-connect` | margin, surplus and battery saturated (solar start window, start routes) |
 | `charger-zappi` | battery behind (phase switching) |
 | `energy`, `results`, `home-screen` | every entity above, for display |
 

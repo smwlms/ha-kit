@@ -19,7 +19,8 @@ short (LOGIC.md, "The battery-full model", has every step):
 - solar left today: (a) history: today's solar so far x the median after/before ratio at this time of day, capped at
   1.3 x the best afternoon of the history; (b) forecast: the remaining forecast scaled by today's actual/forecast
   ratio, minus the solar produced since the forecast's last refresh (the free Forecast.Solar refreshes once an hour);
-  the LOWER of the two is used (the forecast sees clouds but not the shade, the history the reverse);
+  the LOWER of the two is used (the forecast sees clouds but not the shade, the history the reverse), except when
+  today's solar beats the forecast by 30 % or more: then the forecast is too pessimistic and the history is used;
 - house left today: the median house consumption (without the car) between this time of day and each day's sun end;
 - battery needed: (100 - SoC) % x usable kWh / charge efficiency (0 without a battery);
 - margin = solar left - house left - battery needed. After the sun end it is -battery needed (always a number: Home
@@ -43,7 +44,8 @@ MIN_BEFORE_KWH = 0.3         # a history day needs this much solar before now to
 MIN_SO_FAR_KWH = 0.5         # below this much solar today the ratio is not trusted: typical afternoon instead
 HISTORY_CAP = 1.3            # the history estimate never exceeds 1.3 x the best afternoon of the history
 FACTOR_RANGE = (0.5, 1.5)    # bounds of the actual/forecast correction
-FORECAST_MIN_SO_FAR = 1.0    # kWh of forecast before now needed before the correction is trusted
+FORECAST_MIN_SO_FAR = 0.5    # kWh of forecast before now needed before the correction is trusted
+PESSIMISTIC_RATIO = 1.3      # actual/forecast at or above this (unbounded): the forecast is too low, use the history
 FULL_PERCENT = 100.0
 
 
@@ -158,6 +160,35 @@ def minute_of_day(t):
     return t.hour * 60 + t.minute
 
 
+def forecast_left(fc_rest, fc_today, pv_so_far, pv_since):
+    """Solar left by the forecast: (kWh, factor, ratio). Pure.
+
+    ratio = solar produced until the forecast's last refresh / the forecast for that part of the day, unbounded; None
+    while less than FORECAST_MIN_SO_FAR kWh was forecast (early morning: too little to compare). factor = the ratio
+    bounded to FACTOR_RANGE (1.0 without a ratio). The solar produced since the refresh (pv_since) is subtracted:
+    the remaining forecast stays the same for up to an hour while the sun keeps producing."""
+    fc_so_far = fc_today - fc_rest
+    ratio = (pv_so_far - pv_since) / fc_so_far if fc_so_far > FORECAST_MIN_SO_FAR else None
+    factor = 1.0 if ratio is None else min(FACTOR_RANGE[1], max(FACTOR_RANGE[0], ratio))
+    return max(0.0, fc_rest * factor - pv_since), factor, ratio
+
+
+def choose_solar_left(fc_pv, hist_pv, ratio):
+    """(solar left, source, forecast_too_pessimistic) from the forecast and the history estimate. Pure.
+
+    The forecast sees coming clouds but not the evening shade; the history sees the shade but not today's weather.
+    The lower one wins (when in doubt, the battery gets priority), except when today's solar beat the forecast by
+    PESSIMISTIC_RATIO or more: then the forecast is wrong about today (Forecast.Solar sometimes lowers a sunny day by
+    half), and the bounded factor cannot repair that, so the history is used."""
+    if fc_pv is None:
+        return hist_pv, "history", False
+    if ratio is not None and ratio >= PESSIMISTIC_RATIO:
+        return hist_pv, "history", True
+    if fc_pv <= hist_pv:
+        return fc_pv, "forecast", False
+    return hist_pv, "history", False
+
+
 def plan(series, now, cfg, soc=None, fc_rest=None, fc_today=None, fc_ts=None):
     """The day plan for `now` from the 5-minute series. Pure: no database, no clock. Returns the JSON object."""
     tz, today = cfg["tz"], now.date()
@@ -198,7 +229,8 @@ def plan(series, now, cfg, soc=None, fc_rest=None, fc_today=None, fc_ts=None):
     pv_so_far = sum(pv for t, pv, _ in today_prof if t <= now) * SLOT_H / 1000
     after_sun = now >= sun_end
 
-    hist_pv = fc_pv = factor = None
+    hist_pv = fc_pv = factor = ratio = source = None
+    pessimistic = False
     if after_sun:
         rest_pv = rest_load = 0.0
     else:
@@ -215,22 +247,12 @@ def plan(series, now, cfg, soc=None, fc_rest=None, fc_today=None, fc_ts=None):
             if fc_ts is not None and midnight <= fc_ts <= now.timestamp():
                 pv_since = sum(pv for t, pv, _ in today_prof if fc_ts <= t.timestamp() <= now.timestamp()) \
                     * SLOT_H / 1000
-            pv_at_refresh = pv_so_far - pv_since
-            fc_so_far = fc_today - fc_rest
-            factor = (min(FACTOR_RANGE[1], max(FACTOR_RANGE[0], pv_at_refresh / fc_so_far))
-                      if fc_so_far > FORECAST_MIN_SO_FAR else 1.0)
-            fc_pv = max(0.0, fc_rest * factor - pv_since)
-        # The forecast sees coming clouds but not the evening shade; the history sees the shade but not today's
-        # weather. The lower one wins: when in doubt, the battery gets priority.
-        rest_pv = min(fc_pv, hist_pv) if fc_pv is not None else hist_pv
+            fc_pv, factor, ratio = forecast_left(fc_rest, fc_today, pv_so_far, pv_since)
+        rest_pv, source, pessimistic = choose_solar_left(fc_pv, hist_pv, ratio)
         rest_load = statistics.median(load_kwh) if load_kwh else 0.0
 
     needed = (max(0.0, FULL_PERCENT - soc) / 100 * cfg["usable_kwh"] / cfg["charge_efficiency"]) if battery else 0.0
     margin = round(rest_pv - rest_load - needed, 2)
-    if after_sun:
-        source = None
-    else:
-        source = "forecast" if fc_pv is not None and fc_pv <= hist_pv else "history"
     return {
         "state": margin,
         "after_sun": after_sun,
@@ -245,6 +267,8 @@ def plan(series, now, cfg, soc=None, fc_rest=None, fc_today=None, fc_ts=None):
         "house_remaining_kwh": round(rest_load, 2),
         "source": source,
         "forecast_factor": None if factor is None else round(factor, 2),
+        "forecast_ratio": None if ratio is None else round(ratio, 2),
+        "forecast_too_pessimistic": pessimistic,
         "pv_today_kwh": round(pv_so_far, 2),
         "days": len(offsets),
         "error": None,

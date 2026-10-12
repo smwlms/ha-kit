@@ -1,0 +1,127 @@
+# Cases for energy-plan, run by tools/check.py.
+#
+# solar_left: forecast_left() + choose_solar_left() of modules/energy-plan/energy_plan.py ("solar left today: the
+#   forecast or the history"). Input in kWh:
+#     fc_rest    remaining forecast today          fc_today   forecast for the whole day
+#     pv_so_far  solar produced today until now    pv_since   solar produced since the forecast's last refresh
+#     hist_pv    the history estimate of the solar still to come
+#   expect: source (forecast | history), pessimistic (forecast_too_pessimistic), rest (solar left, +- 0.01)
+#
+# battery: the state templates of binary_sensor.energy_plan_battery_saturated and _battery_behind in the filled-in
+#   build "example" (house.example.yaml: battery_soc sensor.home_battery_level, battery_power_w
+#   sensor.home_battery_power, battery_power_sign discharge_positive = charging is negative), with stubbed states(),
+#   is_state(), state_attr() and this.state. delay_on/delay_off are not simulated. A state left out is unknown.
+#     sensor      battery_saturated | battery_behind
+#     states      entity id -> state       attributes   entity id -> {attribute: value}
+#     this        the sensor's own state before (default off)
+#     expect      true | false
+solar_left:
+  - name: forecast cut at 10:30 while the panels beat it (ratio 1.45) -> history, not the forecast's 12.3
+    fc_rest: 12.3
+    fc_today: 13.25
+    pv_so_far: 1.38
+    pv_since: 0.0
+    hist_pv: 23.72
+    expect: { source: history, pessimistic: true, rest: 23.72 }
+  - name: same, 5 minutes after the refresh (ratio 1.32)
+    fc_rest: 12.3
+    fc_today: 13.25
+    pv_so_far: 1.38
+    pv_since: 0.13
+    hist_pv: 23.72
+    expect: { source: history, pessimistic: true, rest: 23.72 }
+  - name: ratio exactly 1.3 counts as too pessimistic
+    fc_rest: 10.0
+    fc_today: 11.0
+    pv_so_far: 1.3
+    pv_since: 0.0
+    hist_pv: 18.0
+    expect: { source: history, pessimistic: true, rest: 18.0 }
+  - name: ratio 1.29 -> the forecast scaled by the factor, the lower one
+    fc_rest: 10.0
+    fc_today: 11.0
+    pv_so_far: 1.29
+    pv_since: 0.0
+    hist_pv: 18.0
+    expect: { source: forecast, pessimistic: false, rest: 12.9 }
+  - name: forecast about right and below the history -> forecast
+    fc_rest: 12.3
+    fc_today: 13.25
+    pv_so_far: 1.0
+    pv_since: 0.0
+    hist_pv: 23.72
+    expect: { source: forecast, pessimistic: false, rest: 12.95 }
+  - name: forecast above the history (evening shade) -> history
+    fc_rest: 20.0
+    fc_today: 22.0
+    pv_so_far: 2.0
+    pv_since: 0.0
+    hist_pv: 15.0
+    expect: { source: history, pessimistic: false, rest: 15.0 }
+  - name: early morning, less than 0.5 kWh forecast so far -> factor 1, no ratio
+    fc_rest: 14.0
+    fc_today: 14.3
+    pv_so_far: 0.6
+    pv_since: 0.0
+    hist_pv: 20.0
+    expect: { source: forecast, pessimistic: false, rest: 14.0 }
+  - name: cloudy day, the panels at half the forecast -> factor bounded to 0.5, forecast
+    fc_rest: 10.0
+    fc_today: 12.0
+    pv_so_far: 0.6
+    pv_since: 0.0
+    hist_pv: 20.0
+    expect: { source: forecast, pessimistic: false, rest: 5.0 }
+
+battery:
+  - name: saturated - exports 0.6 kW while the battery charges 2.4 kW at 54 %
+    sensor: battery_saturated
+    states: { sensor.energy_plan_export_avg: "0.6", sensor.home_battery_power: "-2400", sensor.home_battery_level: "54" }
+    expect: true
+  - name: saturated - export below 0.3 kW
+    sensor: battery_saturated
+    states: { sensor.energy_plan_export_avg: "0.2", sensor.home_battery_power: "-2400", sensor.home_battery_level: "54" }
+    expect: false
+  - name: saturated - battery charges less than 1 kW
+    sensor: battery_saturated
+    states: { sensor.energy_plan_export_avg: "0.6", sensor.home_battery_power: "-600", sensor.home_battery_level: "54" }
+    expect: false
+  - name: saturated - battery discharging
+    sensor: battery_saturated
+    states: { sensor.energy_plan_export_avg: "0.6", sensor.home_battery_power: "1500", sensor.home_battery_level: "54" }
+    expect: false
+  - name: saturated - battery at 98 %
+    sensor: battery_saturated
+    states: { sensor.energy_plan_export_avg: "0.6", sensor.home_battery_power: "-2400", sensor.home_battery_level: "98" }
+    expect: false
+  - name: saturated - battery power in kW
+    sensor: battery_saturated
+    states: { sensor.energy_plan_export_avg: "0.6", sensor.home_battery_power: "-2.4", sensor.home_battery_level: "54" }
+    attributes: { sensor.home_battery_power: { unit_of_measurement: kW } }
+    expect: true
+  - name: saturated - no export average
+    sensor: battery_saturated
+    states: { sensor.energy_plan_export_avg: unavailable, sensor.home_battery_power: "-2400", sensor.home_battery_level: "54" }
+    expect: false
+  - name: behind - negative margin, battery not saturated
+    sensor: battery_behind
+    states: { sensor.energy_plan_margin: "-6.5", sensor.home_battery_level: "54", binary_sensor.energy_plan_battery_saturated: "off" }
+    attributes: { sensor.energy_plan_margin: { after_sun: false } }
+    expect: true
+  - name: behind - negative margin, but the battery is saturated -> off
+    sensor: battery_behind
+    states: { sensor.energy_plan_margin: "-6.5", sensor.home_battery_level: "54", binary_sensor.energy_plan_battery_saturated: "on" }
+    attributes: { sensor.energy_plan_margin: { after_sun: false } }
+    this: "on"
+    expect: false
+  - name: behind - stays on inside the hysteresis band
+    sensor: battery_behind
+    states: { sensor.energy_plan_margin: "0.8", sensor.home_battery_level: "54", binary_sensor.energy_plan_battery_saturated: "off" }
+    attributes: { sensor.energy_plan_margin: { after_sun: false } }
+    this: "on"
+    expect: true
+  - name: behind - off after the sun end
+    sensor: battery_behind
+    states: { sensor.energy_plan_margin: "-2.0", sensor.home_battery_level: "54", binary_sensor.energy_plan_battery_saturated: "off" }
+    attributes: { sensor.energy_plan_margin: { after_sun: true } }
+    expect: false

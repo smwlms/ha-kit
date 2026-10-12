@@ -86,6 +86,7 @@
 <% if has.plan %>
 <% set _ = roles.update({'plan_margin': 'sensor.energy_plan_margin', 'surplus': 'binary_sensor.energy_plan_surplus'}) %>
 <% if has.battery %><% set _ = roles.update({'battery_behind': 'binary_sensor.energy_plan_battery_behind'}) %><% endif %>
+<% if has.battery and has.battery_power %><% set _ = roles.update({'battery_saturated': 'binary_sensor.energy_plan_battery_saturated'}) %><% endif %>
 <% endif %>
 <% if has.charger %>
 <% set _ = roles.update({'charger_power': 'sensor.ev_charger_power', 'charger_mode': 'sensor.ev_charger_mode',
@@ -213,7 +214,7 @@
 <# --- user-facing texts of the screen (strings.yaml, house.language); {placeholders} are filled in by the card --- #>
 <% set screen_keys = [
   'all_rest', 'all_rest_info', 'amps_auto', 'analysis', 'autarky_short', 'autarky_today', 'battery_aria',
-  'battery_charges', 'battery_charges_info', 'battery_feeds_car', 'battery_first', 'battery_full',
+  'battery_charges', 'battery_charges_info', 'battery_feeds_car', 'battery_first', 'battery_full', 'battery_saturated',
   'battery_full_info', 'battery_gives', 'battery_gives_info', 'battery_tile_charges', 'battery_tile_gives',
   'battery_tile_rest', 'busy', 'by_forecast', 'by_history', 'car_bar_aria', 'car_charges_info', 'car_charges_kw',
   'car_commands', 'car_needs', 'car_state', 'cars', 'charge_current_set', 'charge_level', 'charge_level_pct',

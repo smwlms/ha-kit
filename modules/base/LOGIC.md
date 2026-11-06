@@ -92,7 +92,7 @@ No helpers, so no `defaults:`.
 
 1. **First upload to `/config/www`.** `/local/` only works when the folder existed when HA started: restart once after the first `deploy.py`.
 2. **An older `cw-thema.js` in the browser cache.** The `?v=` of the resource changes with `VERSION`; a hard refresh helps when an app still shows the old texts.
-3. **Language changed.** Fill in and deploy again. The language is part of the version (`?v=28-en`, `?v=28-nl`), so browsers load the new texts.
+3. **Language changed.** Fill in and deploy again. The language is part of the version (`?v=29-en`, `?v=29-nl`), so browsers load the new texts.
 4. **Another theme active.** The components still work on the regular HA variables, with HA's colours. The button shows the default style as current; picking a mode switches to it.
 5. **Language changed.** The themes are renamed (Tuin becomes Garden); the files are overwritten, so the old names disappear after the reload. A user who picked an old name falls back to HA's default theme until they pick again: run `--default-theme`.
 6. **A theme left out of `base.themes` later**, or an old theme file of another install: `deploy.py` does not delete files; it names every theme with `cw-*` tokens that is not part of the build. Delete the file yourself (README, "Migrating").

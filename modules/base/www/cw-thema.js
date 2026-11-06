@@ -39,7 +39,7 @@
 // Loaded as an inline Lovelace module resource.
 (() => {
   // The language is part of the version, so browsers reload the file when house.language changes.
-  const VERSION = "28-<@ t('language_code') @>";
+  const VERSION = "29-<@ t('language_code') @>";
   // Default style when the user has not picked one of the themes (house.yaml base.default_theme, light).
   const THEME = <@ t('theme_name_' ~ default_light) | tojson @>;
   const svg = (body) =>
@@ -72,6 +72,8 @@
     auto: `<g transform="translate(0 -1)"><path d="M4.7 16.5 H3 V13.6 c0-1 .7-1.7 1.6-1.9 L8.2 11 c1.4-1.9 3.2-3.6 6-3.6 c2.4 0 4.3 1.3 5.7 3.3 l1 .3 c.7.2 1.1.8 1.1 1.5 v3.9 H19.3"/><path d="M9.3 16.5 H14.7"/><circle cx="7" cy="16.5" r="2.3"/><circle cx="17" cy="16.5" r="2.3"/><path d="M8.5 11 H19.6"/></g>`,
     bliksem: `<path d="M13 2 L5 13 H11 L10 22 L18 10 H12 Z" fill="currentColor" stroke="none"/>`,
     schild: `<path d="M12 3 L20 6 V12 C20 17 16 20 12 21 C8 20 4 17 4 12 V6 Z"/>`,
+    // Small desktop robot (Reachy Mini style): two antennae with a bead, a wide head with two unequal eyes, round shoulders.
+    robot: `<circle cx="5" cy="2.2" r="1.1" fill="currentColor" stroke="none"/><circle cx="9.6" cy="4.6" r="1.1" fill="currentColor" stroke="none"/><path d="M5.4 3.3 L8.9 8.6 M10.6 5.2 L15.6 8.6"/><rect x="8" y="8.6" width="12.4" height="7.8" rx="2.3"/><circle cx="12.3" cy="12.6" r="2" fill="currentColor" stroke="none"/><circle cx="16.8" cy="12.6" r="1.5" fill="currentColor" stroke="none"/><path d="M5.8 22.5 C5.8 20.4 6.9 19 9.5 18.9 H15.8 C17.9 19 18.9 20.4 18.9 22.5"/>`,
     euro: `<path d="M18 6.5 A7 7 0 1 0 18 17.5"/><path d="M4 10 H13 M4 14 H13"/>`,
     klok: `<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>`,
     stekker: `<path d="M9 2v5M15 2v5M6 7h12v4a6 6 0 0 1-12 0zM12 17v5"/>`,

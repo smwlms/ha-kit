@@ -123,7 +123,7 @@ A new language renames the themes (except Organic). The files keep their names, 
 
 ## Language
 
-The texts of the components (theme menu and theme names, status row picker, info sheet, weather names, number format) come from `strings.yaml` in `house.language` (`en` or `nl`). After changing the language: fill in again and run `deploy.py` again; the language is part of the resource version (`?v=28-en`), so browsers load the new file.
+The texts of the components (theme menu and theme names, status row picker, info sheet, weather names, number format) come from `strings.yaml` in `house.language` (`en` or `nl`). After changing the language: fill in again and run `deploy.py` again; the language is part of the resource version (`?v=29-en`), so browsers load the new file.
 
 ## What you do yourself in the UI
 
